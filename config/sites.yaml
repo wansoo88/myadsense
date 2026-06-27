@@ -1,0 +1,38 @@
+# sites.yaml — 사이트·CMS·API 설정 (AUTOMATION.md §6, 어댑터 패턴)
+# 시크릿은 여기 두지 말 것 → .env (키 목록은 .env.example)
+
+sites:
+  - id: main
+    domain: guides.utilverse.info    # 중립·비노골적 라벨 (보유: utilverse.info). 변경은 이 줄만 수정
+    cms:
+      adapter: static_ssg        # wordpress | static_ssg  (어댑터 선택)
+      base_url: https://guides.utilverse.info
+      # wordpress: REST API + 앱 비밀번호(.env: WP_USER, WP_APP_PASSWORD)
+      # static_ssg: 리포 내 콘텐츠 디렉토리 + git push (.env: GIT_REMOTE)
+      content_dir: content/      # static_ssg용
+    required_pages:              # F2 — Privacy Policy 강제, About/Contact 권장
+      privacy_policy: true       # 필수 (자동 생성·1회 발행)
+      about: true                # 권장(신뢰 신호)
+      contact: true              # 권장
+
+# 외부 API 활성화 (자격증명은 .env)
+apis:
+  adsense_management: true       # RPM·수익 by country/page (읽기)
+  search_console: true           # 쿼리·색인·CWV (읽기)
+  pagespeed_insights: true       # LCP/CLS/INP (읽기)
+  claude:                        # 콘텐츠 생성
+    enabled: true
+    model: claude-opus-4-8
+
+alerts:
+  channel: telegram              # telegram | slack | email
+  # 자격증명: .env (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 등)
+
+# 배포 — 보유 Ubuntu 자체호스팅 (pjt11 컨벤션과 동일: Caddy 자동 HTTPS + 서버 cron)
+deploy:
+  host: 115.68.230.40            # Ubuntu, root, key: ~/.ssh/autobtc_iwinv
+  ssh: "ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40"
+  domain_root: utilverse.info    # 서브도메인 할당 (현재: guides.utilverse.info)
+  https: caddy                   # Caddy 자동 HTTPS (pjt11과 동일)
+  scheduler: server_cron         # config/schedule.yaml → 서버 crontab (24/7)
+  # 시크릿(.env)은 서버에만 두고 git 커밋 금지. 콘텐츠 빌드 산출물은 Caddy로 서빙.

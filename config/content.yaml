@@ -1,0 +1,37 @@
+# content.yaml — 프로그래매틱 SEO 생성 + 품질 게이트 (AUTOMATION.md §3)
+# 게이트 없는 대량 = 정지. 모든 페이지는 발행 전 전부 통과해야 함.
+
+generation:
+  model: claude-opus-4-8        # 초안 생성 (Claude API). 비용/속도 트레이드오프 시 sonnet 고려
+  language: en                  # 기본 영어권(Tier-1, F5). 한국어 고단가 주제 시 ko
+  template_dir: templates/      # 페이지 유형별 템플릿 (비교/리스트/가이드 등)
+  inject_unique_data: true      # 페이지별 고유 데이터/계산/표 주입 (필수)
+
+# 품질 게이트 — 발행 전 전부 PASS 해야 발행 큐 진입 (quality_gate.py)
+quality_gate:
+  unique_value:
+    require_unique_block: true  # 템플릿 외 고유 데이터/계산/비교/표 ≥1
+  near_duplicate:
+    method: minhash             # 근접 중복 탐지
+    max_similarity: 0.70        # 기존/신규 간 유사도 임계 (초과 시 거부)
+  structure:
+    require_intent_sections: true   # 검색 의도 충족 섹션 구비
+    min_substantive_blocks: 4       # 빈 골격 거부 (숫자 단어수 아님 — 의도 충족 기준)
+  eeat:
+    require_sources: true       # 출처 인용
+    require_dates: true         # 작성/갱신일
+    require_author: true        # 저자 정보
+    require_schema_org: true    # 구조화 데이터
+  policy_screen:
+    block_prohibited_topics: true
+    block_ad_clickbait: true    # "광고 클릭" 유도 문구 차단
+    block_copyright_risk: true
+  human_sample_gate:
+    enabled: true
+    sample_pct: 10              # 배치의 10%는 사람 승인 큐 (캘리브레이션)
+
+# 거부 처리
+on_reject:
+  log_reason: true
+  requeue_for_regeneration: true
+  max_regeneration_attempts: 2

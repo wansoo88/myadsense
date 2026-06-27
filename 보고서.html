@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AdSense 가성비 자동화 — 리서치 & 산출물 보고서</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
+    --ink:#e7ebf2; --muted:#9aa4b2; --accent:#4f9cf9; --good:#2ecc71;
+    --bad:#ff6b6b; --warn:#f5b942; --chip:#222732; --purple:#9b8cff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,-apple-system,sans-serif;
+    line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:40px 22px 80px}
+  header.hero{border:1px solid var(--line);border-radius:16px;
+    background:linear-gradient(135deg,#1a1f2b,#12151c);padding:30px 28px;margin-bottom:26px}
+  .kicker{color:var(--accent);font-weight:700;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase}
+  h1{font-size:27px;margin:10px 0 8px;line-height:1.25}
+  .sub{color:var(--muted);font-size:14px}
+  .meta{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;font-size:12.5px;color:var(--muted)}
+  .chip b{color:var(--ink)}
+  h2{font-size:19px;margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h2 .num{color:var(--accent);font-weight:800;margin-right:8px}
+  p{margin:10px 0}
+  .lead{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;padding:14px 18px;color:#cdd5e0}
+  .lead.warn{border-left-color:var(--warn)}
+  .lead.bad{border-left-color:var(--bad)}
+  .grid{display:grid;gap:12px}
+  @media(min-width:640px){.grid.two{grid-template-columns:1fr 1fr}.grid.three{grid-template-columns:1fr 1fr 1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .card h3{margin:0 0 6px;font-size:15px}
+  .card .tag{font-size:11.5px;font-weight:700;letter-spacing:.05em;padding:2px 8px;border-radius:6px;
+    display:inline-block;margin-bottom:8px}
+  .tag.good{background:rgba(46,204,113,.13);color:var(--good);border:1px solid rgba(46,204,113,.3)}
+  .card p{margin:4px 0;color:#c4ccd8;font-size:13.6px}
+  .card .src{color:var(--muted);font-size:11.5px;margin-top:8px}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.3px}
+  .scroll{overflow-x:auto}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  td .x{color:var(--bad);font-weight:700}
+  .vote{font-variant-numeric:tabular-nums;color:var(--warn);font-weight:700;white-space:nowrap}
+  .lvl{font-weight:700;white-space:nowrap}
+  .lvl.g{color:var(--good)} .lvl.y{color:var(--warn)} .lvl.r{color:#ff9d9d} .lvl.x{color:var(--bad)}
+  .tree{background:#0c0e13;border:1px solid var(--line);border-radius:12px;padding:18px 20px;
+    font-family:"Cascadia Code",Consolas,monospace;font-size:12.7px;color:#cdd5e0;overflow-x:auto;line-height:1.5}
+  .tree .f{color:var(--accent)} .tree .n{color:var(--good)} .tree .c{color:var(--muted)}
+  .files .card{margin-bottom:12px}
+  .files code{background:var(--chip);padding:1.5px 7px;border-radius:6px;font-size:12.5px;color:#a9d3ff}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    padding:3px 10px;font-size:12px;color:var(--muted);margin:2px 4px 2px 0}
+  .pill.new{color:var(--good);border-color:rgba(46,204,113,.35)}
+  ol{padding-left:20px}ol li{margin:7px 0}
+  .warnbox{background:rgba(245,185,66,.08);border:1px solid rgba(245,185,66,.28);border-radius:10px;
+    padding:12px 16px;font-size:13.3px;color:#f0d79a}
+  .badbox{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3);border-radius:10px;
+    padding:12px 16px;font-size:13.3px;color:#ffc4c4}
+  footer{margin-top:40px;color:var(--muted);font-size:12px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
+  a{color:var(--accent)}
+  .stat{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  .stat .s{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:92px}
+  .stat .s b{display:block;font-size:20px;color:var(--ink)}
+  .stat .s span{font-size:11.5px;color:var(--muted)}
+  .flow{background:#0c0e13;border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:#cdd5e0;overflow-x:auto;line-height:1.7;white-space:pre}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Deep Research → 자동화 검토 → 풀스택 설계</div>
+    <h1>Google AdSense 가성비 <b>자동화</b><br>리서치 &amp; 산출물 보고서</h1>
+    <div class="sub">개인·소규모 퍼블리셔가 최소 비용 대비 최대 ROI로 AdSense를 운영하도록, 검증된 전략을 <b>풀스택 자동화 + 대량 프로그래매틱 SEO</b>로 설계하되 계정 정지 리스크를 코드 가드레일로 차단한 시스템.</div>
+    <div class="meta">
+      <span class="chip">📅 <b>2026-06-28</b></span>
+      <span class="chip">📂 <b>D:\cashflow\pjt12-adsense</b></span>
+      <span class="chip">🔬 deep-research (107 에이전트)</span>
+      <span class="chip">🖥️ <b>utilverse.info</b> · Ubuntu cron 24/7</span>
+      <span class="chip">🚫 Artifact 미사용 · 로컬 HTML</span>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="num">1</span>무엇을 했나</h2>
+    <p class="lead">① <b>딥리서치</b>로 AdSense 가성비 전략을 검증(5앵글·25소스·114주장 → 3표 적대 검증 → 발견 9·반증 12). ② 결과를 <b>"최대 자동화" 관점으로 재검토</b>해 무엇이 자동/게이트/금지인지 매핑. ③ 풀스택 자동화 아키텍처 + config 주도 엔진 스캐폴드 + 운영 스킬 5종을 작성. ④ 보유 <b>Ubuntu 서버(utilverse.info) cron 24/7</b> 배포로 설계.</p>
+    <div class="stat">
+      <div class="s"><b>5</b><span>검색 앵글</span></div>
+      <div class="s"><b>25</b><span>소스</span></div>
+      <div class="s"><b>114</b><span>주장</span></div>
+      <div class="s"><b>9 / 12</b><span>검증 / 반증</span></div>
+      <div class="s"><b>5</b><span>운영 스킬</span></div>
+      <div class="s"><b>3층</b><span>자동화 등급</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span>자동화 검토 — 결론 &amp; 천장</h2>
+    <p class="lead bad">⛔ <b>자동화 천장이 존재한다.</b> 트래픽/클릭 생성·부풀리기·유료클릭·다계정은 <b>무효 트래픽(검증 F3) = 계정 영구 정지 = ROI 0</b>. 코드·스케줄 어디에도 구현하지 않는다. "최대 자동화"는 이 선 <u>안</u>에서의 최대치다.</p>
+    <p class="lead warn">⚠️ <b>대량 프로그래매틱 SEO는 가장 리스크 큰 영역</b>(저품질 판정 시 색인 제외·정지). 그래서 "대량"은 <b>분량</b>에서만 대량으로 가고, <b>페이지별 고유 가치 게이트 → 점진 롤아웃 → 킬스위치</b>를 파이프라인에 강제해 "생존 가능한 대량 자동화"로 설계했다.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span>자동화 맵 (전략 요소 → 등급)</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>전략 요소</th><th>등급</th><th>방법</th></tr></thead>
+      <tbody>
+        <tr><td>키워드·니치 리서치 (F5·F6)</td><td class="lvl g">🟢 풀</td><td>Search Console API + Claude 스코어링</td></tr>
+        <tr><td>콘텐츠 초안 생성</td><td class="lvl g">🟢 풀</td><td>Claude + 템플릿 + 페이지별 고유 데이터</td></tr>
+        <tr><td>품질 게이트(중복·가치·E-E-A-T)</td><td class="lvl g">🟢 풀</td><td>발행 전 자동 검사 (리스크 완화 장치)</td></tr>
+        <tr><td>콘텐츠 발행</td><td class="lvl y">🟡 게이트</td><td>통과분만·배치·점진 롤아웃·킬스위치</td></tr>
+        <tr><td>RPM·지역·CWV·색인 모니터링</td><td class="lvl g">🟢 풀</td><td>AdSense / Search Console / PageSpeed API</td></tr>
+        <tr><td>정책·무효 트래픽 감지 (F3)</td><td class="lvl g">🟢 풀</td><td>폴링 → 알림 → 킬스위치(발행 중단)</td></tr>
+        <tr><td>Auto ads 실험·네트워크 전환 (F8·F9)</td><td class="lvl y">🟡 보조</td><td>데이터 기반 권고, 사람이 결정</td></tr>
+        <tr><td>승인 신청 / 정책 이의제기</td><td class="lvl r">🔴 수동</td><td>API 없음 — 사람</td></tr>
+        <tr><td>트래픽·클릭 생성, 유료클릭, 다계정</td><td class="lvl x">⛔ 금지</td><td><span class="x">구현 안 함 — 영구 정지·사기</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span>풀스택 아키텍처</h2>
+    <div class="flow">[서버 cron 24/7 · config/schedule.yaml]  (utilverse.info / Ubuntu)
+        │
+        ▼  orchestrator.py
+  1. INGEST   AdSense·SearchConsole·PageSpeed → DB        🟢
+  2. RESEARCH 키워드·니치·지역 스코어                     🟢
+  3. GENERATE Claude + 템플릿 + 고유 데이터               🟢
+  4. GATE     quality_gate (중복·가치·E-E-A-T·정책)       🟢 ← 발행 전 강제
+  5. PUBLISH  publisher (CMS, 배치·점진 롤아웃)           🟡 ← 통과분만
+  6. OPTIMIZE rpm_analyzer · experiment_advisor (권고)    🟡
+  7. MONITOR  health · killswitch · alerts (상시)         🟢 ← 이상 시 발행 중단
+        │
+        ▼  알림(텔레그램) + 로컬 HTML 리포트</div>
+    <div class="grid three" style="margin-top:12px">
+      <div class="card"><span class="tag good">생존 장치 1</span><h3>품질 게이트</h3><p>고유 가치·근접중복(&lt;0.70)·구조·E-E-A-T·정책 스크리닝 전부 PASS만 발행. 순수 템플릿 양산 거부.</p></div>
+      <div class="card"><span class="tag good">생존 장치 2</span><h3>점진 롤아웃</h3><p>일일 cap부터 시작, 색인·품질 정상일 때만 단계 상향. 대량을 한 번에 쏟지 않음.</p></div>
+      <div class="card"><span class="tag good">생존 장치 3</span><h3>킬스위치</h3><p>무효 트래픽·정책 경고·색인 급락·CWV 불량 시 <b>발행 자동 중단</b>. 해제는 사람이 수동.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span>리서치 근거 — 검증된 발견 <span style="font-size:13px;color:var(--good)">✓</span></h2>
+    <div class="grid two">
+      <div class="card"><span class="tag good">F1·승인</span><h3>최소 글 수·트래픽 기준 없음</h3><p>품질·E-E-A-T가 관문. 글 수 채우기는 가성비 낮음.</p></div>
+      <div class="card"><span class="tag good">F2·필수</span><h3>Privacy Policy 강제</h3><p>About/Contact는 권장(필수 아님). 자동 생성·1회 발행.</p></div>
+      <div class="card"><span class="tag good">F3·정책</span><h3>무효 트래픽 = 영구 정지</h3><p>자동화 천장의 근거. 클릭/트래픽 생성 금지.</p></div>
+      <div class="card"><span class="tag good">F5·F6</span><h3>Tier-1 영어권 · 금융/보험/기술/건강</h3><p>RPM 5–30배(방향성). 여행은 고CPC 아님.</p></div>
+      <div class="card"><span class="tag good">F7·트래픽</span><h3>오가닉 검색 ≫ 소셜</h3><p>가성비 트래픽 = 검색 SEO. 유료·소셜 자동화 ❌.</p></div>
+      <div class="card"><span class="tag good">F8·F9</span><h3>Auto ads 실험 · Raptive 25k PV</h3><p>코드 수정 0 RPM A/B. 25k에서 전환 검토.</p></div>
+    </div>
+    <p class="warnbox" style="margin-top:12px">⚠️ <b>반증된 통념(따르지 말 것)</b>: "글 30–40개 필수"·"About/Contact 필수"·CPC/RPM 절대 수치(미국 $0.61·한국 6배·50배)·"Mediavine $5,000 모델·Ezoic 무최소" 모두 검증에서 깨짐. 절대 수치는 <b>본인 AdSense 리포트로 검증.</b> AdSense는 2024-03 CPC→CPM 전환 → 지표는 <b>RPM/CPM</b>.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">6</span>만든 산출물</h2>
+    <div class="tree">
+pjt12-adsense/
+├── <span class="f">CLAUDE.md</span>            <span class="c"># 핵심 규칙 + 자동화 천장 가드레일 (갱신)</span>
+├── <span class="f">AUTOMATION.md</span>        <span class="n"># ★ 자동화 맵 + 풀스택 아키텍처 (신규)</span>
+├── <span class="f">PLAN.md</span>              <span class="c"># 단계별 계획 + 자동화 오버레이 (갱신)</span>
+├── <span class="f">README.md</span>            <span class="n"># 셋업·운영 가이드 (신규)</span>
+├── <span class="f">requirements.txt</span> · <span class="f">.env.example</span>   <span class="n"># 의존성·키 목록 (신규)</span>
+├── config/                              <span class="n"># config 주도 (신규)</span>
+│   ├── <span class="f">guardrails.yaml</span>  <span class="c"># 금지목록·롤아웃·킬스위치 임계</span>
+│   ├── <span class="f">content.yaml</span>     <span class="c"># 품질 게이트 임계</span>
+│   ├── <span class="f">niches.yaml</span>      <span class="c"># 니치·지역·의도 스코어링</span>
+│   ├── <span class="f">schedule.yaml</span>    <span class="c"># cron 케이던스</span>
+│   └── <span class="f">sites.yaml</span>       <span class="c"># 사이트·CMS·API·배포(서버)</span>
+├── engine/                              <span class="n"># 엔진 스캐폴드 (신규)</span>
+│   ├── <span class="f">orchestrator.py</span>          <span class="c"># 파이프라인 스파인 + --stage CLI</span>
+│   ├── content/<span class="f">quality_gate.py</span>   <span class="c"># ★ 품질 게이트 (실로직)</span>
+│   └── monitor/<span class="f">killswitch.py</span>     <span class="c"># ★ 킬스위치 (실로직)</span>
+├── docs/<span class="f">RESEARCH.md</span>     <span class="c"># 검증/반증 근거 + 출처</span>
+├── .claude/skills/      <span class="c"># audit · content · pipeline★ · optimize · monitor★</span>
+└── <span class="f">보고서.html</span>          <span class="c"># 이 보고서 (로컬, Artifact 아님)</span>
+    </div>
+    <div class="files" style="margin-top:14px">
+      <div class="card"><h3>운영 스킬 5종</h3><p><span class="pill">/adsense-audit</span><span class="pill">/adsense-content</span><span class="pill new">/adsense-pipeline ★</span><span class="pill">/adsense-optimize</span><span class="pill new">/adsense-monitor ★</span></p><p>각 SKILL.md = 가드레일 + 절차 + 출력형식 + 절대금지 SOP. <code>/스킬명</code>으로 호출해 엔진을 운영(점검·기획·파이프라인·최적화·감시).</p></div>
+      <div class="card"><h3>전략상 핵심 코드 (실로직 작성)</h3><p><code>quality_gate.py</code> — 고유 가치·근접중복(Jaccard)·구조·E-E-A-T·정책 검사. <code>killswitch.py</code> — 트리거 평가·발행 중단 영속화·수동 해제. API 어댑터(ingest/publisher)는 아키텍처에 맞춘 채움 지점.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">7</span>배포 (보유 인프라)</h2>
+    <div class="lead">서버 <b>115.68.230.40</b> (Ubuntu, <code>ssh -i ~/.ssh/autobtc_iwinv root@…</code>) · 도메인 <b>utilverse.info</b> 서브도메인 · Caddy 자동 HTTPS · <b>서버 cron 24/7</b>로 스케줄 구동 (pjt11 컨벤션 동일). 자체 서버가 있으므로 케이던스는 서버 cron이 1차, Claude Code는 운영·디버그·리포트 레이어.</div>
+  </section>
+
+  <section>
+    <h2><span class="num">8</span>다음에 할 일</h2>
+    <ol>
+      <li><b>git init + 셋업</b> — 버전관리·예약 에이전트 활성화, <code>.env</code> 채우기(Google/Claude/CMS 키).</li>
+      <li><b>니치 확정</b> — <code>/adsense-content</code> (서브도메인은 <code>guides.utilverse.info</code>로 확정, 라벨 변경은 <code>config/sites.yaml</code> 한 줄).</li>
+      <li><b>승인 통과</b> — Privacy Policy 자동 발행 후 <code>/adsense-audit</code> → 신청(수동).</li>
+      <li><b>파이프라인 드라이런</b> — <code>/adsense-pipeline</code>로 소량(5건) 생성→게이트→발행 검증 후 램프업.</li>
+      <li><b>감시 가동</b> — <code>/adsense-monitor</code> + 서버 cron(매시)으로 킬스위치 상시.</li>
+    </ol>
+    <p class="warnbox">💡 미해결 질문(자체 데이터로 채울 것): 한↔영 정확 RPM 배율, 프로그래매틱 SEO 안전 한계, 25k에서 net RPM 손익분기. <b>소량 테스트 → 모니터 → 확장</b> 순으로 자체 검증.</p>
+  </section>
+
+  <footer>
+    deep-research(107 에이전트·25 소스·3표 적대 검증) → 자동화 검토 → 풀스택 설계.<br>
+    아키텍처 <b>AUTOMATION.md</b> · 규칙 <b>CLAUDE.md</b> · 계획 <b>PLAN.md</b> · 근거 <b>docs/RESEARCH.md</b> · pjt12-adsense
+  </footer>
+
+</div>
+</body>
+</html>

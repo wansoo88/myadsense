@@ -1,0 +1,38 @@
+# guardrails.yaml — 자동화 안전벨트 (AUTOMATION.md §0·§4)
+# 이 값들은 코드보다 우선한다. 위반 가능 동작은 구현/실행 금지.
+
+# ⛔ 절대 금지 (구현 안 함 — docs/RESEARCH.md F3, 위반 시 계정 영구 정지)
+forbidden:
+  - traffic_generation        # 봇/스크립트로 방문 생성
+  - click_or_impression_inflation  # 자기/지인/봇 클릭·노출 부풀리기
+  - paid_clicks               # 유료 클릭 구매
+  - multi_account             # 다계정·프록시 로테이션
+  - click_bait_on_ads         # "광고 클릭하세요" 유도 문구
+# → 위 항목은 config 토글로도 켤 수 없다. 코드에 경로 자체를 두지 않는다.
+
+# 🟡 발행 점진 롤아웃
+rollout:
+  daily_publish_cap: 20        # 하루 최대 발행 수 (초기 보수적, 색인 정상 시 단계 상향)
+  ramp_up_factor: 1.5          # 배치 정상 시 cap 증가율
+  ramp_up_max: 200             # cap 상한
+  require_indexing_ok_before_next_batch: true
+
+# 🔴 킬스위치 — 트리거 시 발행 즉시 중단 + 알림 (해제는 사람이 수동)
+killswitch:
+  enabled: true
+  triggers:
+    policy_center_warning: true        # AdSense 정책센터 경고
+    invalid_traffic_alert: true        # 무효 트래픽 알림 (최우선)
+    manual_action: true                # Search Console 수동 조치
+    indexing_drop_pct: 30              # 색인률 30% 이상 급락
+    cwv_status_poor: true              # Core Web Vitals "불량" 전환
+    rpm_drop_pct: 50                   # RPM 50% 이상 급락(이상치)
+    new_page_deindex_rate_pct: 40      # 신규 페이지 색인 거부율 임계(저품질 신호)
+  auto_resume: false                   # 자동 재개 금지
+
+# 정책 시간 민감성 — 운영 직전 1차 문서 재확인 (docs/RESEARCH.md Caveat 1)
+policy_recheck:
+  sources:
+    - https://support.google.com/adsense/answer/48182   # 무효 트래픽
+    - https://support.google.com/adsense/answer/9336650  # RAC (2025-11-01)
+  recheck_before_scale: true

@@ -1,0 +1,31 @@
+# schedule.yaml — 자동화 케이던스 (AUTOMATION.md §5)
+# 구동: 로컬 cron / Claude Code 예약 에이전트(/loop·routines) + 스킬.
+# ⚠️ 예약 클라우드 에이전트·버전관리 → git init 필요.
+
+jobs:
+  ingest:                      # API 데이터 수집 → DB
+    cron: "0 6 * * *"          # 매일 06:00
+    runs: engine/orchestrator.py --stage ingest
+
+  monitor:                     # 정책·색인·CWV·RPM 이상 감지 + 킬스위치
+    cron: "0 * * * *"          # 매시
+    runs: engine/orchestrator.py --stage monitor
+    critical: true             # 실패 시 즉시 알림
+
+  research:                    # 키워드·니치·지역 스코어 갱신
+    cron: "0 7 * * 1"          # 매주 월 07:00
+    runs: engine/orchestrator.py --stage research
+
+  generate_gate:               # 초안 생성 → 품질 게이트 → 발행 큐
+    cron: "0 8 * * 1"          # 매주 월 08:00
+    runs: engine/orchestrator.py --stage generate
+
+  publish:                     # 큐에서 daily_publish_cap만큼 점진 발행
+    cron: "0 9 * * *"          # 매일 09:00
+    runs: engine/orchestrator.py --stage publish
+    respects: config/guardrails.yaml  # cap·킬스위치 준수
+
+  report:                      # 로컬 HTML 리포트 (Artifact 아님)
+    cron: "0 10 * * 1"         # 매주 월 10:00
+    runs: engine/orchestrator.py --stage report
+    output: reports/weekly_{date}.html

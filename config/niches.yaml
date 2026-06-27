@@ -1,0 +1,36 @@
+# niches.yaml — 니치·지역·의도 타깃팅 (docs/RESEARCH.md F5·F6·F7)
+# 절대 CPC 수치는 신뢰 금지(R3~R9) — 순위·방향성만. 절대값은 자체 AdSense 리포트로 검증.
+
+# 고CPC 니치 (F6) — 여행은 중간 단가(고CPC 아님)
+niches:
+  priority:        # 본인 역량 있는 하위 니치 1개부터 (E-E-A-T 신호 = 공짜)
+    - finance      # 세금·신용·핀테크·대출
+    - insurance    # 건강/자동차/여행자보험 비교
+    - tech         # VPN·사이버보안·SaaS
+    - health       # 질환 정보·보조제 (YMYL — E-E-A-T 강하게 요구)
+  avoid_as_high_cpc:
+    - travel       # 중간 단가, 고CPC로 오인 금지
+
+# 지역/언어 (F5) — Tier-1 영어권이 RPM 레버 가장 큼 (~5–30x, 정확 배율 불확실)
+geo:
+  target_tier: 1
+  tier_1: [US, GB, CA, AU]    # 고구매력 영어권 우선
+  fallback_ko_high_value:      # 한국어만 가능 시 고단가 하위주제로 한정
+    - tax
+    - loan
+    - insurance_compare
+    - b2b_saas
+
+# 검색 의도 (F7) — 비교·거래형이 단가↑. 오가닉 검색만(소셜·유료 ❌)
+intent:
+  prefer: [comparison, transactional]   # 광고 단가 높음
+  allow: [informational]
+  traffic_source: organic_search_only   # 유료·소셜 트래픽 자동화 금지
+
+# 키워드 스코어링 가중치 (keyword_research.py)
+scoring:
+  weights:
+    niche_match: 0.35      # 고CPC 니치 적합도
+    intent_value: 0.30     # 비교/거래 > 정보
+    geo_tier: 0.20         # Tier-1 비중
+    competition: -0.15     # 경쟁도 패널티
