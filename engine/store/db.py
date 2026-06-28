@@ -72,3 +72,9 @@ def latest(source: str, metric: str, limit: int = 20):
         return c.execute(
             "SELECT date,dim_value,value FROM metrics WHERE source=? AND metric=? "
             "ORDER BY date DESC LIMIT ?", (source, metric, limit)).fetchall()
+
+
+def query(sql: str, params=()):
+    """임의 SELECT (health·report 용). 결과 행 리스트."""
+    with connect() as c:
+        return c.execute(sql, params).fetchall()

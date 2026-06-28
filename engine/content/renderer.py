@@ -433,10 +433,14 @@ def render(spec, draft: bool = False) -> str:
                f'<span class="sep">•</span><span>{esc(str(getattr(spec, "reading_time", 6)))} min read</span></div>')
     draft_banner = '<div class="draft">DRY-RUN PREVIEW · 샘플 초안(미발행) · 자동 생성</div>' if draft else ""
 
+    extra = _jsonld(spec)
+    if getattr(spec, "cluster", None):
+        extra += f'<meta name="cluster" content="{esc(spec.cluster)}">'
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head(spec.title, spec.dek, getattr(spec, "canonical", ""), "article", _jsonld(spec))}
+{_head(spec.title, spec.dek, getattr(spec, "canonical", ""), "article", extra)}
 </head>
 <body>
 <a class="skip" href="#overview">Skip to content</a>
@@ -513,6 +517,21 @@ def _ic(path, w=18, stroke="currentColor"):
             f'stroke-width="2">{path}</svg>')
 
 
+def _feat_card(p, grad=False):
+    """비교글 카드 (홈 '이번 주 비교' + 카테고리 허브 공용)."""
+    pair = _vs_pair(p["title"])
+    thumb = (f'<span>{esc(pair[0])}</span><span class="vs">vs</span><span>{esc(pair[1])}</span>'
+             if pair else f'<span>{esc(p["title"][:40])}</span>')
+    meta = " · ".join([x for x in [p.get("read"),
+                                   (f'updated {p["updated"]}' if p.get("updated") else None)] if x])
+    return (f'<a class="feat-card" href="{esc(p["url"])}">'
+            f'<div class="feat-thumb{" grad" if grad else ""}">{thumb}</div>'
+            f'<div class="bd"><div class="ey">Comparison</div>'
+            f'<div class="tt">{esc(p["title"].split(":")[0])}</div>'
+            f'<div class="ds">{esc(p.get("desc") or "Hands-on comparison of pricing, features, and fit.")}</div>'
+            f'<div class="mt">{esc(meta)}</div></div></a>')
+
+
 def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str = "") -> str:
     pages = list(pages)
     featured = pages[:3]
@@ -522,20 +541,8 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
     pills = "".join(f'<a href="{esc(p["url"])}">{esc((_vs_pair(p["title"]) and " vs ".join(_vs_pair(p["title"]))) or p["title"][:28])}</a>'
                     for p in featured) or '<span class="lab">coming soon</span>'
 
-    # 이번 주 비교 카드
-    cards = []
-    for i, p in enumerate(featured):
-        pair = _vs_pair(p["title"])
-        thumb = (f'<span>{esc(pair[0])}</span><span class="vs">vs</span><span>{esc(pair[1])}</span>'
-                 if pair else f'<span>{esc(p["title"][:40])}</span>')
-        meta = " · ".join([x for x in [p.get("read"), (f'updated {p["updated"]}' if p.get("updated") else None)] if x])
-        cards.append(
-            f'<a class="feat-card" href="{esc(p["url"])}">'
-            f'<div class="feat-thumb{" grad" if i == 0 else ""}">{thumb}</div>'
-            f'<div class="bd"><div class="ey">Comparison</div>'
-            f'<div class="tt">{esc(p["title"].split(":")[0])}</div>'
-            f'<div class="ds">{esc(p.get("desc") or "Hands-on comparison of pricing, features, and fit.")}</div>'
-            f'<div class="mt">{esc(meta)}</div></div></a>')
+    # 이번 주 비교 카드 (첫 카드만 그라디언트 썸네일)
+    cards = [_feat_card(p, grad=(i == 0)) for i, p in enumerate(featured)]
     featured_html = (f'<section class="home-sec" id="featured"><div class="container">'
                      f'<div class="sechead"><h2><span class="num">01</span>This week\'s comparisons</h2></div>'
                      f'<div class="feat-grid">{"".join(cards)}</div></div></section>') if cards else ""
@@ -604,6 +611,32 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
 {categories_html}
 {latest_html}
 {newsletter}
+{_footer()}
+{_SCRIPTS}
+</body>
+</html>"""
+
+
+def render_hub(name: str, dek: str, pages, *, domain: str = "stack.utilverse.info", canonical: str = "") -> str:
+    """카테고리 허브 페이지 — 해당 카테고리의 비교글 카드 그리드."""
+    cards = "".join(_feat_card(p) for p in pages) or \
+        '<p style="color:var(--muted);padding:18px 0">No articles in this category yet — check back soon.</p>'
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+{_head(name + " — stack.", dek, canonical, "website")}
+</head>
+<body>
+<a class="skip" href="#hub">Skip to content</a>
+{_header()}
+<div class="container" style="padding-top:32px;padding-bottom:64px"><main id="hub">
+<nav class="crumb"><a href="/">Home</a><span class="s">/</span><span class="cur">{esc(name)}</span></nav>
+<div class="kicker">Category</div>
+<h1>{esc(name)}</h1>
+<p class="dek">{esc(dek)}</p>
+{_ad("hub-top", "leaderboard")}
+<div class="feat-grid" style="margin-top:24px">{cards}</div>
+</main></div>
 {_footer()}
 {_SCRIPTS}
 </body>

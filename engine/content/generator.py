@@ -41,6 +41,7 @@ class ContentSpec:
     kicker: str = ""                    # eyebrow 라벨(없으면 renderer 가 page_type 로 유도)
     tldr_html: str | None = None        # 상단 'At a glance' 한 줄 결론
     feature_matrix: dict | None = None  # {"a","b","rows":[{"label","a","b"(✓/△/✗),"note"}]}
+    cluster: str | None = None          # topics.yaml 클러스터 id(카테고리 허브 그룹핑용)
 
 
 def _strip(h: str) -> str:
@@ -66,10 +67,13 @@ def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
     )
 
 
-def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False, draft: bool = False):
+def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False,
+             draft: bool = False, cluster: str | None = None):
     """topic(시드 키워드) → (spec, page). page.html 은 design.md 렌더 결과."""
     use_api = (not force_fixture) and bool(os.environ.get("ANTHROPIC_API_KEY"))
     spec = _via_api(topic, content_cfg) if use_api else _fixture(topic)
+    if cluster:
+        spec.cluster = cluster                # 카테고리 허브 그룹핑용(렌더 시 meta로 기록)
     html_doc = renderer.render(spec, draft=draft)
     return spec, spec_to_page(spec, html_doc)
 

@@ -32,11 +32,23 @@ def _meta_of(doc: str) -> dict:
     read = re.search(r"(\d+)\s*min read", doc)
     upd = re.search(r"Updated <time>([^<]+)</time>", doc)
     desc = re.search(r'<meta name="description" content="([^"]*)">', doc)
+    cl = re.search(r'<meta name="cluster" content="([^"]*)">', doc)
     return {
         "read": f"{read.group(1)} min read" if read else None,
         "updated": upd.group(1).strip() if upd else None,
         "desc": html.unescape(desc.group(1)) if desc else None,
+        "cluster": cl.group(1) if cl else None,
     }
+
+
+# 카테고리 허브 (헤더·홈 nav 가 링크하는 URL) — topics.yaml 클러스터 id 매핑
+CATEGORIES = [
+    ("ai-coding", "AI Coding", "Editors, assistants, and AI coding tools — compared hands-on.", {"ai-coding-tools"}),
+    ("hosting", "Hosting & Self-host", "VPS, cloud hosting, and self-hosting — compared hands-on.", {"hosting-selfhost"}),
+    ("dev-tools", "Dev Tools", "SaaS and developer tools — compared hands-on.", {"dev-saas-compare"}),
+    ("ai-tools", "AI Tools", "Productivity and creative AI tools — compared hands-on.", {"ai-productivity"}),
+    ("vpn-security", "VPN & Security", "VPNs, password managers, and security tools — compared hands-on.", {"vpn-security"}),
+]
 
 
 def _write(path: str, content: str):
@@ -101,8 +113,16 @@ def build(cfg) -> str:
     _write(os.path.join(SITE_DIR, "index.html"),
            renderer.render_home(pages, domain=domain, canonical=f"{base}/"))
 
+    # 3.5) 카테고리 허브 (nav·홈이 링크하는 URL — 항상 5개 생성, 빈 카테고리는 안내)
+    cat_urls = []
+    for slug, name, dek, cluster_ids in CATEGORIES:
+        cat_pages = [p for p in pages if p.get("cluster") in cluster_ids]
+        _write(os.path.join(SITE_DIR, slug, "index.html"),
+               renderer.render_hub(name, dek, cat_pages, domain=domain, canonical=f"{base}/{slug}/"))
+        cat_urls.append(f"{base}/{slug}/")
+
     # 4) sitemap.xml + robots.txt
-    urls = [f"{base}/"] + [f"{base}{p['url']}" for p in pages] + \
+    urls = [f"{base}/"] + cat_urls + [f"{base}{p['url']}" for p in pages] + \
            [f"{base}/{p}/" for p in static_pages]
     sitemap = ('<?xml version="1.0" encoding="UTF-8"?>\n'
                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -111,5 +131,6 @@ def build(cfg) -> str:
     _write(os.path.join(SITE_DIR, "robots.txt"),
            f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n")
 
-    print(f"build: {len(pages)} 콘텐츠 + {len(static_pages)} 필수 페이지 + sitemap/robots → {SITE_DIR}/")
+    print(f"build: {len(pages)} 콘텐츠 + {len(CATEGORIES)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
+          f"+ sitemap/robots → {SITE_DIR}/")
     return SITE_DIR

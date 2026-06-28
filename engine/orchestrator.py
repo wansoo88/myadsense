@@ -80,7 +80,7 @@ def stage_generate(cfg):
     corpus, passed = [], 0
     for kw, cid in seeds:
         try:
-            spec, page = generator.generate(kw, cfg["content"])   # 키 있으면 API, 없으면 fixture
+            spec, page = generator.generate(kw, cfg["content"], cluster=cid)  # 키 있으면 API, 없으면 fixture
         except Exception as e:
             print(f"SKIP {kw}: 생성 실패 {e}")
             continue
@@ -98,12 +98,18 @@ def stage_generate(cfg):
 
 def stage_monitor(cfg):
     """정책·색인·CWV·RPM 신호 수집 → 킬스위치 평가. 이상 시 발행 중단 + 알림."""
-    metrics = killswitch.Metrics()           # TODO: monitor.health 가 API에서 채움
+    from store import db
+    from monitor import health, alerts
+    db.init()
+    metrics = health.collect(cfg, db)        # CWV·RPM은 DB, 그 외는 signals.json 오버라이드
     decision = killswitch.evaluate(metrics, cfg["guardrails"])
     if decision.halt:
         killswitch.engage(decision)
-        # TODO: monitor.alerts.send(decision.reasons)
+        alerts.send("[stack. KILLSWITCH] 발행 자동 중단 — " + "; ".join(decision.reasons)
+                    + " (원인 확인 후 killswitch.clear() 로 해제)", cfg)
         print("KILLSWITCH ENGAGED:", "; ".join(decision.reasons))
+    else:
+        print("monitor: 정상 (killswitch 미발동)")
     return decision
 
 
@@ -140,8 +146,11 @@ def stage_deploy(cfg):
 
 
 def stage_report(cfg):
-    """로컬 HTML 리포트(RPM·세션·CWV·게이트 통과율). Artifact 아님(CLAUDE.md)."""
-    raise NotImplementedError("report 렌더러 구현 → reports/weekly_{date}.html")
+    """로컬 HTML 리포트(RPM·CWV·검색·발행/큐·킬스위치). Artifact 아님(CLAUDE.md)."""
+    from store import db
+    import report as reporter
+    db.init()
+    return reporter.build(cfg, db)
 
 
 STAGES = {
@@ -161,7 +170,8 @@ def main(argv=None):
     p.add_argument("--stage", required=True, choices=list(STAGES))
     args = p.parse_args(argv)
     cfg = load_config()
-    return STAGES[args.stage](cfg)
+    STAGES[args.stage](cfg)             # 반환값은 종료코드로 쓰지 않음(예외 시에만 비0)
+    return 0
 
 
 if __name__ == "__main__":
