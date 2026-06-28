@@ -12,12 +12,12 @@ venv/
 # 런타임 상태·생성물 (주석은 패턴과 같은 줄에 두지 말 것 — gitignore 미지원)
 engine/store/*.db
 engine/store/killswitch_state.json
-# 리포트 산출물
-reports/
+# 리포트 산출물 (루트 한정 — 앞 / 로 앵커, engine/content 같은 하위 동명 디렉토리 보호)
+/reports/
 # 드라이런 미리보기·발행 큐
-dist/
+/dist/
 # 생성된 발행 콘텐츠(SSG 빌드 산출물)
-content/
+/content/
 
 # 로그·임시
 *.log

@@ -44,7 +44,8 @@ def stage_research(cfg):
 def stage_generate(cfg):
     """초안 생성 → 품질 게이트 → 발행 큐(dist/queue). 통과분만.
 
-    현재 fixture 모드(오프라인 드래프트). ANTHROPIC_API_KEY 기반 실생성은 generator._via_api 구현 후.
+    ANTHROPIC_API_KEY 있으면 Claude(claude-opus-4-8) 실생성, 없으면 fixture(오프라인 드래프트).
+    개별 생성 실패(거절·오류)는 스킵하고 계속.
     """
     from content import generator, quality_gate
     seeds = []
@@ -54,7 +55,11 @@ def stage_generate(cfg):
     os.makedirs("dist/queue", exist_ok=True)
     corpus, passed = [], 0
     for kw, cid in seeds:
-        spec, page = generator.generate(kw, cfg["content"], force_fixture=True)
+        try:
+            spec, page = generator.generate(kw, cfg["content"])   # 키 있으면 API, 없으면 fixture
+        except Exception as e:
+            print(f"SKIP {kw}: 생성 실패 {e}")
+            continue
         r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
         if r.passed:
             with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
@@ -108,6 +113,11 @@ STAGES = {
 
 
 def main(argv=None):
+    try:                                  # .env 의 ANTHROPIC_API_KEY 등 로드(있으면)
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
     p = argparse.ArgumentParser()
     p.add_argument("--stage", required=True, choices=list(STAGES))
     args = p.parse_args(argv)

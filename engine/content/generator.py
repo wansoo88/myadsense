@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+import datetime
+import json
 import os
 import re
 
@@ -69,12 +71,115 @@ def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False, draf
     return spec, spec_to_page(spec, html_doc)
 
 
+# 구조화 출력 스키마 — Claude 가 이 형태로만 반환(output_config.format).
+# 날짜·저자·slug·canonical 은 모델이 아니라 시스템이 채운다(날조 방지) → 스키마에 없음.
+_CONTENT_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {
+        "title": {"type": "string"},
+        "dek": {"type": "string"},
+        "page_type": {"type": "string", "enum": ["comparison", "listicle", "guide", "alternatives"]},
+        "intro_html": {"type": "string"},
+        "sections": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"heading": {"type": "string"}, "html": {"type": "string"}},
+            "required": ["heading", "html"]}},
+        "comparison": {"type": ["object", "null"], "additionalProperties": False,
+            "properties": {"a": {"type": "string"}, "b": {"type": "string"},
+                "rows": {"type": "array", "items": {
+                    "type": "object", "additionalProperties": False,
+                    "properties": {"feature": {"type": "string"}, "a": {"type": "string"},
+                        "b": {"type": "string"}, "winner": {"type": ["string", "null"]}},
+                    "required": ["feature", "a", "b", "winner"]}}},
+            "required": ["a", "b", "rows"]},
+        "pricing": {"type": ["array", "null"], "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"name": {"type": "string"}, "price": {"type": "string"},
+                "features": {"type": "array", "items": {"type": "string"}},
+                "cta": {"type": ["object", "null"], "additionalProperties": False,
+                    "properties": {"label": {"type": "string"}, "url": {"type": "string"}},
+                    "required": ["label", "url"]}},
+            "required": ["name", "price", "features", "cta"]}},
+        "pros_cons": {"type": ["array", "null"], "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"name": {"type": "string"},
+                "pros": {"type": "array", "items": {"type": "string"}},
+                "cons": {"type": "array", "items": {"type": "string"}}},
+            "required": ["name", "pros", "cons"]}},
+        "verdict_html": {"type": "string"},
+        "sources": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"title": {"type": "string"}, "url": {"type": "string"}},
+            "required": ["title", "url"]}},
+        "related": {"type": ["array", "null"], "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"title": {"type": "string"}, "url": {"type": "string"}},
+            "required": ["title", "url"]}},
+    },
+    "required": ["title", "dek", "page_type", "intro_html", "sections", "comparison",
+                 "pricing", "pros_cons", "verdict_html", "sources", "related"],
+}
+
+_SYSTEM = """You are an editor for an independent software-comparison site (SaaS, developer, and AI tools) for an English-speaking audience.
+Write genuinely useful, original content that satisfies search intent. Rules:
+- E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of. Describe pricing as tiers (e.g. "free tier + paid Pro") and tell readers to confirm current pricing on the vendor's site.
+- Structure: at least 4 substantive sections. For comparisons include a comparison table (real differentiating features), pricing (tiered), pros/cons per option, and a hands-on verdict.
+- HTML fields (*_html): simple semantic HTML only — <p>, <strong>, <em>, <ul>, <li>, <h3>. NO <script>, NO inline styles, NO ad/clickbait language, NO "click the ad". Styling is handled by the site theme.
+- Neutral, trustworthy, editorial tone. No fabricated testimonials. Output must match the provided JSON schema exactly."""
+
+
 def _via_api(topic: str, content_cfg: dict) -> ContentSpec:
-    """ANTHROPIC_API_KEY 사용 시 Claude 로 ContentSpec 생성 (운영 시 구조화 출력 프롬프트로 확장)."""
-    raise NotImplementedError(
-        "API 생성은 운영 단계에서 구현 — content.yaml generation.model 사용, "
-        "구조화 출력(JSON)으로 ContentSpec 채우고 페이지별 unique_data 강제. "
-        "드라이런은 generate(..., force_fixture=True)."
+    """ANTHROPIC_API_KEY 사용 시 Claude(claude-opus-4-8)로 ContentSpec 생성 — 구조화 출력."""
+    try:
+        import anthropic  # SDK는 이 경로에서만 필요(드라이런 fixture는 불필요)
+    except ImportError as e:
+        raise RuntimeError("anthropic SDK 미설치 — `pip install anthropic` (requirements.txt)") from e
+
+    gen = content_cfg.get("generation", {})
+    model = gen.get("model", "claude-opus-4-8")
+    language = gen.get("language", "en")
+    client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수에서 인증
+
+    user = (f"Write a {language} article for this search query: \"{topic}\".\n"
+            "If it is an 'X vs Y' query, make page_type 'comparison' and fill comparison/pricing/pros_cons. "
+            "If it is 'best ...' make it 'listicle'; if 'how to ...' make it 'guide' (comparison may be null). "
+            "Include 2+ official sources. Aim for depth that fully answers the query.")
+
+    resp = client.messages.create(
+        model=model,
+        max_tokens=16000,                       # 비스트리밍 안전 한도(타임아웃 회피)
+        thinking={"type": "adaptive"},          # opus-4-8: adaptive only (budget_tokens 금지)
+        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": _CONTENT_SCHEMA}},
+        system=_SYSTEM,
+        messages=[{"role": "user", "content": user}],
+    )
+    if resp.stop_reason == "refusal":           # 안전 분류기 거절 → 파이프라인이 스킵
+        raise RuntimeError(f"content generation refused: {getattr(resp, 'stop_details', None)}")
+
+    text = next(b.text for b in resp.content if b.type == "text")  # thinking 블록 뒤의 text
+    data = json.loads(text)                     # output_config.format 가 유효 JSON 보장
+    return _dict_to_spec(topic, data, content_cfg)
+
+
+def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
+    """모델 출력(dict) → ContentSpec. 날짜·저자·slug·canonical 은 시스템이 채움."""
+    gen = content_cfg.get("generation", {})
+    title = d.get("title") or topic
+    slug = renderer.slugify(title)
+    today = datetime.date.today().isoformat()   # 모델이 아니라 시스템 날짜
+    domain = "stack.utilverse.info"
+    words = len(_strip(d.get("intro_html", "") + " " + " ".join(s.get("html", "") for s in d.get("sections", []))).split())
+    return ContentSpec(
+        slug=slug, title=title, dek=d["dek"], page_type=d.get("page_type", "comparison"),
+        breadcrumb=[("Home", "/"), ("Compare", "/compare/"), (title, "")],
+        author=gen.get("author", "The stack. editors"),
+        author_bio="Independent, hands-on software reviews.",
+        published_at=today, updated_at=today, reading_time=max(3, round(words / 200)),
+        canonical=f"https://{domain}/compare/{slug}/",
+        intro_html=d["intro_html"], sections=d["sections"],
+        comparison=d.get("comparison"), pricing=d.get("pricing"),
+        pros_cons=d.get("pros_cons"), verdict_html=d.get("verdict_html"),
+        sources=d.get("sources", []), related=d.get("related") or [],
     )
 
 
