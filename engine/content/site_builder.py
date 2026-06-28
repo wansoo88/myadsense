@@ -27,6 +27,18 @@ def _title_of(html_doc: str, fallback: str) -> str:
     return html.unescape(m.group(1).strip()) if m else fallback
 
 
+def _meta_of(doc: str) -> dict:
+    """렌더된 페이지에서 홈 카드용 메타 추출(읽는 시간·갱신일·설명)."""
+    read = re.search(r"(\d+)\s*min read", doc)
+    upd = re.search(r"Updated <time>([^<]+)</time>", doc)
+    desc = re.search(r'<meta name="description" content="([^"]*)">', doc)
+    return {
+        "read": f"{read.group(1)} min read" if read else None,
+        "updated": upd.group(1).strip() if upd else None,
+        "desc": html.unescape(desc.group(1)) if desc else None,
+    }
+
+
 def _write(path: str, content: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -72,7 +84,8 @@ def build(cfg) -> str:
         with open(qf, encoding="utf-8") as f:
             doc = f.read()
         _write(os.path.join(SITE_DIR, "compare", slug, "index.html"), doc)
-        pages.append({"slug": slug, "title": _title_of(doc, slug), "url": f"/compare/{slug}/"})
+        pages.append({"slug": slug, "title": _title_of(doc, slug),
+                      "url": f"/compare/{slug}/", **_meta_of(doc)})
 
     # 2) 필수/정적 페이지 (Privacy 필수 — F2)
     static_pages = {
@@ -84,14 +97,9 @@ def build(cfg) -> str:
         _write(os.path.join(SITE_DIR, path, "index.html"),
                renderer.render_static_page(title, body, description=f"{title} — {domain}"))
 
-    # 3) 인덱스
-    items = "".join(f'<li><a href="{esc(p["url"])}">{esc(p["title"])}</a></li>' for p in pages) \
-        or "<li>No articles published yet.</li>"
-    index_body = (f'<p class="dek">Independent, hands-on comparisons and guides for SaaS, developer, and AI tools.</p>'
-                  f'<h3>Latest comparisons</h3><ul>{items}</ul>')
+    # 3) 홈 (Home 목업 수준 — 히어로·이번 주 비교·카테고리·최신·뉴스레터)
     _write(os.path.join(SITE_DIR, "index.html"),
-           renderer.render_static_page("stack. — software comparisons & guides", index_body,
-                                       description="Independent SaaS, dev, and AI tool comparisons."))
+           renderer.render_home(pages, domain=domain, canonical=f"{base}/"))
 
     # 4) sitemap.xml + robots.txt
     urls = [f"{base}/"] + [f"{base}{p['url']}" for p in pages] + \

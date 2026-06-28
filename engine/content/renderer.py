@@ -154,6 +154,65 @@ footer.site{border-top:1px solid var(--line);background:var(--surface)}
 footer.site .inner{max-width:1120px;margin:0 auto;padding:28px 24px;display:flex;flex-wrap:wrap;gap:20px;align-items:center;font-size:13.5px;color:var(--muted)}
 footer.site .fb{font-weight:700;color:var(--ink-soft)}footer.site nav{display:flex;flex-wrap:wrap;gap:16px}footer.site a{color:var(--muted)}footer.site .priv{font-weight:600}footer.site .cp{margin-left:auto}
 .draft{background:#f5b942;color:#1a1f2b;text-align:center;font-size:13px;font-weight:700;padding:8px 12px}
+/* home */
+.hero{padding:88px 0 76px;text-align:center}
+.hero .pill{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:6px 14px;background:var(--surface)}
+.hero .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block}
+.hero h1{font-size:clamp(40px,6.4vw,68px);line-height:1.04;letter-spacing:-.03em;margin:24px auto 0;font-weight:800;color:var(--ink);max-width:18ch;text-wrap:balance}
+.hero h1 .ac{color:var(--accent)}
+.hero .dek{font-size:clamp(17px,2.2vw,20px);line-height:1.55;color:var(--ink-soft);margin:22px auto 0;max-width:58ch;text-wrap:pretty}
+.searchbox{margin:34px auto 0;max-width:560px;display:flex;gap:10px}
+.searchbox .field{flex:1;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;padding:14px 16px}
+.searchbox input{flex:1;border:0;background:transparent;outline:none;color:var(--ink);font-size:16px;font-family:var(--font-sans)}
+.searchbox button{flex:none;border:0;background:var(--accent);color:#fff;font-weight:700;font-size:16px;border-radius:12px;padding:0 22px;cursor:pointer}
+.searchbox button:hover{background:var(--accent-ink)}
+.pills{margin:18px auto 0;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:13px}
+.pills .lab{color:var(--muted);font-family:var(--font-mono);font-size:12px;align-self:center}
+.pills a{border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--ink-soft);background:var(--bg)}
+.pills a:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
+.trustbar{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface)}
+.trustbar .in{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:14px 48px;padding:26px 24px;justify-content:center}
+.trustbar .item{display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:14px}
+.trustbar strong{color:var(--ink);font-weight:700}
+.home-sec{padding:64px 0}.home-sec.alt{background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sechead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:28px}
+.sechead h2{font-size:clamp(26px,3.4vw,34px);font-weight:800;letter-spacing:-.02em;margin:0;color:var(--ink);display:flex;align-items:baseline;gap:12px}
+.sechead h2 .num{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent)}
+.seemore{font-size:14px;color:var(--accent);font-weight:600;white-space:nowrap}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.feat-card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--bg)}
+.feat-card:hover{border-color:var(--accent);text-decoration:none}
+.feat-thumb{height:140px;display:flex;align-items:center;justify-content:center;gap:14px;font-family:var(--font-mono);font-weight:700;color:var(--ink-soft);background:var(--surface-2);padding:0 16px;text-align:center}
+.feat-thumb.grad{background:linear-gradient(135deg,var(--accent),var(--accent-ink));color:#fff}
+.feat-thumb .vs{opacity:.65;font-size:13px}
+.feat-card .bd{padding:18px 20px 22px;flex:1;display:flex;flex-direction:column}
+.feat-card .ey{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
+.feat-card .tt{font-size:18px;font-weight:700;color:var(--ink);margin:8px 0 6px;line-height:1.35}
+.feat-card .ds{font-size:14px;color:var(--muted);line-height:1.5}
+.feat-card .mt{margin-top:14px;font-size:13px;color:var(--muted);font-family:var(--font-mono)}
+.cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.cat-card{display:flex;align-items:center;gap:16px;border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--bg)}
+.cat-card:hover{border-color:var(--accent);background:var(--surface);text-decoration:none}
+.cat-ic{flex:none;display:inline-flex;width:44px;height:44px;border-radius:11px;background:var(--surface-2);color:var(--accent);align-items:center;justify-content:center}
+.cat-card .nm{display:block;font-weight:700;color:var(--ink);font-size:16px}
+.cat-card .tg{display:block;font-size:13px;color:var(--muted);margin-top:2px;font-family:var(--font-mono)}
+.latest a.row{display:flex;align-items:center;gap:18px;padding:18px 4px;border-top:1px solid var(--line)}
+.latest a.row:hover{background:var(--surface-2);text-decoration:none}
+.latest .num{font-family:var(--font-mono);font-size:13px;color:var(--muted);flex:none;width:46px}
+.latest .tt{display:block;font-weight:700;color:var(--ink);font-size:17px;line-height:1.4}
+.latest .mt{display:block;font-size:13.5px;color:var(--muted);margin-top:3px}
+.latest .ar{flex:none;color:var(--muted)}
+.newsletter{padding:80px 0}
+.nl-card{border:1px solid var(--line);border-radius:20px;background:var(--surface);padding:clamp(28px,5vw,52px);text-align:center}
+.nl-card .ey{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.nl-card h2{font-size:clamp(24px,3.2vw,32px);font-weight:800;letter-spacing:-.02em;margin:12px auto 0;color:var(--ink);max-width:22ch;text-wrap:balance}
+.nl-card p{color:var(--ink-soft);margin:14px auto 0;max-width:44ch}
+.nl-form{margin:24px auto 0;max-width:440px;display:flex;gap:10px}
+.nl-form input{flex:1;border:1px solid var(--line-strong);background:var(--bg);border-radius:11px;padding:13px 15px;outline:none;color:var(--ink);font-size:15px}
+.nl-form button{flex:none;border:0;background:var(--accent);color:#fff;font-weight:700;font-size:15px;border-radius:11px;padding:0 22px;cursor:pointer}
+.nl-form button:hover{background:var(--accent-ink)}
+@media(max-width:860px){.feat-grid{grid-template-columns:1fr}.cat-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.cat-grid{grid-template-columns:1fr}}
 """
 
 THEME_INIT = ("<script>(function(){try{var t=localStorage.getItem('uv-theme')||"
@@ -417,6 +476,134 @@ def render_static_page(title: str, body_html: str, *, description: str = "", can
 <h1>{esc(title)}</h1>
 {body_html}
 </article></main></div>
+{_footer()}
+{_SCRIPTS}
+</body>
+</html>"""
+
+
+# 홈 카테고리 (정직성: 가짜 도구 수 대신 태그라인)
+_HOME_CATS = [
+    ("AI Coding", "/ai-coding/", "Editors & assistants",
+     '<path d="m8 6-6 6 6 6M16 6l6 6-6 6"></path>'),
+    ("Hosting & Self-host", "/hosting/", "VPS, cloud, self-hosting",
+     '<rect x="2" y="3" width="20" height="7" rx="2"></rect><rect x="2" y="14" width="20" height="7" rx="2"></rect><path d="M6 6.5h.01M6 17.5h.01"></path>'),
+    ("Dev Tools", "/dev-tools/", "SaaS & developer tools",
+     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path>'),
+    ("AI Tools", "/ai-tools/", "Productivity & creative AI",
+     '<path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4L12 3z"></path>'),
+    ("VPN & Security", "/vpn-security/", "Privacy & security",
+     '<path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"></path>'),
+]
+_TRUST = [
+    ('<path d="M20 6 9 17l-5-5"></path>', "Hands-on tested", " before every verdict"),
+    ('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M9 13h6M9 17h6"></path>', "Sources cited", " on every claim"),
+    ('<path d="M3 12a9 9 0 1 0 9-9 9.7 9.7 0 0 0-6.7 2.7L3 8"></path><path d="M3 3v5h5"></path>', "Regularly updated", " pricing & features"),
+]
+
+
+def _vs_pair(title: str):
+    base = title.split(":")[0]
+    parts = re.split(r"\s+vs\.?\s+", base, flags=re.I)
+    return (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else None
+
+
+def _ic(path, w=18, stroke="currentColor"):
+    return (f'<svg width="{w}" height="{w}" viewBox="0 0 24 24" fill="none" stroke="{stroke}" '
+            f'stroke-width="2">{path}</svg>')
+
+
+def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str = "") -> str:
+    pages = list(pages)
+    featured = pages[:3]
+    base = f"https://{domain}"
+
+    # 히어로 인기 핀 (상위 비교글)
+    pills = "".join(f'<a href="{esc(p["url"])}">{esc((_vs_pair(p["title"]) and " vs ".join(_vs_pair(p["title"]))) or p["title"][:28])}</a>'
+                    for p in featured) or '<span class="lab">coming soon</span>'
+
+    # 이번 주 비교 카드
+    cards = []
+    for i, p in enumerate(featured):
+        pair = _vs_pair(p["title"])
+        thumb = (f'<span>{esc(pair[0])}</span><span class="vs">vs</span><span>{esc(pair[1])}</span>'
+                 if pair else f'<span>{esc(p["title"][:40])}</span>')
+        meta = " · ".join([x for x in [p.get("read"), (f'updated {p["updated"]}' if p.get("updated") else None)] if x])
+        cards.append(
+            f'<a class="feat-card" href="{esc(p["url"])}">'
+            f'<div class="feat-thumb{" grad" if i == 0 else ""}">{thumb}</div>'
+            f'<div class="bd"><div class="ey">Comparison</div>'
+            f'<div class="tt">{esc(p["title"].split(":")[0])}</div>'
+            f'<div class="ds">{esc(p.get("desc") or "Hands-on comparison of pricing, features, and fit.")}</div>'
+            f'<div class="mt">{esc(meta)}</div></div></a>')
+    featured_html = (f'<section class="home-sec" id="featured"><div class="container">'
+                     f'<div class="sechead"><h2><span class="num">01</span>This week\'s comparisons</h2></div>'
+                     f'<div class="feat-grid">{"".join(cards)}</div></div></section>') if cards else ""
+
+    # 카테고리
+    cat_cards = "".join(
+        f'<a class="cat-card" href="{esc(url)}"><span class="cat-ic">{_ic(path, 22)}</span>'
+        f'<span><span class="nm">{esc(name)}</span><span class="tg">{esc(tag)}</span></span></a>'
+        for (name, url, tag, path) in _HOME_CATS)
+    categories_html = (f'<section class="home-sec" id="categories"><div class="container">'
+                       f'<div class="sechead"><h2><span class="num">02</span>Categories</h2></div>'
+                       f'<div class="cat-grid">{cat_cards}</div></div></section>')
+
+    # 최신 (전체)
+    rows = "".join(
+        f'<a class="row" href="{esc(p["url"])}"><span class="num">{i + 1:02d}</span>'
+        f'<span style="flex:1;min-width:0"><span class="tt">{esc(p["title"].split(":")[0])}</span>'
+        f'<span class="mt">Comparison{(" · " + p["read"]) if p.get("read") else ""}</span></span>'
+        f'<span class="ar hide-sm">→</span></a>' for i, p in enumerate(pages)) or \
+        '<p style="color:var(--muted);padding:18px 4px">No articles published yet.</p>'
+    latest_html = (f'<section class="home-sec alt latest" id="latest"><div class="container">'
+                   f'<div class="sechead"><h2><span class="num">03</span>Latest</h2></div>'
+                   f'<div>{rows}</div></div></section>')
+
+    # 트러스트바
+    trust = "".join(f'<div class="item">{_ic(p, 18, "var(--good)")}'
+                    f'<span><strong>{esc(t)}</strong>{esc(rest)}</span></div>' for (p, t, rest) in _TRUST)
+    trustbar = f'<section class="trustbar"><div class="in">{trust}</div></section>'
+
+    # 뉴스레터 (no-backend: onsubmit return false)
+    newsletter = ('<section class="newsletter"><div class="container"><div class="nl-card">'
+                  '<div class="ey">Newsletter</div>'
+                  '<h2>One email a week — only new comparisons and guides.</h2>'
+                  '<p>No ads, no PR. Just tools we have actually tested.</p>'
+                  '<form class="nl-form" onsubmit="return false">'
+                  '<input type="email" placeholder="you@example.com" aria-label="Email">'
+                  '<button type="submit">Subscribe</button></form></div></div></section>')
+
+    jsonld = ('<script type="application/ld+json">' + json.dumps({
+        "@context": "https://schema.org", "@type": "WebSite", "name": "stack.",
+        "url": base + "/", "description": "Independent SaaS, developer, and AI tool comparisons and guides.",
+    }, ensure_ascii=False) + "</script>")
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+{_head("stack. — independent software comparisons & guides", "We test SaaS, developer, and AI tools hands-on and compare them — pricing, features, and data ownership.", canonical or base + "/", "website", jsonld)}
+</head>
+<body>
+<a class="skip" href="#featured">Skip to content</a>
+{_header()}
+<section class="hero"><div class="container">
+<span class="pill"><span class="dot"></span>{esc(domain)}</span>
+<h1>Tool choices, backed by <span class="ac">data</span> — not vibes.</h1>
+<p class="dek">We test SaaS, developer, and AI tools hands-on and compare them — pricing, features, and data ownership, distilled to what your decision needs.</p>
+<form class="searchbox" action="https://www.google.com/search" method="get" role="search">
+<div class="field">{_ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 19, "var(--muted)")}
+<input name="q" placeholder="Search tools to compare…  e.g. Cursor, Notion" aria-label="Search tools"></div>
+<input type="hidden" name="as_sitesearch" value="{esc(domain)}">
+<button type="submit">Search</button>
+</form>
+<div class="pills"><span class="lab">Popular:</span>{pills}</div>
+</div></section>
+{trustbar}
+{featured_html}
+{categories_html}
+{latest_html}
+{newsletter}
 {_footer()}
 {_SCRIPTS}
 </body>
