@@ -24,3 +24,4 @@ engine/store/signals.json
 *.log
 .DS_Store
 Thumbs.db
+engine/store/published.json

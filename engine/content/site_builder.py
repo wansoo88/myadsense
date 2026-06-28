@@ -71,6 +71,8 @@ def _privacy_body(domain: str) -> str:
 <li>You may opt out of some third-party vendors' use of cookies for personalized advertising at <a href="https://www.aboutads.info/choices/" rel="noopener" target="_blank">aboutads.info/choices</a>.</li>
 <li>See <a href="https://policies.google.com/technologies/partner-sites" rel="noopener" target="_blank">how Google uses data</a> from sites that use its services.</li>
 </ul>
+<h3>Advertising &amp; affiliate disclosure</h3>
+<p>This site is supported by advertising and may contain affiliate links. If you click certain links and make a qualifying purchase, we may earn a commission at no additional cost to you. Our comparisons and verdicts are based on documented product features and publicly available information; commissions do not influence our assessments.</p>
 <h3>Your rights</h3>
 <p>Depending on your location, you may have rights under laws such as the GDPR and CCPA, including access, correction, and deletion. We comply with applicable data-protection laws.</p>
 <h3>Contact</h3>

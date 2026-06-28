@@ -99,8 +99,16 @@ def stage_generate(cfg):
     # 실콘텐츠(fixture 아님)는 발행 전 항상 검수(adsense-review 루브릭 — 사용자 방침)
     review_on = os.environ.get("ADSENSE_FIXTURE") != "1" and (
         bool(os.environ.get("ANTHROPIC_API_KEY")) or generator._claude_cli_available())
+    # 일일 카덴스: 실콘텐츠는 이미 발행한 키워드 제외 + 하루 신규 상한(daily_generate)
+    pub_path = "engine/store/published.json"
+    published = set(json.load(open(pub_path, encoding="utf-8"))) if os.path.exists(pub_path) else set()
+    daily = (cfg["guardrails"].get("rollout", {}) or {}).get("daily_generate", 4)
+    if review_on:
+        seeds = [s for s in seeds if s[0] not in published]
     corpus, passed, rejected = [], 0, 0
     for kw, cid in seeds:
+        if review_on and passed >= daily:                # 하루 신규 상한 도달
+            break
         try:
             spec, page = generator.generate(kw, cfg["content"], cluster=cid)
         except Exception as e:
@@ -123,8 +131,11 @@ def stage_generate(cfg):
                 rejected += 1; continue
         with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
             f.write(page.html)
-        corpus.append(" ".join(page.blocks)); passed += 1
-    print(f"generate({'검수ON' if review_on else 'fixture'}): {passed} 통과 / {rejected} 탈락 (시드 {len(seeds)}) → dist/queue")
+        corpus.append(" ".join(page.blocks)); published.add(kw); passed += 1
+    if review_on:                                        # 발행 키워드 영속화(다음 날 중복 방지)
+        os.makedirs("engine/store", exist_ok=True)
+        json.dump(sorted(published), open(pub_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    print(f"generate({'검수ON·일일' if review_on else 'fixture'}): {passed} 신규 / {rejected} 탈락 → dist/queue (누적 발행 {len(published)})")
     return passed
 
 

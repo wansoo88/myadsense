@@ -12,7 +12,8 @@ forbidden:
 
 # 🟡 발행 점진 롤아웃
 rollout:
-  daily_publish_cap: 20        # 하루 최대 발행 수 (초기 보수적, 색인 정상 시 단계 상향)
+  daily_generate: 3            # 하루 신규 생성·검수·발행 편수(생성이 병목 — 승인 단계 권장 2~3)
+  daily_publish_cap: 20        # 발행 큐→사이트 점진 발행 상한 (생성과 별개)
   ramp_up_factor: 1.5          # 배치 정상 시 cap 증가율
   ramp_up_max: 200             # cap 상한
   require_indexing_ok_before_next_batch: true
