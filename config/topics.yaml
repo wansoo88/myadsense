@@ -1,0 +1,99 @@
+# topics.yaml — 토픽 클러스터 + 시드 키워드 (니치: 기술/SaaS·개발·AI 도구, 영어 Tier-1)
+# keyword_research / generator 가 소비. 의도 우선순위: comparison ≥ transactional > informational (F7).
+# 각 페이지는 quality_gate 통과 필수 — programmatic 패턴마다 unique_data(가격표·기능매트릭스·실측·핸즈온) 강제.
+# ⚠️ 시드는 출발점. 실제 검색량·경쟁도는 Search Console/키워드 데이터로 검증 후 확장(절대 수치 맹신 금지).
+
+clusters:
+  # ── P1: AI 코딩/개발 도구 (트렌딩·고의도·E-E-A-T 적합) ──
+  - id: ai-coding-tools
+    priority: 1
+    hub: "Best AI coding assistants (2026)"
+    intent: [comparison, transactional]
+    patterns:                      # 프로그래매틱 생성 템플릿 ({} = 엔티티)
+      - "{toolA} vs {toolB}"
+      - "best alternatives to {tool}"
+      - "{tool} review: pricing, features, is it worth it"
+      - "how to {task} with {tool}"
+    unique_data: [pricing_table, feature_matrix, hands_on_notes]
+    seeds:
+      - "cursor vs github copilot"        # comparison
+      - "claude code vs cursor"
+      - "github copilot vs codeium"
+      - "cursor vs windsurf"
+      - "github copilot alternatives"     # transactional
+      - "is github copilot worth it"      # transactional
+      - "best ai code review tools"
+
+  # ── P1: VPS·클라우드 호스팅·셀프호스팅 (서버 운영 경험 = 최강 E-E-A-T) ──
+  - id: hosting-selfhost
+    priority: 1
+    hub: "Best cheap VPS hosting for developers (2026)"
+    intent: [comparison, transactional]
+    patterns:
+      - "{providerA} vs {providerB}"
+      - "best VPS for {use_case}"
+      - "how to self-host {app}"
+      - "best self-hosted alternatives to {saas}"
+    unique_data: [pricing_table, benchmark, hands_on_notes]
+    seeds:
+      - "digitalocean vs linode vs vultr"
+      - "hetzner vs digitalocean"
+      - "best cheap vps 2026"
+      - "how to self-host nextcloud"
+      - "how to self-host ghost blog"
+      - "best self-hosted alternatives to notion"
+      - "self-hosted analytics vs google analytics"
+
+  # ── P2: 개발/SaaS 도구 비교 (대량 볼륨) ──
+  - id: dev-saas-compare
+    priority: 2
+    hub: "Best developer tools by category (2026)"
+    intent: [comparison]
+    patterns:
+      - "{toolA} vs {toolB}"
+      - "best {category} software for {use_case}"
+      - "{tool} alternatives"
+    unique_data: [feature_matrix, pricing_table]
+    seeds:
+      - "notion vs obsidian"
+      - "postman vs insomnia"
+      - "linear vs jira"
+      - "vercel vs netlify"
+      - "supabase vs firebase"
+      - "best api testing tools"
+
+  # ── P2: AI 생산성 도구 (비코딩) ──
+  - id: ai-productivity
+    priority: 2
+    hub: "Best AI tools for work (2026)"
+    intent: [comparison, transactional]
+    patterns:
+      - "{toolA} vs {toolB}"
+      - "best ai {category} tools"
+      - "best alternatives to {tool}"
+    unique_data: [feature_matrix, hands_on_notes]
+    seeds:
+      - "best ai meeting note takers"
+      - "jasper vs copy ai"
+      - "best ai writing tools 2026"
+      - "notion ai alternatives"
+
+  # ── P3: VPN·보안 (초고CPC, 인접·선택적 — 포화·경쟁 큼) ──
+  - id: vpn-security
+    priority: 3
+    hub: "Best VPNs and security tools (2026)"
+    intent: [transactional, comparison]
+    patterns:
+      - "{toolA} vs {toolB}"
+      - "best vpn for {use_case}"
+      - "best {category} (password managers, antivirus)"
+    unique_data: [pricing_table, hands_on_notes]
+    seeds:
+      - "bitwarden vs 1password"
+      - "best password managers 2026"
+      - "nordvpn vs expressvpn"
+
+# 발행 순서 가이드 (PLAN.md 단계와 연결)
+sequencing:
+  cornerstone_first: true          # 승인 전: hub + P1 핵심 비교글 8~15편을 깊게(품질 우선)
+  programmatic_after_approval: true # 승인 후: P1→P2→P3 순으로 패턴 대량 생성(게이트·점진 롤아웃)

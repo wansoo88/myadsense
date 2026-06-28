@@ -34,9 +34,9 @@
 - **지표**: CPC가 아니라 **RPM/CPM** 기준으로 판단(2024-03 CPM 전환). (Caveat 2)
 
 ## 프로젝트 구조 (요약 — 상세 @AUTOMATION.md §2)
-- `config/` sites·niches·content(품질게이트)·guardrails(킬스위치)·schedule (하드코딩 금지 → 값으로 관리)
+- `config/` sites·niches·**topics(클러스터·시드)**·content(품질게이트)·guardrails(킬스위치)·schedule (하드코딩 금지 → 값으로 관리)
 - `engine/` ingest·content(`quality_gate.py`)·optimize·monitor(`killswitch.py`)·store·`orchestrator.py`
-- `docs/RESEARCH.md` 근거 · `AUTOMATION.md` 아키텍처 · `PLAN.md` 단계
+- `docs/RESEARCH.md` 근거 · `docs/CONTENT-PLAN.md` 토픽전략 · `AUTOMATION.md` 아키텍처 · `PLAN.md` 단계 · **`design.md` 디자인 시스템(생성기가 모든 페이지에 적용)**
 
 ## 실행 스킬 (.claude/skills — 필요 시 /로 호출)
 - **/adsense-audit** — 승인 준비도 + 정책 위반 점검 (신청 전·재신청·정기 점검)

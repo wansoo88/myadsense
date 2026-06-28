@@ -7,6 +7,8 @@
 - **전략 규칙(항상 로드)**: [CLAUDE.md](CLAUDE.md)
 - **자동화 아키텍처 + 자동화 맵**: [AUTOMATION.md](AUTOMATION.md)  ← 핵심 검토 결과
 - **단계별 실행 계획**: [PLAN.md](PLAN.md)
+- **토픽 클러스터·콘텐츠 전략**: [docs/CONTENT-PLAN.md](docs/CONTENT-PLAN.md) ([config/topics.yaml](config/topics.yaml))
+- **디자인 시스템(생성기 적용)**: [design.md](design.md)
 - **리서치 근거(검증/반증)**: [docs/RESEARCH.md](docs/RESEARCH.md)
 - **보고서(로컬 HTML)**: [보고서.html](보고서.html)
 
