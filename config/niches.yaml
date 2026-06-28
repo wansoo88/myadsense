@@ -3,13 +3,19 @@
 
 # 고CPC 니치 (F6) — 여행은 중간 단가(고CPC 아님)
 niches:
-  priority:        # 본인 역량 있는 하위 니치 1개부터 (E-E-A-T 신호 = 공짜)
-    - finance      # 세금·신용·핀테크·대출
-    - insurance    # 건강/자동차/여행자보험 비교
-    - tech         # VPN·사이버보안·SaaS
-    - health       # 질환 정보·보조제 (YMYL — E-E-A-T 강하게 요구)
+  selected: tech              # ✅ 확정: 기술/소프트웨어 (영어 Tier-1)
+  sub_focus:                  # SaaS·개발·AI 도구 — 비교/대안/가이드 (프로그래매틱 SEO 친화 + E-E-A-T)
+    - saas_comparison         # "X vs Y", "best alternatives to Z"
+    - dev_tools               # 개발툴·셀프호스팅·오픈소스 가이드
+    - ai_tools                # AI 툴 비교·활용
+    - vpn_security            # 인접 초고CPC (선택 확장)
+  priority:                   # 확장 시 우선순위
+    - tech
+    - finance                 # 세금·신용·핀테크·대출 (YMYL 주의)
+    - insurance               # 보험 비교 (YMYL 주의)
+    - health                  # YMYL — 대량 자동발행 리스크 가장 큼
   avoid_as_high_cpc:
-    - travel       # 중간 단가, 고CPC로 오인 금지
+    - travel                  # 중간 단가, 고CPC로 오인 금지
 
 # 지역/언어 (F5) — Tier-1 영어권이 RPM 레버 가장 큼 (~5–30x, 정확 배율 불확실)
 geo:

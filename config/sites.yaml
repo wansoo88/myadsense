@@ -3,10 +3,10 @@
 
 sites:
   - id: main
-    domain: guides.utilverse.info    # 중립·비노골적 라벨 (보유: utilverse.info). 변경은 이 줄만 수정
+    domain: stack.utilverse.info     # 기술 니치 라벨 (보유: utilverse.info). 변경은 이 줄만 수정
     cms:
       adapter: static_ssg        # wordpress | static_ssg  (어댑터 선택)
-      base_url: https://guides.utilverse.info
+      base_url: https://stack.utilverse.info
       # wordpress: REST API + 앱 비밀번호(.env: WP_USER, WP_APP_PASSWORD)
       # static_ssg: 리포 내 콘텐츠 디렉토리 + git push (.env: GIT_REMOTE)
       content_dir: content/      # static_ssg용
@@ -32,7 +32,7 @@ alerts:
 deploy:
   host: 115.68.230.40            # Ubuntu, root, key: ~/.ssh/autobtc_iwinv
   ssh: "ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40"
-  domain_root: utilverse.info    # 서브도메인 할당 (현재: guides.utilverse.info)
+  domain_root: utilverse.info    # 서브도메인 할당 (현재: stack.utilverse.info)
   https: caddy                   # Caddy 자동 HTTPS (pjt11과 동일)
   scheduler: server_cron         # config/schedule.yaml → 서버 crontab (24/7)
   # 시크릿(.env)은 서버에만 두고 git 커밋 금지. 콘텐츠 빌드 산출물은 Caddy로 서빙.
