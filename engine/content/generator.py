@@ -38,6 +38,9 @@ class ContentSpec:
     pros_cons: list | None = None       # [{"name","pros":[...],"cons":[...]}]
     verdict_html: str | None = None
     related: list = field(default_factory=list)
+    kicker: str = ""                    # eyebrow 라벨(없으면 renderer 가 page_type 로 유도)
+    tldr_html: str | None = None        # 상단 'At a glance' 한 줄 결론
+    feature_matrix: dict | None = None  # {"a","b","rows":[{"label","a","b"(✓/△/✗),"note"}]}
 
 
 def _strip(h: str) -> str:
@@ -106,6 +109,16 @@ _CONTENT_SCHEMA = {
                 "pros": {"type": "array", "items": {"type": "string"}},
                 "cons": {"type": "array", "items": {"type": "string"}}},
             "required": ["name", "pros", "cons"]}},
+        "tldr_html": {"type": ["string", "null"]},
+        "feature_matrix": {"type": ["object", "null"], "additionalProperties": False,
+            "properties": {"a": {"type": "string"}, "b": {"type": "string"},
+                "rows": {"type": "array", "items": {
+                    "type": "object", "additionalProperties": False,
+                    "properties": {"label": {"type": "string"},
+                        "a": {"type": "string"}, "b": {"type": "string"},
+                        "note": {"type": ["string", "null"]}},
+                    "required": ["label", "a", "b", "note"]}}},
+            "required": ["a", "b", "rows"]},
         "verdict_html": {"type": "string"},
         "sources": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
@@ -117,13 +130,14 @@ _CONTENT_SCHEMA = {
             "required": ["title", "url"]}},
     },
     "required": ["title", "dek", "page_type", "intro_html", "sections", "comparison",
-                 "pricing", "pros_cons", "verdict_html", "sources", "related"],
+                 "pricing", "pros_cons", "tldr_html", "feature_matrix",
+                 "verdict_html", "sources", "related"],
 }
 
 _SYSTEM = """You are an editor for an independent software-comparison site (SaaS, developer, and AI tools) for an English-speaking audience.
 Write genuinely useful, original content that satisfies search intent. Rules:
 - E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of. Describe pricing as tiers (e.g. "free tier + paid Pro") and tell readers to confirm current pricing on the vendor's site.
-- Structure: at least 4 substantive sections. For comparisons include a comparison table (real differentiating features), pricing (tiered), pros/cons per option, and a hands-on verdict.
+- Structure: at least 4 substantive sections. For comparisons include: a one-line tldr_html verdict; a comparison table (real differentiating features, set winner to 'a'/'b'/null); a feature_matrix where each row's a/b is exactly one of "✓" (full), "△" (partial/paid), or "✗" (none), with an optional footnote in note; tiered pricing; pros/cons per option; and a hands-on verdict_html.
 - HTML fields (*_html): simple semantic HTML only — <p>, <strong>, <em>, <ul>, <li>, <h3>. NO <script>, NO inline styles, NO ad/clickbait language, NO "click the ad". Styling is handled by the site theme.
 - Neutral, trustworthy, editorial tone. No fabricated testimonials. Output must match the provided JSON schema exactly."""
 
@@ -179,6 +193,7 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
         intro_html=d["intro_html"], sections=d["sections"],
         comparison=d.get("comparison"), pricing=d.get("pricing"),
         pros_cons=d.get("pros_cons"), verdict_html=d.get("verdict_html"),
+        tldr_html=d.get("tldr_html"), feature_matrix=d.get("feature_matrix"),
         sources=d.get("sources", []), related=d.get("related") or [],
     )
 
@@ -257,6 +272,15 @@ def _cursor_vs_copilot() -> ContentSpec:
             "integration, <strong>Copilot</strong> is the safer pick. Try both free tiers on a real task before committing.</p>"
             "<p><em>Pricing and model availability change frequently — confirm current details on each vendor's site.</em></p>"
         ),
+        tldr_html=("<p>Pick <strong>Cursor</strong> for an AI-first editor with heavy multi-file edits; "
+                   "pick <strong>GitHub Copilot</strong> to stay in your current editor with GitHub-native flow.</p>"),
+        feature_matrix={"a": "Cursor", "b": "GitHub Copilot", "rows": [
+            {"label": "Inline completions", "a": "✓", "b": "✓", "note": None},
+            {"label": "Multi-file agent edits", "a": "✓", "b": "△", "note": None},
+            {"label": "Works in your existing editor", "a": "✗", "b": "✓", "note": None},
+            {"label": "Native GitHub / PR flow", "a": "△", "b": "✓", "note": None},
+            {"label": "Free tier", "a": "✓", "b": "✓", "note": None},
+        ]},
         sources=[
             {"title": "Cursor — official site", "url": "https://cursor.com"},
             {"title": "GitHub Copilot — official site", "url": "https://github.com/features/copilot"},
@@ -294,6 +318,11 @@ def _generic_comparison(topic: str) -> ContentSpec:
         pros_cons=[{"name": a, "pros": ["Pro 1", "Pro 2"], "cons": ["Con 1"]},
                    {"name": b, "pros": ["Pro 1", "Pro 2"], "cons": ["Con 1"]}],
         verdict_html=f"<p>Both are solid; choose {a} or {b} by fit. Confirm current pricing on each vendor's site.</p>",
+        tldr_html=f"<p>Choose <strong>{a}</strong> or <strong>{b}</strong> based on your workflow and budget.</p>",
+        feature_matrix={"a": a, "b": b, "rows": [
+            {"label": "Free tier", "a": "✓", "b": "✓", "note": None},
+            {"label": "Best-in-class for its core use", "a": "✓", "b": "△", "note": None},
+        ]},
         sources=[{"title": f"{a} — official", "url": "https://example.com"},
                  {"title": f"{b} — official", "url": "https://example.com"}],
     )

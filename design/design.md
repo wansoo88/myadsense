@@ -3,6 +3,8 @@
 > 목적: **콘텐츠 생성기(generator)가 모든 페이지에 일관되게 입히는 디자인 스펙.** 사람·Claude 모두 이 토큰/컴포넌트만 따른다.
 > 사이트 분위기: **모던·테크·신뢰형 에디토리얼** (SaaS·개발·AI 도구 비교/가이드).
 > 제약은 디자인에 내장: **Core Web Vitals(LCP/CLS/INP) 안전 · 광고 슬롯 CLS 예약 · E-E-A-T 신뢰 요소 · 가독성 우선.** 근거 @docs/RESEARCH.md(F2·F8), @AUTOMATION.md(§3).
+>
+> **구현**: `engine/content/renderer.py` (자체완결 인라인 CSS/JS·시스템 폰트·외부 fetch 0). 목업 `design/*.dc.html` 기준으로 완성도 반영 — 추가 요소: 토큰 `--good-tint/--bad-tint`, kicker(eyebrow), 상단 "At a glance" 콜아웃, 기능 매트릭스(✓/△/✗), 승자 셀 그린 틴트, 아바타 메타바, 스크롤스파이 사이드바 TOC + 모바일 접이식 TOC, 해/달 테마 토글 + `prefers-color-scheme`, OG·theme-color·SVG 파비콘, BreadcrumbList JSON-LD, skip-link·focus-visible·reduced-motion.
 
 ---
 

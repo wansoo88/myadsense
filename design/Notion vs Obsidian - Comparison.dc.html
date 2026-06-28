@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0}
+  :root{
+    --bg:#ffffff; --surface:#f7f8fa; --surface-2:#eef1f6;
+    --ink:#1a1f2b; --ink-soft:#3d4654; --muted:#5b6573;
+    --line:#e5e8ee; --line-strong:#d3d8e2;
+    --accent:#2f6df6; --accent-ink:#1b4fd1;
+    --good:#0f8a5f; --warn:#b5791a; --bad:#c2392f;
+    --good-tint:#e7f5ee; --bad-tint:#fbeceb;
+    --code-bg:#0f1320; --code-ink:#e7ebf2;
+    --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Malgun Gothic",sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"Cascadia Code",Consolas,monospace;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1115; --surface:#171a21; --surface-2:#1d212b;
+    --ink:#e7ebf2; --ink-soft:#c4ccd8; --muted:#9aa4b2;
+    --line:#2a2f3a; --line-strong:#3a4150;
+    --accent:#5b9cff; --accent-ink:#8bb6ff;
+    --good:#2ecc71; --warn:#f5b942; --bad:#ff6b6b;
+    --good-tint:#13241c; --bad-tint:#2a1816;
+    --code-bg:#0c0e13; --code-ink:#e7ebf2;
+  }
+  .uv-grid{display:grid;grid-template-columns:minmax(0,720px) 300px;gap:48px;max-width:1120px;margin:0 auto;padding:0 24px}
+  @media (max-width:1023px){ .uv-grid{grid-template-columns:1fr;gap:0} .uv-aside{display:none} }
+  @media (min-width:1024px){ .uv-tocm{display:none} }
+  @media (max-width:639px){ .uv-hide-sm{display:none} }
+  a{color:var(--accent)}
+</style>
+<script>
+(function(){try{var t=localStorage.getItem('uv-theme')||(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+</helmet>
+
+<div style="background:var(--bg);color:var(--ink);font-family:var(--font-sans);min-height:100vh;font-size:17px;line-height:1.7">
+
+  <header style="position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(140%) blur(8px);border-bottom:1px solid var(--line)">
+    <div style="max-width:1120px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;gap:20px">
+      <a href="#" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--ink);font-weight:700;font-size:16px;letter-spacing:-.01em">
+        <span style="display:inline-flex;width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:14px;font-weight:700">U</span>
+        <span>utilverse<span style="color:var(--muted);font-weight:500">.info</span></span>
+      </a>
+      <nav class="uv-hide-sm" style="display:flex;gap:18px;font-size:14px;font-weight:500">
+        <a href="#" style="color:var(--ink-soft);text-decoration:none">노트앱</a>
+        <a href="#" style="color:var(--ink-soft);text-decoration:none">AI 도구</a>
+        <a href="#" style="color:var(--ink-soft);text-decoration:none">개발</a>
+        <a href="#" style="color:var(--ink-soft);text-decoration:none">가이드</a>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <div class="uv-hide-sm" style="display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--muted);font-size:13px;min-width:170px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path></svg>
+          <span>도구 검색…</span>
+        </div>
+        <button onClick="{{ toggleTheme }}" aria-label="테마 전환" style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer" style-hover="border-color:var(--line-strong);color:var(--ink)">
+          <sc-if value="{{ isDark }}" hint-placeholder-val="{{ false }}">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+          </sc-if>
+          <sc-if value="{{ isLight }}" hint-placeholder-val="{{ true }}">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path></svg>
+          </sc-if>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="uv-grid" style="padding-top:32px;padding-bottom:64px">
+
+    <main style="min-width:0">
+
+      <nav aria-label="breadcrumb" style="font-size:13px;color:var(--muted);margin-bottom:20px;display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+        <a href="#" style="color:var(--muted);text-decoration:none">홈</a>
+        <span style="opacity:.5">/</span>
+        <a href="#" style="color:var(--muted);text-decoration:none">노트앱</a>
+        <span style="opacity:.5">/</span>
+        <span style="color:var(--ink-soft)">Notion vs Obsidian</span>
+      </nav>
+
+      <article id="overview">
+        <div style="font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)">비교 · COMPARISON</div>
+        <h1 style="font-size:33px;line-height:1.2;letter-spacing:-.02em;margin:10px 0 0;font-weight:800;color:var(--ink);text-wrap:balance">Notion vs Obsidian: 2026년, 당신에게 맞는 노트앱은?</h1>
+        <p style="font-size:19px;line-height:1.55;color:var(--ink-soft);margin:14px 0 0;max-width:60ch;text-wrap:pretty">올인원 협업 워크스페이스 Notion과 로컬 우선 마크다운 지식관리 도구 Obsidian을 데이터 소유권·편집 경험·가격·확장성 기준으로 직접 써보고 정리했다.</p>
+
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:20px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="display:inline-flex;width:30px;height:30px;border-radius:50%;background:var(--surface-2);color:var(--ink-soft);align-items:center;justify-content:center;font-weight:700;font-size:13px">정</span>
+            <span style="color:var(--ink-soft)"><strong style="color:var(--ink);font-weight:600">정우진</strong> · 생산성 도구 리뷰어</span>
+          </div>
+          <span style="opacity:.4">•</span>
+          <span>작성 2026.03.12</span>
+          <span style="opacity:.4">•</span>
+          <span>갱신 <time style="color:var(--ink-soft)">2026.06.20</time></span>
+          <span style="opacity:.4">•</span>
+          <span>읽는 시간 약 9분</span>
+        </div>
+      </article>
+
+      <div class="uv-tocm" style="margin-top:24px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:6px 16px">
+        <details>
+          <summary style="cursor:pointer;font-weight:600;font-size:14px;padding:10px 0;color:var(--ink-soft);list-style:none">목차 보기</summary>
+          <sc-for list="{{ toc }}" as="t" hint-placeholder-count="6">
+            <a href="{{ t.href }}" style="display:block;padding:6px 0;font-size:14px;color:var(--ink-soft);text-decoration:none">{{ t.label }}</a>
+          </sc-for>
+        </details>
+      </div>
+
+      <section id="quick-verdict" style="margin-top:36px;scroll-margin-top:80px">
+        <div style="border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;background:var(--surface);padding:20px 22px">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--accent);margin-bottom:8px">한 줄 결론</div>
+          <p style="margin:0;color:var(--ink-soft);font-size:16.5px">팀과 함께 문서·DB·프로젝트를 한 곳에서 굴린다면 <strong style="color:var(--ink)">Notion</strong>. 데이터를 내 손에 두고 오프라인·마크다운·평생 보존을 원하는 1인 지식관리라면 <strong style="color:var(--ink)">Obsidian</strong>.</p>
+        </div>
+      </section>
+
+      <section id="comparison" style="margin-top:44px;scroll-margin-top:80px">
+        <h2 style="font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 4px;color:var(--ink);display:flex;align-items:center;gap:10px">
+          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block"></span>한눈에 비교
+        </h2>
+        <p style="color:var(--muted);font-size:15px;margin:0 0 18px">핵심 항목별 차이. 더 유리한 쪽을 초록으로 표시했다.</p>
+
+        <div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px">
+          <table style="width:100%;border-collapse:collapse;font-size:15px;min-width:560px">
+            <thead>
+              <tr>
+                <th style="position:sticky;top:0;text-align:left;padding:13px 16px;background:var(--surface-2);color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap">항목</th>
+                <th style="position:sticky;top:0;text-align:left;padding:13px 16px;background:var(--surface-2);color:var(--ink);font-weight:700;white-space:nowrap">Notion</th>
+                <th style="position:sticky;top:0;text-align:left;padding:13px 16px;background:var(--surface-2);color:var(--ink);font-weight:700;white-space:nowrap">Obsidian</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600">데이터 저장</td><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft)">클라우드(서버)</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">로컬 마크다운 파일</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600;background:var(--surface)">편집 모델</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--surface);color:var(--ink-soft)">블록 기반 위지윅</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--surface);color:var(--ink-soft)">마크다운 텍스트</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600">오프라인 사용</td><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft)">제한적</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">완전 지원</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600;background:var(--surface)">실시간 협업</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">기본 내장</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--surface);color:var(--ink-soft)">유료 부가(공유)</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600">데이터베이스</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">강력(뷰·관계형)</td><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft)">플러그인 의존</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600;background:var(--surface)">확장 / 플러그인</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--surface);color:var(--ink-soft)">API·연동 위주</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">2,000+ 커뮤니티</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600">무료 플랜</td><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft)">개인 무제한</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">개인 영구 무료</td></tr>
+              <tr><td style="padding:13px 16px;border-top:1px solid var(--line);color:var(--ink-soft);font-weight:600;background:var(--surface)">학습 곡선</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--good-tint);color:var(--ink)">완만</td><td style="padding:13px 16px;border-top:1px solid var(--line);background:var(--surface);color:var(--ink-soft)">초반 가파름</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="features" style="margin-top:44px;scroll-margin-top:80px">
+        <h2 style="font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 18px;color:var(--ink);display:flex;align-items:center;gap:10px">
+          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block"></span>기능 매트릭스
+        </h2>
+        <div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px">
+          <table style="width:100%;border-collapse:collapse;font-size:15px;min-width:520px">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:12px 16px;background:var(--surface-2);color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase">기능</th>
+                <th style="text-align:center;padding:12px 16px;background:var(--surface-2);color:var(--ink);font-weight:700;width:120px">Notion</th>
+                <th style="text-align:center;padding:12px 16px;background:var(--surface-2);color:var(--ink);font-weight:700;width:120px">Obsidian</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ matrix }}" as="m" hint-placeholder-count="7">
+                <tr>
+                  <td style="padding:12px 16px;border-top:1px solid var(--line);color:var(--ink-soft)">{{ m.label }}<sc-if value="{{ m.note }}" hint-placeholder-val="{{ false }}"><sup style="color:var(--muted);font-size:12px;margin-left:2px">{{ m.note }}</sup></sc-if></td>
+                  <td style="padding:12px 16px;border-top:1px solid var(--line);text-align:center;color:{{ m.aColor }};font-weight:700">{{ m.a }}</td>
+                  <td style="padding:12px 16px;border-top:1px solid var(--line);text-align:center;color:{{ m.bColor }};font-weight:700">{{ m.b }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:10px 2px 0">¹ 유료 플랜에서 제공 · ² 공식·서드파티 플러그인 기준</p>
+      </section>
+
+      <section id="pricing" style="margin-top:44px;scroll-margin-top:80px">
+        <h2 style="font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 18px;color:var(--ink);display:flex;align-items:center;gap:10px">
+          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block"></span>가격
+        </h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px">
+          <sc-for list="{{ plans }}" as="p" hint-placeholder-count="4">
+            <div style="border:1px solid {{ p.border }};border-radius:14px;background:var(--surface);padding:18px;display:flex;flex-direction:column;gap:4px">
+              <div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{{ p.brandColor }}">{{ p.brand }}</div>
+              <div style="font-size:16px;font-weight:700;color:var(--ink)">{{ p.name }}</div>
+              <div style="font-size:26px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:2px">{{ p.price }}<span style="font-size:13px;font-weight:500;color:var(--muted)">{{ p.unit }}</span></div>
+              <div style="font-size:14px;color:var(--ink-soft);margin-top:4px;line-height:1.5">{{ p.desc }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:12px 2px 0">가격은 월 환산·USD 기준이며 연 결제 시 달라질 수 있다. 2026년 6월 기준.</p>
+      </section>
+
+      <section id="proscons" style="margin-top:44px;scroll-margin-top:80px">
+        <h2 style="font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 18px;color:var(--ink);display:flex;align-items:center;gap:10px">
+          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block"></span>장단점
+        </h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+          <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden">
+            <div style="padding:13px 18px;background:var(--surface-2);font-weight:700;color:var(--ink)">Notion</div>
+            <div style="padding:16px 18px">
+              <div style="font-size:13px;font-weight:700;color:var(--good);margin-bottom:8px">장점</div>
+              <ul style="margin:0 0 16px;padding-left:20px;color:var(--ink-soft);font-size:15px;line-height:1.6">
+                <li>문서·DB·위키·작업관리 올인원</li>
+                <li>팀 실시간 협업·권한 관리 강력</li>
+                <li>템플릿 생태계 풍부, 시작이 쉬움</li>
+              </ul>
+              <div style="font-size:13px;font-weight:700;color:var(--bad);margin-bottom:8px">단점</div>
+              <ul style="margin:0;padding-left:20px;color:var(--ink-soft);font-size:15px;line-height:1.6">
+                <li>오프라인·대용량에서 느려짐</li>
+                <li>데이터가 서버에 종속(이탈 비용)</li>
+              </ul>
+            </div>
+          </div>
+          <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden">
+            <div style="padding:13px 18px;background:var(--surface-2);font-weight:700;color:var(--ink)">Obsidian</div>
+            <div style="padding:16px 18px">
+              <div style="font-size:13px;font-weight:700;color:var(--good);margin-bottom:8px">장점</div>
+              <ul style="margin:0 0 16px;padding-left:20px;color:var(--ink-soft);font-size:15px;line-height:1.6">
+                <li>로컬 마크다운 = 완전한 데이터 소유</li>
+                <li>빠르고 오프라인 완벽, 평생 보존</li>
+                <li>그래프 뷰·백링크·플러그인 무한 확장</li>
+              </ul>
+              <div style="font-size:13px;font-weight:700;color:var(--bad);margin-bottom:8px">단점</div>
+              <ul style="margin:0;padding-left:20px;color:var(--ink-soft);font-size:15px;line-height:1.6">
+                <li>실시간 협업 약함(개인 도구 성격)</li>
+                <li>초기 설정·플러그인 학습 필요</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="deepdive" style="margin-top:44px;scroll-margin-top:80px">
+        <h2 style="font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 14px;color:var(--ink);display:flex;align-items:center;gap:10px">
+          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block"></span>자세히 들여다보기
+        </h2>
+
+        <h3 style="font-size:19px;font-weight:700;color:var(--ink);margin:24px 0 8px">데이터 소유권 — 가장 큰 갈림길</h3>
+        <p style="color:var(--ink-soft);margin:0 0 12px;max-width:68ch">Notion은 모든 콘텐츠를 자사 서버에 저장한다. 빠른 협업과 동기화의 대가로, 서비스에 의존하게 되고 내보내기 포맷도 완벽하지 않다. Obsidian은 노트를 내 기기의 일반 <code style="font-family:var(--font-mono);font-size:.9em;background:var(--code-bg);color:var(--code-ink);padding:2px 6px;border-radius:5px">.md</code> 파일로 저장한다. 어떤 앱으로도 열 수 있고, 서비스가 사라져도 노트는 남는다.</p>
+
+        <div style="background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:16px 18px;font-family:var(--font-mono);font-size:13.5px;line-height:1.7;overflow-x:auto;margin:14px 0">
+          <div style="color:#9aa4b2"># Obsidian 보관함은 그냥 폴더다</div>
+          <div>~/Vault/</div>
+          <div>├── <span style="color:#5b9cff">일일노트/</span> 2026-06-20.md</div>
+          <div>├── <span style="color:#5b9cff">프로젝트/</span> utilverse.md</div>
+          <div>└── <span style="color:#2ecc71">.obsidian/</span> &nbsp;<span style="color:#9aa4b2"># 설정·플러그인</span></div>
+        </div>
+
+        <h3 style="font-size:19px;font-weight:700;color:var(--ink);margin:24px 0 8px">편집 경험과 학습 곡선</h3>
+        <p style="color:var(--ink-soft);margin:0 0 12px;max-width:68ch">Notion의 블록 에디터는 슬래시 명령으로 표·DB·임베드를 끼워 넣기 쉬워 비개발자도 금방 익힌다. Obsidian은 순수 마크다운이라 처음엔 투박해 보이지만, 단축키와 플러그인에 익숙해지면 키보드만으로 빠르게 글을 쌓을 수 있다.</p>
+
+        <h3 style="font-size:19px;font-weight:700;color:var(--ink);margin:24px 0 8px">동기화와 협업</h3>
+        <p style="color:var(--ink-soft);margin:0;max-width:68ch">팀 단위 동시 편집·댓글·권한은 Notion이 압도적이다. Obsidian은 1인 멀티기기 동기화(유료 Sync) 또는 iCloud·Git로 해결하며, 협업보다 개인 지식 축적에 초점이 있다.</p>
+      </section>
+
+      <section id="verdict" style="margin-top:40px;scroll-margin-top:80px">
+        <div style="border:1px solid var(--line);border-left:4px solid var(--good);border-radius:0 12px 12px 0;background:var(--surface);padding:20px 22px">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--good);margin-bottom:8px">최종 평가</div>
+          <p style="margin:0 0 10px;color:var(--ink-soft)"><strong style="color:var(--ink)">팀·협업·DB 중심이면 Notion.</strong> 한 워크스페이스에서 위키·작업관리·문서를 굴리는 조직에 압도적으로 편하다.</p>
+          <p style="margin:0;color:var(--ink-soft)"><strong style="color:var(--ink)">개인·데이터 소유·오프라인이면 Obsidian.</strong> 평생 남길 지식을 내 파일로 쌓는다면 이만한 선택이 없다. 둘을 병행(Notion=협업, Obsidian=개인 보관)하는 것도 흔한 답이다.</p>
+        </div>
+      </section>
+
+      <div style="margin-top:36px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px 20px;display:flex;gap:16px;align-items:flex-start">
+        <span style="flex:none;display:inline-flex;width:46px;height:46px;border-radius:50%;background:var(--surface-2);color:var(--ink-soft);align-items:center;justify-content:center;font-weight:700;font-size:17px">정</span>
+        <div>
+          <div style="font-weight:700;color:var(--ink)">정우진</div>
+          <div style="font-size:14px;color:var(--muted);margin:2px 0 8px">생산성·노트 도구를 6년간 리뷰해 온 에디터. 30개 이상 도구를 실사용 테스트했다.</div>
+          <div style="font-size:13px;color:var(--muted)">최종 갱신 2026.06.20 · 실사용 기간 8주</div>
+        </div>
+      </div>
+
+      <section id="sources" style="margin-top:36px;scroll-margin-top:80px">
+        <h2 style="font-size:17px;font-weight:700;color:var(--ink);margin:0 0 10px">출처</h2>
+        <ol style="margin:0;padding-left:20px;color:var(--muted);font-size:14px;line-height:1.8">
+          <li>Notion 공식 요금제 페이지 — <a href="#" rel="noopener" style="text-decoration:none">notion.so/pricing</a></li>
+          <li>Obsidian 공식 가격·라이선스 — <a href="#" rel="noopener" style="text-decoration:none">obsidian.md/pricing</a></li>
+          <li>저자 8주 실사용 테스트 노트 (2026.04–06)</li>
+        </ol>
+      </section>
+
+      <section style="margin-top:36px;border-top:1px solid var(--line);padding-top:24px">
+        <div style="font-size:13px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">함께 보면 좋은 글</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+          <a href="#" style="display:block;border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-decoration:none" style-hover="border-color:var(--accent)">
+            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px">가이드</div>
+            <div style="color:var(--ink);font-weight:600;font-size:15px;line-height:1.4">Obsidian 첫 보관함 30분 세팅법</div>
+          </a>
+          <a href="#" style="display:block;border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-decoration:none" style-hover="border-color:var(--accent)">
+            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px">대안</div>
+            <div style="color:var(--ink);font-weight:600;font-size:15px;line-height:1.4">Notion 대신 쓸 만한 노트앱 7선</div>
+          </a>
+          <a href="#" style="display:block;border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-decoration:none" style-hover="border-color:var(--accent)">
+            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px">비교</div>
+            <div style="color:var(--ink);font-weight:600;font-size:15px;line-height:1.4">Obsidian vs Logseq 무엇이 다른가</div>
+          </a>
+        </div>
+      </section>
+
+    </main>
+
+    <aside class="uv-aside" style="min-width:0">
+      <div style="position:sticky;top:80px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">목차</div>
+        <nav style="display:flex;flex-direction:column;gap:2px;border-left:1px solid var(--line)">
+          <sc-for list="{{ toc }}" as="t" hint-placeholder-count="7">
+            <a href="{{ t.href }}" style="padding:6px 0 6px 14px;margin-left:-1px;font-size:14px;text-decoration:none;border-left:{{ t.border }};color:{{ t.color }};font-weight:{{ t.weight }};line-height:1.4">{{ t.label }}</a>
+          </sc-for>
+        </nav>
+      </div>
+    </aside>
+
+  </div>
+
+  <footer style="border-top:1px solid var(--line);background:var(--surface)">
+    <div style="max-width:1120px;margin:0 auto;padding:28px 24px;display:flex;flex-wrap:wrap;gap:20px;align-items:center;font-size:13.5px;color:var(--muted)">
+      <span style="font-weight:700;color:var(--ink-soft)">utilverse.info</span>
+      <nav style="display:flex;flex-wrap:wrap;gap:16px">
+        <a href="#" style="color:var(--muted);text-decoration:none">소개</a>
+        <a href="#" style="color:var(--muted);text-decoration:none">연락처</a>
+        <a href="#" style="color:var(--muted);text-decoration:none;font-weight:600">개인정보처리방침</a>
+        <a href="#" style="color:var(--muted);text-decoration:none">노트앱</a>
+        <a href="#" style="color:var(--muted);text-decoration:none">AI 도구</a>
+      </nav>
+      <span style="margin-left:auto">© 2026 utilverse.info</span>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { theme: 'light', activeId: 'overview' };
+
+  componentDidMount() {
+    let theme = 'light';
+    try {
+      theme = localStorage.getItem('uv-theme')
+        || ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+    } catch (e) {}
+    document.documentElement.setAttribute('data-theme', theme);
+    this.setState({ theme });
+
+    const ids = ['overview','quick-verdict','comparison','features','pricing','proscons','deepdive','verdict','sources'];
+    this._io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) this.setState({ activeId: en.target.id });
+      });
+    }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) this._io.observe(el);
+    });
+  }
+
+  componentWillUnmount() { if (this._io) this._io.disconnect(); }
+
+  toggleTheme = () => {
+    const next = this.state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    this.setState({ theme: next });
+    try { localStorage.setItem('uv-theme', next); } catch (e) {}
+  };
+
+  renderVals() {
+    const isDark = this.state.theme === 'dark';
+    const sections = [
+      { id: 'overview', label: '개요' },
+      { id: 'quick-verdict', label: '한 줄 결론' },
+      { id: 'comparison', label: '한눈에 비교' },
+      { id: 'features', label: '기능 매트릭스' },
+      { id: 'pricing', label: '가격' },
+      { id: 'proscons', label: '장단점' },
+      { id: 'deepdive', label: '자세히 보기' },
+      { id: 'verdict', label: '최종 평가' },
+      { id: 'sources', label: '출처' },
+    ];
+    const toc = sections.map((s) => {
+      const active = s.id === this.state.activeId;
+      return {
+        href: '#' + s.id,
+        label: s.label,
+        color: active ? 'var(--accent)' : 'var(--muted)',
+        weight: active ? '600' : '400',
+        border: active ? '2px solid var(--accent)' : '2px solid transparent',
+      };
+    });
+
+    const yes = (n) => ({ a: '✓', aColor: 'var(--good)', n });
+    const matrix = [
+      { label: '실시간 공동 편집', a: '✓', aColor: 'var(--good)', b: '✗', bColor: 'var(--bad)' },
+      { label: '오프라인 완전 지원', a: '△', aColor: 'var(--warn)', b: '✓', bColor: 'var(--good)' },
+      { label: '관계형 데이터베이스', a: '✓', aColor: 'var(--good)', b: '△', bColor: 'var(--warn)', note: '2' },
+      { label: '그래프 뷰 / 백링크', a: '✗', aColor: 'var(--bad)', b: '✓', bColor: 'var(--good)' },
+      { label: '로컬 파일 저장', a: '✗', aColor: 'var(--bad)', b: '✓', bColor: 'var(--good)' },
+      { label: 'AI 어시스턴트', a: '✓', aColor: 'var(--good)', b: '△', bColor: 'var(--warn)', note: '1' },
+      { label: '모바일 앱', a: '✓', aColor: 'var(--good)', b: '✓', bColor: 'var(--good)' },
+      { label: 'API / 자동화', a: '✓', aColor: 'var(--good)', b: '△', bColor: 'var(--warn)', note: '2' },
+    ];
+
+    const plans = [
+      { brand: 'NOTION', brandColor: 'var(--accent)', name: 'Free', price: '$0', unit: '', desc: '개인 무제한 페이지·블록', border: 'var(--line)' },
+      { brand: 'NOTION', brandColor: 'var(--accent)', name: 'Plus', price: '$10', unit: '/월', desc: '팀 협업·게스트·버전 기록', border: 'var(--line-strong)' },
+      { brand: 'OBSIDIAN', brandColor: 'var(--good)', name: 'Personal', price: '$0', unit: '', desc: '개인 사용 영구 무료', border: 'var(--line)' },
+      { brand: 'OBSIDIAN', brandColor: 'var(--good)', name: 'Sync', price: '$4', unit: '/월', desc: '멀티기기 암호화 동기화', border: 'var(--line-strong)' },
+    ];
+
+    return {
+      theme: this.state.theme,
+      isDark,
+      isLight: !isDark,
+      toggleTheme: this.toggleTheme,
+      toc,
+      matrix,
+      plans,
+    };
+  }
+}
+</script>
+</body>
+</html>
