@@ -1,48 +1,71 @@
-"""deploy.py — 빌드된 정적 사이트를 보유 Ubuntu 서버로 배포 (AUTOMATION.md §6).
+"""deploy.py — 빌드된 정적 사이트를 보유 서버로 배포 (AUTOMATION.md §6).
 
-rsync over SSH(키: ~/.ssh/autobtc_iwinv) → 서버 web_root → Caddy 가 서빙.
-⚠️ 안전 가드: 기본은 DRY-RUN(명령만 출력). 실제 배포는 환경변수 ADSENSE_DEPLOY=1 일 때만.
-   프로덕션 변경이므로 DNS(stack.utilverse.info→서버)·Caddy 설정 선행 필요.
+이 서버는 **nginx**(80/443) + certbot 구성(Caddy 아님 — data·itsmine 등 기존 서브도메인 공유).
+stack.utilverse.info 의 nginx vhost·TLS는 1회 셋업 완료. 이후 배포는 dist/site 콘텐츠 동기화뿐.
+전송: tar → scp → 원격 추출 (로컬 rsync 불필요, Windows/Git-Bash·Linux 공통).
+안전 가드: 기본 DRY-RUN, ADSENSE_DEPLOY=1 일 때만 실제 전송.
+
+⚠️ 현재 vhost 는 [STAGING] X-Robots-Tag noindex 가 걸려 있음(샘플 콘텐츠 색인 방지).
+   실콘텐츠 발행 시: 서버 /etc/nginx/sites-available/stack.utilverse.info 의 add_header 줄 삭제
+   → nginx -t && systemctl reload nginx (remove_noindex() 참고).
 """
 from __future__ import annotations
 import os
-import shlex
 import subprocess
 
-SRC = "dist/site/"
+SRC = "dist/site"
 DEFAULT_KEY = "~/.ssh/autobtc_iwinv"
 
 
-def caddy_snippet(domain: str, web_root: str) -> str:
-    return (f"{domain} {{\n"
-            f"    root * {web_root}\n"
-            f"    file_server\n"
-            f"    encode gzip\n"
-            f"    try_files {{path}} {{path}}/ {{path}}/index.html\n"
-            f"}}\n")
-
-
-def deploy(cfg, *, dry_run: bool = True) -> str:
+def _cfg(cfg):
     d = (cfg.get("sites", {}) or {}).get("deploy", {}) or {}
-    host = d.get("host", "115.68.230.40")
-    domain = d.get("domain_root", "utilverse.info")
-    web_root = d.get("web_root", "/var/www/stack.utilverse.info")
-    key = d.get("ssh_key", DEFAULT_KEY)
+    return (d.get("host", "115.68.230.40"),
+            d.get("web_root", "/var/www/stack.utilverse.info"),
+            os.path.expanduser(d.get("ssh_key", DEFAULT_KEY)),
+            d.get("domain_root", "utilverse.info"))
 
-    ssh = f"ssh -i {key} -o StrictHostKeyChecking=accept-new"
-    cmd = ["rsync", "-az", "--delete", "-e", ssh, SRC, f"root@{host}:{web_root}/"]
-    printable = " ".join(shlex.quote(c) for c in cmd)
 
+def nginx_vhost(domain: str, web_root: str) -> str:
+    """참고용 nginx 정적 vhost (1회 셋업 — 이미 적용됨). certbot --nginx -d {domain} 로 TLS."""
+    return (f"server {{\n  server_name {domain};\n  root {web_root};\n  index index.html;\n"
+            f"  location / {{ try_files $uri $uri/ $uri/index.html =404; }}\n"
+            f"  gzip on; gzip_types text/css application/javascript image/svg+xml;\n  listen 80;\n}}\n")
+
+
+def deploy(cfg, *, dry_run: bool = True):
+    host, web_root, key, droot = _cfg(cfg)
+    tgz = "dist/_site.tgz"
+    ssh = ["ssh", "-i", key, "-o", "StrictHostKeyChecking=accept-new", f"root@{host}"]
+    steps = [
+        ["tar", "-C", SRC, "-czf", tgz, "."],
+        ["scp", "-i", key, "-o", "StrictHostKeyChecking=accept-new", tgz, f"root@{host}:/tmp/stack_site.tgz"],
+        ssh + [f"mkdir -p {web_root} && tar -C {web_root} -xzf /tmp/stack_site.tgz && rm -f /tmp/stack_site.tgz"],
+    ]
     if dry_run:
         print("[deploy DRY-RUN] 실제 배포하려면 ADSENSE_DEPLOY=1")
-        print("  " + printable)
-        print("  Caddy 설정(서버 Caddyfile):\n    " + caddy_snippet(f"stack.{domain}", web_root).replace("\n", "\n    "))
-        print("  사전: DNS stack." + domain + " → " + host + ", 서버에 " + web_root + " 생성 권한")
-        return printable
+        for s in steps:
+            print("  " + " ".join(s))
+        print(f"  → https://stack.{droot} (nginx vhost·TLS 셋업 완료)")
+        return None
+    if not os.path.isdir(SRC):
+        raise RuntimeError("dist/site 없음 — 먼저 orchestrator --stage build")
+    print(f"[deploy] tar/scp over ssh → {host}:{web_root}")
+    for s in steps:
+        subprocess.run(s, check=True)
+    if os.path.exists(tgz):
+        os.remove(tgz)
+    print(f"[deploy] 완료 → https://stack.{droot}")
+    return host
 
-    if not os.path.isdir("dist/site"):
-        raise RuntimeError("dist/site 없음 — 먼저 site_builder.build() (orchestrator --stage build)")
-    print("[deploy] rsync 실행:", printable)
+
+def remove_noindex(cfg):
+    """[STAGING] 해제 — 실콘텐츠 발행 후 noindex 헤더 제거 + nginx reload (실제 변경: ADSENSE_DEPLOY=1)."""
+    host, _, key, _ = _cfg(cfg)
+    conf = "/etc/nginx/sites-available/stack.utilverse.info"
+    remote = (f"sed -i '/X-Robots-Tag/d' {conf} && nginx -t && systemctl reload nginx "
+              f"&& echo 'noindex 제거·reload 완료'")
+    cmd = ["ssh", "-i", key, "-o", "StrictHostKeyChecking=accept-new", f"root@{host}", remote]
+    if os.environ.get("ADSENSE_DEPLOY") != "1":
+        print("[remove_noindex DRY-RUN] ADSENSE_DEPLOY=1 필요:\n  " + " ".join(cmd[:-1]) + f" '{remote}'")
+        return
     subprocess.run(cmd, check=True)
-    print("[deploy] 완료 → https://stack." + domain)
-    return printable

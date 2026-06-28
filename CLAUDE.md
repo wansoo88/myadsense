@@ -6,7 +6,7 @@
 - **사용자**: 개인·소규모 퍼블리셔 1인.
 - **핵심 전략 (리서치 검증)**: 글 수가 아니라 **품질·권위(E-E-A-T)** + **고CPC 니치(금융·보험·기술·건강)** + **Tier-1 영어권·검색 SEO 오가닉 트래픽** + **Auto ads experiments로 RPM 자체 최적화**. 유료·조작 트래픽 금지.
 - **자동화**: 풀스택 + 대량 프로그래매틱 SEO. 단, **품질 게이트·점진 롤아웃·킬스위치**로 생존 가능하게. 아키텍처·자동화 맵 @AUTOMATION.md
-- **배포**: 보유 Ubuntu 자체호스팅 `ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40`, `utilverse.info` 서브도메인, Caddy, **서버 cron 24/7**(pjt11 컨벤션).
+- **배포**: 보유 Ubuntu `ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40`, **nginx+certbot**(80/443, data·itsmine 공유 — Caddy 아님), **서버 cron 24/7**. `stack.utilverse.info` **라이브**(2026-06-28, [STAGING] noindex — 실콘텐츠 전).
 - **전체 계획**: @PLAN.md · **리서치 근거(검증/반증)**: @docs/RESEARCH.md (모든 주장은 여기에 근거를 둔다)
 
 ## 🚨 절대 규칙 (가드레일 — 위반 시 계정 영구 정지 = 모든 ROI 소멸)

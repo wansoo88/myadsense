@@ -33,7 +33,8 @@ deploy:
   host: 115.68.230.40            # Ubuntu, root
   ssh_key: ~/.ssh/autobtc_iwinv  # rsync/ssh 키 (engine/deploy.py)
   domain_root: utilverse.info    # 서브도메인 할당 (현재: stack.utilverse.info)
-  web_root: /var/www/stack.utilverse.info   # Caddy 서빙 디렉토리 (rsync 대상)
-  https: caddy                   # Caddy 자동 HTTPS (pjt11과 동일)
+  web_root: /var/www/stack.utilverse.info   # nginx 서빙 디렉토리 (배포 대상)
+  https: nginx_certbot           # 이 서버는 nginx(80/443) + certbot — Caddy 아님(data·itsmine 공유)
+  status: live                   # stack.utilverse.info 배포됨(2026-06-28). [STAGING] noindex 가드 ON
   scheduler: server_cron         # config/schedule.yaml → 서버 crontab (24/7)
   # 시크릿(.env)은 서버에만 두고 git 커밋 금지. 콘텐츠 빌드 산출물은 Caddy로 서빙.

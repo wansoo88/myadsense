@@ -109,7 +109,7 @@
 | publish | 매일 | 큐에서 `daily_publish_cap`만큼 점진 발행 |
 | report | 주간 | 로컬 HTML 리포트(RPM·세션·CWV·게이트 통과율) |
 
-구동: **보유 Ubuntu 서버의 cron으로 24/7 실행** (`config/sites.yaml` deploy). 서버: `ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40`, 도메인 `utilverse.info` 서브도메인, Caddy 자동 HTTPS (pjt11 컨벤션 동일). `config/schedule.yaml` → 서버 `crontab` 으로 설치. 보조로 Claude Code 예약 에이전트(`/loop`)·스킬로 점검·디버그. ⚠️ 버전관리·예약 클라우드 에이전트는 **`git init` 후** 가능(이전 ultraplan이 git 부재로 실패).
+구동: **보유 Ubuntu 서버의 cron으로 24/7 실행** (`config/sites.yaml` deploy). 서버: `ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40`, 도메인 `utilverse.info` 서브도메인. **웹서버는 nginx+certbot**(80/443, data·itsmine 등 공유 — Caddy 아님). `stack.utilverse.info` 라이브(정적 vhost+TLS 1회 셋업 완료, [STAGING] X-Robots-Tag noindex). 콘텐츠 배포는 `engine/deploy.py`(tar/scp over ssh). `config/schedule.yaml` → 서버 `crontab`. 보조로 Claude Code 예약 에이전트(`/loop`)·스킬로 점검·디버그. ⚠️ 버전관리·예약 클라우드 에이전트는 **`git init` 후** 가능(이전 ultraplan이 git 부재로 실패).
 
 > 자체 서버가 있으므로 "최대 자동화"의 케이던스는 **서버 cron이 1차**(상시 monitor·일일 ingest/publish). Claude Code는 운영·디버그·리포트 해석 레이어.
 
