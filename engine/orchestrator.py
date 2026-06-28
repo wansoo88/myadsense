@@ -32,8 +32,32 @@ def load_config() -> dict:
 
 
 def stage_ingest(cfg):
-    """AdSense/Search Console/PageSpeed → store(DB). 읽기 전용."""
-    raise NotImplementedError("ingest 어댑터 구현 — AUTOMATION.md §2, 읽기 API")
+    """AdSense/Search Console/PageSpeed → store(DB). 읽기 전용(F3: 트래픽/클릭 생성 없음).
+
+    각 어댑터는 자격증명 없으면 스스로 스킵(0 반환). 개별 오류도 스킵하고 계속.
+    """
+    from store import db
+    db.init()
+    urls = [s.get("cms", {}).get("base_url") or f"https://{s['domain']}"
+            for s in cfg["sites"]["sites"]]
+    n = 0
+    try:
+        from ingest import pagespeed
+        c = pagespeed.ingest(urls, cfg, db); n += c; print(f"  pagespeed: {c} rows")
+    except Exception as e:
+        print(f"  pagespeed skip: {e}")
+    try:
+        from ingest import search_console
+        c = search_console.ingest(cfg, db); n += c; print(f"  search_console: {c} rows")
+    except Exception as e:
+        print(f"  search_console skip: {e}")
+    try:
+        from ingest import adsense_api
+        c = adsense_api.ingest(cfg, db); n += c; print(f"  adsense: {c} rows")
+    except Exception as e:
+        print(f"  adsense skip: {e}")
+    print(f"ingest: {n} metric rows → {db.DB_PATH}")
+    return n
 
 
 def stage_research(cfg):
@@ -101,6 +125,20 @@ def stage_publish(cfg):
     return len(queued)
 
 
+def stage_build(cfg):
+    """dist/queue(게이트 통과분) → dist/site (정적 사이트 + 필수 페이지 + sitemap/robots)."""
+    from content import site_builder
+    return site_builder.build(cfg)
+
+
+def stage_deploy(cfg):
+    """dist/site → 보유 서버(rsync). 기본 DRY-RUN, ADSENSE_DEPLOY=1 일 때만 실제 배포."""
+    from content import site_builder
+    import deploy as deployer
+    site_builder.build(cfg)                       # 항상 최신 빌드 후 배포
+    return deployer.deploy(cfg, dry_run=os.environ.get("ADSENSE_DEPLOY") != "1")
+
+
 def stage_report(cfg):
     """로컬 HTML 리포트(RPM·세션·CWV·게이트 통과율). Artifact 아님(CLAUDE.md)."""
     raise NotImplementedError("report 렌더러 구현 → reports/weekly_{date}.html")
@@ -108,7 +146,8 @@ def stage_report(cfg):
 
 STAGES = {
     "ingest": stage_ingest, "research": stage_research, "generate": stage_generate,
-    "monitor": stage_monitor, "publish": stage_publish, "report": stage_report,
+    "monitor": stage_monitor, "publish": stage_publish, "build": stage_build,
+    "deploy": stage_deploy, "report": stage_report,
 }
 
 

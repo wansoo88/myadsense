@@ -30,9 +30,10 @@ alerts:
 
 # 배포 — 보유 Ubuntu 자체호스팅 (pjt11 컨벤션과 동일: Caddy 자동 HTTPS + 서버 cron)
 deploy:
-  host: 115.68.230.40            # Ubuntu, root, key: ~/.ssh/autobtc_iwinv
-  ssh: "ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40"
+  host: 115.68.230.40            # Ubuntu, root
+  ssh_key: ~/.ssh/autobtc_iwinv  # rsync/ssh 키 (engine/deploy.py)
   domain_root: utilverse.info    # 서브도메인 할당 (현재: stack.utilverse.info)
+  web_root: /var/www/stack.utilverse.info   # Caddy 서빙 디렉토리 (rsync 대상)
   https: caddy                   # Caddy 자동 HTTPS (pjt11과 동일)
   scheduler: server_cron         # config/schedule.yaml → 서버 crontab (24/7)
   # 시크릿(.env)은 서버에만 두고 git 커밋 금지. 콘텐츠 빌드 산출물은 Caddy로 서빙.

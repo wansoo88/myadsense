@@ -222,3 +222,34 @@ def render(spec, draft: bool = False) -> str:
 {THEME_TOGGLE}
 </body>
 </html>"""
+
+
+def render_static_page(title: str, body_html: str, *, description: str = "") -> str:
+    """필수/정적 페이지(Privacy·About·Contact·index) — 광고 없는 단순 본문, 동일 디자인 셸."""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(description or title)}">
+{THEME_INIT}
+<style>{CSS}</style>
+</head>
+<body>
+<header class="site"><div class="container row">
+<a class="brand" href="/">stack<span class="dot">.</span></a>
+<nav class="cats"><a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a><a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>
+<span class="spacer"></span><button class="tbtn" aria-label="Toggle theme">◐ Theme</button>
+</div></header>
+<div class="container"><main><article>
+<h1>{esc(title)}</h1>
+{body_html}
+</article></main></div>
+<footer class="site"><div class="container">
+<a href="/about/">About</a><a href="/contact/">Contact</a><a href="/privacy/">Privacy Policy</a>
+<p>© 2026 stack.utilverse.info · Independent software comparisons &amp; guides.</p>
+</div></footer>
+{THEME_TOGGLE}
+</body>
+</html>"""
