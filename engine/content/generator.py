@@ -108,6 +108,39 @@ def _user_prompt(topic: str, language: str) -> str:
             "Include 2+ official sources. Aim for depth that fully answers the query.")
 
 
+def complete_text(system: str, user: str, content_cfg: dict, *, max_tokens: int = 6000) -> str:
+    """provider(api|claude_cli)로 1회 완성 텍스트 반환 — reviewer 등 범용 재사용."""
+    gen = content_cfg.get("generation", {})
+    model = gen.get("model", "claude-opus-4-8")
+    provider = gen.get("provider", "auto")
+    if provider == "auto":
+        provider = "api" if os.environ.get("ANTHROPIC_API_KEY") else ("claude_cli" if _claude_cli_available() else "")
+    if provider == "api":
+        import anthropic
+        resp = anthropic.Anthropic().messages.create(
+            model=model, max_tokens=max_tokens, thinking={"type": "adaptive"},
+            output_config={"effort": "medium"}, system=system,
+            messages=[{"role": "user", "content": user}])
+        return next(b.text for b in resp.content if b.type == "text")
+    if provider == "claude_cli":
+        import shutil
+        import subprocess
+        if not shutil.which("claude"):
+            raise RuntimeError("claude CLI 없음")
+        proc = subprocess.run(
+            ["claude", "-p", user, "--append-system-prompt", system,
+             "--output-format", "json", "--model", model],
+            capture_output=True, text=True, encoding="utf-8", timeout=900)
+        if proc.returncode != 0:
+            raise RuntimeError(f"claude CLI 실패: {(proc.stderr or '')[:200]}")
+        try:
+            env = json.loads(proc.stdout)
+            return env.get("result", proc.stdout) if isinstance(env, dict) else proc.stdout
+        except json.JSONDecodeError:
+            return proc.stdout
+    raise RuntimeError("생성 provider 없음 — ANTHROPIC_API_KEY 또는 claude CLI 필요")
+
+
 # 구조화 출력 스키마 — Claude 가 이 형태로만 반환(output_config.format).
 # 날짜·저자·slug·canonical 은 모델이 아니라 시스템이 채운다(날조 방지) → 스키마에 없음.
 _CONTENT_SCHEMA = {
@@ -171,9 +204,10 @@ _CONTENT_SCHEMA = {
 _SYSTEM = """You are an editor for an independent software-comparison site (SaaS, developer, and AI tools) for an English-speaking audience.
 Write genuinely useful, original content that satisfies search intent. Rules:
 - E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of. Describe pricing as tiers (e.g. "free tier + paid Pro") and tell readers to confirm current pricing on the vendor's site.
-- Structure: at least 4 substantive sections. For comparisons include: a one-line tldr_html verdict; a comparison table (real differentiating features, set winner to 'a'/'b'/null); a feature_matrix where each row's a/b is exactly one of "✓" (full), "△" (partial/paid), or "✗" (none), with an optional footnote in note; tiered pricing; pros/cons per option; and a hands-on verdict_html.
+- Structure: at least 4 substantive sections. For comparisons include: a one-line tldr_html verdict; a comparison table (real differentiating features, set winner to 'a'/'b'/null); a feature_matrix where each row's a/b is exactly one of "✓" (full), "△" (partial/paid), or "✗" (none), with an optional footnote in note; tiered pricing; pros/cons per option; and a clear, evidence-based verdict_html.
+- NO false experience: do NOT claim first-person testing or personal use you did not perform (never write "after working with both", "I tested for weeks", "in my experience", "a joy to use"). Write from documented features and typical workflows. Do NOT state absolute superlatives ("the best", "#1", "fastest") as fact — attribute them or frame as opinion.
 - HTML fields (*_html): simple semantic HTML only — <p>, <strong>, <em>, <ul>, <li>, <h3>. NO <script>, NO inline styles, NO ad/clickbait language, NO "click the ad". Styling is handled by the site theme.
-- Neutral, trustworthy, editorial tone. No fabricated testimonials. Output must match the provided JSON schema exactly."""
+- Neutral, trustworthy, editorial tone. No fabricated testimonials or reviews. Output must match the provided JSON schema exactly."""
 
 
 def _via_api(topic: str, content_cfg: dict) -> ContentSpec:

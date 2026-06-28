@@ -96,22 +96,35 @@ def stage_generate(cfg):
             if c.get("priority") == 1:
                 seeds += [(s, c["id"]) for s in c.get("seeds", [])[:3]]
     os.makedirs("dist/queue", exist_ok=True)
-    corpus, passed = [], 0
+    # 실콘텐츠(fixture 아님)는 발행 전 항상 검수(adsense-review 루브릭 — 사용자 방침)
+    review_on = os.environ.get("ADSENSE_FIXTURE") != "1" and (
+        bool(os.environ.get("ANTHROPIC_API_KEY")) or generator._claude_cli_available())
+    corpus, passed, rejected = [], 0, 0
     for kw, cid in seeds:
         try:
-            spec, page = generator.generate(kw, cfg["content"], cluster=cid)  # 키 있으면 API, 없으면 fixture
+            spec, page = generator.generate(kw, cfg["content"], cluster=cid)
         except Exception as e:
-            print(f"SKIP {kw}: 생성 실패 {e}")
-            continue
+            print(f"SKIP {kw}: 생성 실패 {e}"); rejected += 1; continue
         r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
-        if r.passed:
-            with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
-                f.write(page.html)
-            corpus.append(" ".join(page.blocks))
-            passed += 1
-        else:
-            print(f"REJECT {kw}: {r.reasons}")
-    print(f"generate(fixture): {passed}/{len(seeds)} 게이트 통과 → dist/queue")
+        if not r.passed:
+            print(f"GATE REJECT {kw}: {r.reasons}"); rejected += 1; continue
+        if review_on:                                    # 검수 게이트
+            from content import reviewer
+            try:
+                rv = reviewer.review(spec, cfg["content"])
+            except Exception as e:
+                print(f"REVIEW 실패→미발행 {kw}: {e}"); rejected += 1; continue
+            os.makedirs("dist/review", exist_ok=True)
+            with open(f"dist/review/{spec.slug}.json", "w", encoding="utf-8") as f:
+                json.dump(rv, f, ensure_ascii=False, indent=2)
+            if not rv.get("passed"):
+                tps = [i.get("type") for i in rv.get("issues", [])][:5]
+                print(f"REVIEW REJECT {kw}: sev={rv.get('severity')} {tps} (상세 dist/review/{spec.slug}.json)")
+                rejected += 1; continue
+        with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
+            f.write(page.html)
+        corpus.append(" ".join(page.blocks)); passed += 1
+    print(f"generate({'검수ON' if review_on else 'fixture'}): {passed} 통과 / {rejected} 탈락 (시드 {len(seeds)}) → dist/queue")
     return passed
 
 
