@@ -7,7 +7,11 @@ spec 은 속성만 읽으므로 generator 와 순환 import 없음.
 from __future__ import annotations
 import html
 import json
+import os
 import re
+
+# AdSense 승인 전에는 광고 슬롯 비노출(빈 플레이스홀더가 심사에 불리). 승인 후 ADSENSE_ADS=1 로 켬.
+ADS_ENABLED = os.environ.get("ADSENSE_ADS", "0") == "1"
 
 esc = html.escape
 
@@ -278,6 +282,8 @@ def _footer():
 
 
 def _ad(name, cls):
+    if not ADS_ENABLED:
+        return ""                       # 승인 전: 광고 영역 비노출. 승인 후 ADSENSE_ADS=1 → 슬롯 복원
     return f'<div class="ad-slot {cls}" data-ad-slot="{name}">Advertisement</div>'
 
 
