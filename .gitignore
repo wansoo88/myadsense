@@ -9,12 +9,15 @@ __pycache__/
 .venv/
 venv/
 
-# 런타임 상태·생성물
+# 런타임 상태·생성물 (주석은 패턴과 같은 줄에 두지 말 것 — gitignore 미지원)
 engine/store/*.db
 engine/store/killswitch_state.json
+# 리포트 산출물
 reports/
-dist/               # 드라이런 미리보기·발행 큐(생성물)
-content/            # 생성된 발행 콘텐츠(SSG 빌드 산출물)
+# 드라이런 미리보기·발행 큐
+dist/
+# 생성된 발행 콘텐츠(SSG 빌드 산출물)
+content/
 
 # 로그·임시
 *.log
