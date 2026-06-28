@@ -61,8 +61,19 @@ def stage_ingest(cfg):
 
 
 def stage_research(cfg):
-    """키워드·니치·지역 스코어 (config/niches.yaml weights)."""
-    raise NotImplementedError("keyword_research 구현")
+    """시드 키워드 스코어링 → dist/research/backlog.json (generate 가 소비). 있으면 SC 실수요 보정."""
+    import json
+    from content import keyword_research
+    from store import db
+    db.init()
+    backlog = keyword_research.run(cfg["topics"], cfg["niches"], db)
+    os.makedirs("dist/research", exist_ok=True)
+    with open("dist/research/backlog.json", "w", encoding="utf-8") as f:
+        json.dump(backlog, f, ensure_ascii=False, indent=2)
+    print(f"research: {len(backlog)} 시드 스코어 → dist/research/backlog.json")
+    for e in backlog[:5]:
+        print(f"  {e['score']:.3f} [{e['cluster']}/{e['intent']}] {e['keyword']}")
+    return backlog
 
 
 def stage_generate(cfg):
@@ -71,11 +82,19 @@ def stage_generate(cfg):
     ANTHROPIC_API_KEY 있으면 Claude(claude-opus-4-8) 실생성, 없으면 fixture(오프라인 드래프트).
     개별 생성 실패(거절·오류)는 스킵하고 계속.
     """
+    import json
     from content import generator, quality_gate
-    seeds = []
-    for c in cfg["topics"]["clusters"]:
-        if c.get("priority") == 1:                       # 승인 전: P1 코너스톤부터
-            seeds += [(s, c["id"]) for s in c.get("seeds", [])[:3]]
+    backlog_path = "dist/research/backlog.json"
+    if os.path.exists(backlog_path):                     # research 가 만든 순위 백로그 우선
+        with open(backlog_path, encoding="utf-8") as f:
+            ranked = json.load(f)
+        seeds = [(e["keyword"], e["cluster"]) for e in ranked[:10]]
+        print(f"generate: research 백로그 상위 {len(seeds)}개 사용")
+    else:                                                # 없으면 P1 코너스톤 시드
+        seeds = []
+        for c in cfg["topics"]["clusters"]:
+            if c.get("priority") == 1:
+                seeds += [(s, c["id"]) for s in c.get("seeds", [])[:3]]
     os.makedirs("dist/queue", exist_ok=True)
     corpus, passed = [], 0
     for kw, cid in seeds:
