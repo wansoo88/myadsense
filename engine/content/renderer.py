@@ -62,6 +62,8 @@ header.site{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--
 nav.cats{display:flex;gap:18px;font-size:14px;font-weight:500}nav.cats a{color:var(--ink-soft)}
 .right{margin-left:auto;display:flex;align-items:center;gap:10px}
 .searchpill{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--muted);font-size:13px;min-width:170px}
+.searchpill:focus-within{border-color:var(--line-strong)}
+.searchpill input{border:0;background:transparent;outline:none;color:var(--ink);font:13px var(--font-sans);width:100%;min-width:0}
 .tbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer}
 .tbtn:hover{border-color:var(--line-strong);color:var(--ink)}
 .tbtn .ic-sun{display:none}[data-theme=dark] .tbtn .ic-sun{display:inline-flex}[data-theme=dark] .tbtn .ic-moon{display:none}
@@ -266,7 +268,12 @@ def _header():
             '<a class="brand" href="/"><span class="badge">S</span><span>stack<span class="tld">.utilverse.info</span></span></a>'
             '<nav class="cats hide-sm"><a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
             '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
-            '<div class="right"><span class="searchpill hide-sm">Search tools…</span>'
+            '<div class="right">'
+            '<form class="searchpill hide-sm" action="https://www.google.com/search" method="get" role="search">'
+            + _ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 15, "var(--muted)")
+            + '<input name="q" placeholder="Search tools…" aria-label="Search tools">'
+            '<input type="hidden" name="as_sitesearch" value="stack.utilverse.info">'
+            '</form>'
             f'<button class="tbtn" aria-label="Toggle theme">{_SUN}{_MOON}</button></div>'
             '</div></header>')
 

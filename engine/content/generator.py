@@ -70,12 +70,42 @@ def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
 def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False,
              draft: bool = False, cluster: str | None = None):
     """topic(시드 키워드) → (spec, page). page.html 은 design.md 렌더 결과."""
-    use_api = (not force_fixture) and bool(os.environ.get("ANTHROPIC_API_KEY"))
-    spec = _via_api(topic, content_cfg) if use_api else _fixture(topic)
+    spec = _resolve_provider(topic, content_cfg, force_fixture)
     if cluster:
         spec.cluster = cluster                # 카테고리 허브 그룹핑용(렌더 시 meta로 기록)
     html_doc = renderer.render(spec, draft=draft)
     return spec, spec_to_page(spec, html_doc)
+
+
+def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool) -> ContentSpec:
+    """provider 선택: api(키) | claude_cli(구독 헤드리스) | auto | fixture(오프라인)."""
+    if force_fixture or os.environ.get("ADSENSE_FIXTURE") == "1":
+        return _fixture(topic)                # 스테이징/프리뷰 빠른 빌드(LLM 호출 없음)
+    provider = (content_cfg.get("generation", {}) or {}).get("provider", "auto")
+    if provider == "auto":                    # 키 있으면 API, 없고 claude CLI 있으면 구독, 둘 다 없으면 fixture
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            provider = "api"
+        elif _claude_cli_available():
+            provider = "claude_cli"
+        else:
+            provider = "fixture"
+    if provider == "api":
+        return _via_api(topic, content_cfg)
+    if provider == "claude_cli":
+        return _via_claude_cli(topic, content_cfg)
+    return _fixture(topic)
+
+
+def _claude_cli_available() -> bool:
+    import shutil
+    return shutil.which("claude") is not None
+
+
+def _user_prompt(topic: str, language: str) -> str:
+    return (f"Write a {language} article for this search query: \"{topic}\".\n"
+            "If it is an 'X vs Y' query, make page_type 'comparison' and fill comparison/pricing/pros_cons. "
+            "If it is 'best ...' make it 'listicle'; if 'how to ...' make it 'guide' (comparison may be null). "
+            "Include 2+ official sources. Aim for depth that fully answers the query.")
 
 
 # 구조화 출력 스키마 — Claude 가 이 형태로만 반환(output_config.format).
@@ -158,10 +188,7 @@ def _via_api(topic: str, content_cfg: dict) -> ContentSpec:
     language = gen.get("language", "en")
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수에서 인증
 
-    user = (f"Write a {language} article for this search query: \"{topic}\".\n"
-            "If it is an 'X vs Y' query, make page_type 'comparison' and fill comparison/pricing/pros_cons. "
-            "If it is 'best ...' make it 'listicle'; if 'how to ...' make it 'guide' (comparison may be null). "
-            "Include 2+ official sources. Aim for depth that fully answers the query.")
+    user = _user_prompt(topic, language)
 
     resp = client.messages.create(
         model=model,
@@ -200,6 +227,56 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
         tldr_html=d.get("tldr_html"), feature_matrix=d.get("feature_matrix"),
         sources=d.get("sources", []), related=d.get("related") or [],
     )
+
+
+def _extract_json(text: str) -> dict:
+    """모델 텍스트에서 JSON 추출 — 코드펜스/잡음 제거 후 최외곽 {..} 파싱(스키마 강제 없는 CLI용)."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
+        t = re.sub(r"\n?```$", "", t).strip()
+    a, b = t.find("{"), t.rfind("}")
+    if a != -1 and b != -1 and b > a:
+        t = t[a:b + 1]
+    return json.loads(t)
+
+
+def _via_claude_cli(topic: str, content_cfg: dict) -> ContentSpec:
+    """Claude Code 헤드리스(구독 로그인)로 ContentSpec 생성 — API 키 불필요.
+
+    `claude -p <prompt> --append-system-prompt <sys> --output-format json --model <m>`.
+    API의 output_config.format(스키마 강제)이 없으므로 프롬프트로 JSON-only 요구 + 견고 파싱.
+    """
+    import shutil
+    import subprocess
+    if not shutil.which("claude"):
+        raise RuntimeError("claude CLI 미설치/미로그인 — Claude Code 설치 + 구독 로그인 필요")
+    gen = content_cfg.get("generation", {})
+    model = gen.get("model", "claude-opus-4-8")
+    language = gen.get("language", "en")
+    schema_str = json.dumps(_CONTENT_SCHEMA, ensure_ascii=False)
+    user = (_user_prompt(topic, language)
+            + "\n\nReturn ONLY a single JSON object — no markdown, no code fences, no commentary — "
+              "that strictly matches this JSON schema (every required key present; nullable fields "
+              "may be null):\n" + schema_str)
+    cmd = ["claude", "-p", user, "--append-system-prompt", _SYSTEM,
+           "--output-format", "json", "--model", model]
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=900)
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude CLI 실패(rc={proc.returncode}): {(proc.stderr or '')[:300]}")
+    # Claude Code --output-format json 봉투: {"result":"<텍스트>","is_error":bool, ...}
+    try:
+        env = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        env = None
+    if isinstance(env, dict):
+        if env.get("is_error"):
+            raise RuntimeError(f"claude CLI 결과 오류: {str(env.get('result'))[:200]}")
+        text = env.get("result", proc.stdout)
+    else:
+        text = proc.stdout
+    data = _extract_json(text)
+    return _dict_to_spec(topic, data, content_cfg)
 
 
 # ── fixture (오프라인 드라이런) ─────────────────────────────────────────────

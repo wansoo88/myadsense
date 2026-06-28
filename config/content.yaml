@@ -2,7 +2,8 @@
 # 게이트 없는 대량 = 정지. 모든 페이지는 발행 전 전부 통과해야 함.
 
 generation:
-  model: claude-opus-4-8        # 초안 생성 (Claude API). 비용/속도 트레이드오프 시 sonnet 고려
+  provider: auto                # api | claude_cli | auto (auto: ANTHROPIC_API_KEY 있으면 api, 없고 claude CLI 있으면 구독 헤드리스, 둘 다 없으면 fixture)
+  model: claude-opus-4-8        # 초안 생성. 비용/속도 트레이드오프 시 sonnet 고려
   language: en                  # 기본 영어권(Tier-1, F5). 한국어 고단가 주제 시 ko
   template_dir: templates/      # 페이지 유형별 템플릿 (비교/리스트/가이드 등)
   inject_unique_data: true      # 페이지별 고유 데이터/계산/표 주입 (필수)
