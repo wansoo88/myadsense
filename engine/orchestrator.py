@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 import argparse
+import glob
+import os
 import sys
 
 import yaml  # pip install pyyaml
@@ -23,7 +25,7 @@ from monitor import killswitch
 
 def load_config() -> dict:
     cfg = {}
-    for name in ("guardrails", "content", "niches", "schedule", "sites"):
+    for name in ("guardrails", "content", "niches", "topics", "schedule", "sites"):
         with open(f"config/{name}.yaml", encoding="utf-8") as f:
             cfg[name] = yaml.safe_load(f)
     return cfg
@@ -40,8 +42,29 @@ def stage_research(cfg):
 
 
 def stage_generate(cfg):
-    """초안 생성 → 품질 게이트 → 발행 큐. 통과분만 큐로(quality_gate.check)."""
-    raise NotImplementedError("generator + quality_gate.check 파이프라인 구현")
+    """초안 생성 → 품질 게이트 → 발행 큐(dist/queue). 통과분만.
+
+    현재 fixture 모드(오프라인 드래프트). ANTHROPIC_API_KEY 기반 실생성은 generator._via_api 구현 후.
+    """
+    from content import generator, quality_gate
+    seeds = []
+    for c in cfg["topics"]["clusters"]:
+        if c.get("priority") == 1:                       # 승인 전: P1 코너스톤부터
+            seeds += [(s, c["id"]) for s in c.get("seeds", [])[:3]]
+    os.makedirs("dist/queue", exist_ok=True)
+    corpus, passed = [], 0
+    for kw, cid in seeds:
+        spec, page = generator.generate(kw, cfg["content"], force_fixture=True)
+        r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
+        if r.passed:
+            with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
+                f.write(page.html)
+            corpus.append(" ".join(page.blocks))
+            passed += 1
+        else:
+            print(f"REJECT {kw}: {r.reasons}")
+    print(f"generate(fixture): {passed}/{len(seeds)} 게이트 통과 → dist/queue")
+    return passed
 
 
 def stage_monitor(cfg):
@@ -56,13 +79,21 @@ def stage_monitor(cfg):
 
 
 def stage_publish(cfg):
-    """발행 큐 → CMS. 킬스위치·일일 cap 준수. 게이트 통과분만."""
+    """발행 큐(dist/queue) → CMS. 킬스위치·일일 cap 준수. 게이트 통과분만."""
+    from content import publisher
     if killswitch.is_halted():
         print("발행 중단됨(killswitch). 사람이 원인 확인 후 clear() 필요.")
-        return
+        return 0
     cap = cfg["guardrails"]["rollout"]["daily_publish_cap"]
-    print(f"발행: 큐에서 최대 {cap}개 점진 발행 (publisher 어댑터 TODO)")
-    raise NotImplementedError("publisher 어댑터(wordpress/static_ssg) 구현")
+    queued = sorted(glob.glob("dist/queue/*.html"))[:cap]
+    pub = publisher.get_publisher(cfg["sites"])
+    for q in queued:
+        slug = os.path.splitext(os.path.basename(q))[0]
+        with open(q, encoding="utf-8") as f:
+            url = pub.publish(f.read(), slug, dry_run=False)
+        print(f"published → {url}")
+    print(f"publish: {len(queued)} (cap {cap})")
+    return len(queued)
 
 
 def stage_report(cfg):

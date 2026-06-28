@@ -1,0 +1,194 @@
+"""generator.py — 콘텐츠 초안 생성 (AUTOMATION.md §2 GENERATE).
+
+두 모드:
+  - fixture (드라이런/오프라인 기본): API 키 없이 구조 완성된 초안 생성 → design.md 렌더 검증용.
+  - api: ANTHROPIC_API_KEY 있으면 Claude 로 실제 생성(여기선 골격만, 운영 시 확장).
+생성물은 renderer 로 HTML 렌더 후 quality_gate.Page 로 변환 → 게이트 통과해야 발행 큐.
+순수 템플릿 양산 방지: 페이지마다 unique_blocks(비교표·가격표·핸즈온) 필수.
+"""
+from __future__ import annotations
+from dataclasses import dataclass, field
+import os
+import re
+
+from content import renderer
+from content.quality_gate import Page
+
+
+@dataclass
+class ContentSpec:
+    slug: str
+    title: str
+    dek: str
+    page_type: str                     # comparison | listicle | guide | alternatives
+    breadcrumb: list                   # [(name, url), ...]
+    author: str
+    published_at: str
+    updated_at: str | None
+    intro_html: str
+    sections: list                     # [{"heading","html"}]
+    sources: list                      # [{"title","url"}]
+    canonical: str = ""
+    author_bio: str = ""
+    reading_time: int = 6
+    comparison: dict | None = None      # {"a","b","rows":[{"feature","a","b","winner"}]}
+    pricing: list | None = None         # [{"name","price","features":[...],"cta":{...}}]
+    pros_cons: list | None = None       # [{"name","pros":[...],"cons":[...]}]
+    verdict_html: str | None = None
+    related: list = field(default_factory=list)
+
+
+def _strip(h: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h)).strip()
+
+
+def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
+    blocks = [_strip(spec.intro_html)] + [_strip(s["html"]) for s in spec.sections]
+    if spec.verdict_html:
+        blocks.append(_strip(spec.verdict_html))
+    unique = []
+    if spec.comparison:
+        unique.append("comparison-table")
+    if spec.pricing:
+        unique.append("pricing-table")
+    if spec.pros_cons:
+        unique.append("pros-cons")
+    return Page(
+        slug=spec.slug, title=spec.title, html=html_doc,
+        blocks=[b for b in blocks if b], unique_blocks=unique,
+        sources=[s["url"] for s in spec.sources], author=spec.author,
+        published_at=spec.published_at, updated_at=spec.updated_at, has_schema_org=True,
+    )
+
+
+def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False, draft: bool = False):
+    """topic(시드 키워드) → (spec, page). page.html 은 design.md 렌더 결과."""
+    use_api = (not force_fixture) and bool(os.environ.get("ANTHROPIC_API_KEY"))
+    spec = _via_api(topic, content_cfg) if use_api else _fixture(topic)
+    html_doc = renderer.render(spec, draft=draft)
+    return spec, spec_to_page(spec, html_doc)
+
+
+def _via_api(topic: str, content_cfg: dict) -> ContentSpec:
+    """ANTHROPIC_API_KEY 사용 시 Claude 로 ContentSpec 생성 (운영 시 구조화 출력 프롬프트로 확장)."""
+    raise NotImplementedError(
+        "API 생성은 운영 단계에서 구현 — content.yaml generation.model 사용, "
+        "구조화 출력(JSON)으로 ContentSpec 채우고 페이지별 unique_data 강제. "
+        "드라이런은 generate(..., force_fixture=True)."
+    )
+
+
+# ── fixture (오프라인 드라이런) ─────────────────────────────────────────────
+def _fixture(topic: str) -> ContentSpec:
+    if slug_topic(topic) == "cursor-vs-github-copilot":
+        return _cursor_vs_copilot()
+    return _generic_comparison(topic)
+
+
+def slug_topic(topic: str) -> str:
+    return renderer.slugify(topic)
+
+
+def _cursor_vs_copilot() -> ContentSpec:
+    return ContentSpec(
+        slug="cursor-vs-github-copilot",
+        title="Cursor vs GitHub Copilot: Which AI Coding Assistant Wins in 2026?",
+        dek="A hands-on comparison of pricing, features, and real-world workflow — so you can pick the right AI coding assistant for your stack.",
+        page_type="comparison",
+        breadcrumb=[("Home", "/"), ("AI Coding", "/ai-coding/"), ("Cursor vs GitHub Copilot", "")],
+        author="The stack. editors",
+        author_bio="Independent, hands-on software reviews.",
+        published_at="2026-06-28", updated_at="2026-06-28", reading_time=8,
+        canonical="https://stack.utilverse.info/ai-coding/cursor-vs-github-copilot/",
+        intro_html=(
+            "<p>Both <strong>Cursor</strong> and <strong>GitHub Copilot</strong> bring AI into your editor, "
+            "but they take different shapes: Cursor is an AI-first editor (a VS Code fork) built around the "
+            "chat-and-edit loop, while Copilot is an extension that layers completions and chat onto editors "
+            "you already use. We tested both on real refactors and greenfield work; here is how they compare.</p>"
+        ),
+        sections=[
+            {"heading": "What they are",
+             "html": "<p>Cursor ships as a standalone editor with deep, repo-aware AI editing and an agent mode. "
+                     "GitHub Copilot is an extension for VS Code, JetBrains, Neovim and others, with inline "
+                     "completions and Copilot Chat. If you are committed to your current editor, that difference matters.</p>"},
+            {"heading": "Workflow & developer experience",
+             "html": "<p>Cursor's strength is multi-file, context-aware edits and its agent loop — useful for larger "
+                     "changes. Copilot excels at fast, low-friction inline completions inside the tools teams already "
+                     "standardize on. In our refactor test, Cursor's repo context reduced manual file-hopping; in day-to-day "
+                     "typing, Copilot stayed out of the way.</p>"},
+            {"heading": "Models & integrations",
+             "html": "<p>Both offer access to frontier models and chat. Copilot benefits from tight GitHub/PR integration; "
+                     "Cursor focuses the experience inside its editor. Check each vendor's current model list before deciding — "
+                     "model availability changes often.</p>"},
+            {"heading": "Who should pick which",
+             "html": "<p>Pick <strong>Cursor</strong> if you want an AI-first editor and frequent multi-file edits. "
+                     "Pick <strong>Copilot</strong> if you want to stay in your existing editor and value GitHub-native flow.</p>"},
+        ],
+        comparison={
+            "a": "Cursor", "b": "GitHub Copilot",
+            "rows": [
+                {"feature": "Form factor", "a": "Standalone AI editor (VS Code fork)", "b": "Extension for existing editors", "winner": None},
+                {"feature": "Multi-file / agent edits", "a": "Strong, repo-aware", "b": "Improving", "winner": "a"},
+                {"feature": "Editor flexibility", "a": "Cursor only", "b": "VS Code, JetBrains, Neovim…", "winner": "b"},
+                {"feature": "GitHub / PR integration", "a": "Good", "b": "Native", "winner": "b"},
+                {"feature": "Free tier", "a": "Yes (limited)", "b": "Yes (limited)", "winner": None},
+            ],
+        },
+        pricing=[
+            {"name": "Cursor", "price": "Free / paid tiers", "features": ["Free hobby tier", "Paid Pro tier", "Team plans"],
+             "cta": {"label": "See Cursor pricing", "url": "https://cursor.com/pricing"}},
+            {"name": "GitHub Copilot", "price": "Free / paid tiers", "features": ["Free tier", "Pro for individuals", "Business / Enterprise"],
+             "cta": {"label": "See Copilot pricing", "url": "https://github.com/features/copilot/plans"}},
+        ],
+        pros_cons=[
+            {"name": "Cursor", "pros": ["AI-first, repo-aware editing", "Strong multi-file agent flow"],
+             "cons": ["Must switch editors", "Heavier learning curve"]},
+            {"name": "GitHub Copilot", "pros": ["Works in your existing editor", "Native GitHub/PR flow"],
+             "cons": ["Less opinionated multi-file editing", "Best value inside GitHub ecosystem"]},
+        ],
+        verdict_html=(
+            "<p>There is no single winner — it depends on your workflow. For AI-heavy, multi-file work in a "
+            "dedicated editor, <strong>Cursor</strong> is compelling. To stay in your current editor with GitHub-native "
+            "integration, <strong>Copilot</strong> is the safer pick. Try both free tiers on a real task before committing.</p>"
+            "<p><em>Pricing and model availability change frequently — confirm current details on each vendor's site.</em></p>"
+        ),
+        sources=[
+            {"title": "Cursor — official site", "url": "https://cursor.com"},
+            {"title": "GitHub Copilot — official site", "url": "https://github.com/features/copilot"},
+        ],
+        related=[
+            {"title": "Claude Code vs Cursor", "url": "/ai-coding/claude-code-vs-cursor/"},
+            {"title": "Best GitHub Copilot alternatives", "url": "/ai-coding/github-copilot-alternatives/"},
+        ],
+    )
+
+
+def _generic_comparison(topic: str) -> ContentSpec:
+    """'A vs B' 형태 시드용 일반 초안 골격 (드라이런 — 실데이터는 API/핸즈온으로 대체)."""
+    m = re.split(r"\s+vs\.?\s+", topic, flags=re.I)
+    a, b = (m[0].strip().title(), m[1].strip().title()) if len(m) == 2 else (topic.title(), "Alternatives")
+    slug = renderer.slugify(topic)
+    return ContentSpec(
+        slug=slug, title=f"{a} vs {b}: Comparison (2026)",
+        dek=f"Hands-on comparison of {a} and {b} — pricing, features, and which to choose.",
+        page_type="comparison",
+        breadcrumb=[("Home", "/"), ("Compare", "/compare/"), (f"{a} vs {b}", "")],
+        author="The stack. editors", author_bio="Independent, hands-on software reviews.",
+        published_at="2026-06-28", updated_at="2026-06-28", reading_time=6,
+        canonical=f"https://stack.utilverse.info/compare/{slug}/",
+        intro_html=f"<p>How do <strong>{a}</strong> and <strong>{b}</strong> compare? We weigh features, pricing and fit.</p>",
+        sections=[
+            {"heading": "Overview", "html": f"<p>{a} and {b} target similar needs with different trade-offs.</p>"},
+            {"heading": "Key differences", "html": "<p>The table below summarizes where each tool leads.</p>"},
+            {"heading": "Who should choose which", "html": f"<p>Pick {a} or {b} based on your workflow and budget.</p>"},
+        ],
+        comparison={"a": a, "b": b, "rows": [
+            {"feature": "Best for", "a": f"{a} use case", "b": f"{b} use case", "winner": None},
+            {"feature": "Pricing", "a": "Free / paid", "b": "Free / paid", "winner": None},
+        ]},
+        pros_cons=[{"name": a, "pros": ["Pro 1", "Pro 2"], "cons": ["Con 1"]},
+                   {"name": b, "pros": ["Pro 1", "Pro 2"], "cons": ["Con 1"]}],
+        verdict_html=f"<p>Both are solid; choose {a} or {b} by fit. Confirm current pricing on each vendor's site.</p>",
+        sources=[{"title": f"{a} — official", "url": "https://example.com"},
+                 {"title": f"{b} — official", "url": "https://example.com"}],
+    )

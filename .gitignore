@@ -13,6 +13,7 @@ venv/
 engine/store/*.db
 engine/store/killswitch_state.json
 reports/
+dist/               # 드라이런 미리보기·발행 큐(생성물)
 content/            # 생성된 발행 콘텐츠(SSG 빌드 산출물)
 
 # 로그·임시
