@@ -4,6 +4,7 @@
 sites:
   - id: main
     domain: stack.utilverse.info     # 기술 니치 라벨 (보유: utilverse.info). 변경은 이 줄만 수정
+    contact_email: kimcomplete8888@gmail.com   # Privacy/Contact 노출용 (메일서버 없음 → 개인메일 직접). 포워딩 도입 시 contact@도메인으로 교체
     cms:
       adapter: static_ssg        # wordpress | static_ssg  (어댑터 선택)
       base_url: https://stack.utilverse.info

@@ -13,6 +13,7 @@ from content import renderer
 
 SITE_DIR = "dist/site"
 QUEUE_DIR = "dist/queue"
+PRIVACY_LAST_UPDATED = "2026-06-30"   # Privacy Policy 본문 갱신일 — 정책 텍스트 변경 시 함께 수정
 
 
 def _domain(cfg) -> str:
@@ -20,6 +21,17 @@ def _domain(cfg) -> str:
         return cfg["sites"]["sites"][0]["domain"]
     except Exception:
         return "stack.utilverse.info"
+
+
+def _contact_email(cfg) -> str:
+    """Privacy/Contact 노출용 이메일. config 우선, 없으면 contact@도메인(포워딩 전제)."""
+    try:
+        e = cfg["sites"]["sites"][0].get("contact_email")
+        if e:
+            return e
+    except Exception:
+        pass
+    return f"contact@{_domain(cfg)}"
 
 
 def _title_of(html_doc: str, fallback: str) -> str:
@@ -57,10 +69,10 @@ def _write(path: str, content: str):
         f.write(content)
 
 
-def _privacy_body(domain: str) -> str:
+def _privacy_body(domain: str, email: str) -> str:
     # AdSense 필수(F2): 데이터 수집·제3자 쿠키·벤더 링크·맞춤광고 옵트아웃·법 준수.
     # ⚠️ 실서비스 전 법률 검토·연락 이메일 채우기.
-    return f"""<p><em>Last updated: 2026-06-28. Review with counsel before launch; replace contact email.</em></p>
+    return f"""<p><em>Last updated: {PRIVACY_LAST_UPDATED}.</em></p>
 <p>This Privacy Policy explains how {esc(domain)} ("we") collects, uses, and shares information when you visit our site.</p>
 <h3>Information we collect</h3>
 <p>We collect standard log data (IP address, browser type, pages visited) and use cookies and similar technologies to operate the site and serve advertising.</p>
@@ -76,7 +88,7 @@ def _privacy_body(domain: str) -> str:
 <h3>Your rights</h3>
 <p>Depending on your location, you may have rights under laws such as the GDPR and CCPA, including access, correction, and deletion. We comply with applicable data-protection laws.</p>
 <h3>Contact</h3>
-<p>Questions about this policy: <a href="mailto:contact@{esc(domain)}">contact@{esc(domain)}</a>.</p>"""
+<p>Questions about this policy: <a href="mailto:{esc(email)}">{esc(email)}</a>.</p>"""
 
 
 esc = html.escape
@@ -102,26 +114,31 @@ def build(cfg) -> str:
                       "url": f"/compare/{slug}/", **_meta_of(doc)})
 
     # 2) 필수/정적 페이지 (Privacy 필수 — F2)
+    email = _contact_email(cfg)
     static_pages = {
-        "privacy": ("Privacy Policy", _privacy_body(domain)),
+        "privacy": ("Privacy Policy", _privacy_body(domain, email)),
         "about": ("About", "<p>We publish independent, hands-on comparisons and guides for SaaS, developer, and AI tools.</p>"),
-        "contact": ("Contact", f'<p>Reach us at <a href="mailto:contact@{esc(domain)}">contact@{esc(domain)}</a>.</p>'),
+        "contact": ("Contact", f'<p>Reach us at <a href="mailto:{esc(email)}">{esc(email)}</a>.</p>'),
     }
     for path, (title, body) in static_pages.items():
         _write(os.path.join(SITE_DIR, path, "index.html"),
                renderer.render_static_page(title, body, description=f"{title} — {domain}"))
 
-    # 3) 홈 (Home 목업 수준 — 히어로·이번 주 비교·카테고리·최신·뉴스레터)
-    _write(os.path.join(SITE_DIR, "index.html"),
-           renderer.render_home(pages, domain=domain, canonical=f"{base}/"))
-
-    # 3.5) 카테고리 허브 (nav·홈이 링크하는 URL — 항상 5개 생성, 빈 카테고리는 안내)
+    # 3) 카테고리 허브 — 콘텐츠 1편 이상인 카테고리만 생성·링크·sitemap (빈 '공사중' 페이지 방지)
     cat_urls = []
+    active_cat_paths = []
     for slug, name, dek, cluster_ids in CATEGORIES:
         cat_pages = [p for p in pages if p.get("cluster") in cluster_ids]
+        if not cat_pages:                     # 빈 카테고리는 생성/링크 안 함(helpful-content·승인 리스크)
+            continue
         _write(os.path.join(SITE_DIR, slug, "index.html"),
                renderer.render_hub(name, dek, cat_pages, domain=domain, canonical=f"{base}/{slug}/"))
         cat_urls.append(f"{base}/{slug}/")
+        active_cat_paths.append(f"/{slug}/")
+
+    # 3.5) 홈 (활성 카테고리만 그리드에 노출 — 빈 허브 링크 방지)
+    _write(os.path.join(SITE_DIR, "index.html"),
+           renderer.render_home(pages, domain=domain, canonical=f"{base}/", active_cat_urls=active_cat_paths))
 
     # 4) sitemap.xml + robots.txt
     urls = [f"{base}/"] + cat_urls + [f"{base}{p['url']}" for p in pages] + \
@@ -133,6 +150,6 @@ def build(cfg) -> str:
     _write(os.path.join(SITE_DIR, "robots.txt"),
            f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n")
 
-    print(f"build: {len(pages)} 콘텐츠 + {len(CATEGORIES)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
+    print(f"build: {len(pages)} 콘텐츠 + {len(cat_urls)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
           f"+ sitemap/robots → {SITE_DIR}/")
     return SITE_DIR

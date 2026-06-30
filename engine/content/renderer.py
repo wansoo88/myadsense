@@ -545,7 +545,7 @@ def _feat_card(p, grad=False):
             f'<div class="mt">{esc(meta)}</div></div></a>')
 
 
-def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str = "") -> str:
+def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str = "", active_cat_urls=None) -> str:
     pages = list(pages)
     featured = pages[:3]
     base = f"https://{domain}"
@@ -560,11 +560,12 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
                      f'<div class="sechead"><h2><span class="num">01</span>This week\'s comparisons</h2></div>'
                      f'<div class="feat-grid">{"".join(cards)}</div></div></section>') if cards else ""
 
-    # 카테고리
+    # 카테고리 (활성 목록이 주어지면 그것만 — 빈 허브 링크 방지)
+    cats = _HOME_CATS if active_cat_urls is None else [c for c in _HOME_CATS if c[1] in set(active_cat_urls)]
     cat_cards = "".join(
         f'<a class="cat-card" href="{esc(url)}"><span class="cat-ic">{_ic(path, 22)}</span>'
         f'<span><span class="nm">{esc(name)}</span><span class="tg">{esc(tag)}</span></span></a>'
-        for (name, url, tag, path) in _HOME_CATS)
+        for (name, url, tag, path) in cats)
     categories_html = (f'<section class="home-sec" id="categories"><div class="container">'
                        f'<div class="sechead"><h2><span class="num">02</span>Categories</h2></div>'
                        f'<div class="cat-grid">{cat_cards}</div></div></section>')
