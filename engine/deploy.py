@@ -34,12 +34,17 @@ def nginx_vhost(domain: str, web_root: str) -> str:
 
 def deploy(cfg, *, dry_run: bool = True):
     host, web_root, key, droot = _cfg(cfg)
+    # 안전장치: web_root 를 비우고 추출하므로(=stale 페이지 제거) 경로가 정상인지 먼저 검증.
+    if not (web_root.startswith("/var/www/") and web_root.rstrip("/") != "/var/www"):
+        raise RuntimeError(f"안전장치: 비정상 web_root({web_root!r}) — 정리 배포 거부")
     tgz = "dist/_site.tgz"
     ssh = ["ssh", "-i", key, "-o", "StrictHostKeyChecking=accept-new", f"root@{host}"]
+    # web_root 내용물만 삭제(-mindepth 1, 디렉터리 자체·nginx root 유지) → 추출. 구 샘플/삭제된 슬러그가 남아 색인되는 것 방지.
     steps = [
         ["tar", "-C", SRC, "-czf", tgz, "."],
         ["scp", "-i", key, "-o", "StrictHostKeyChecking=accept-new", tgz, f"root@{host}:/tmp/stack_site.tgz"],
-        ssh + [f"mkdir -p {web_root} && tar -C {web_root} -xzf /tmp/stack_site.tgz && rm -f /tmp/stack_site.tgz"],
+        ssh + [f"mkdir -p {web_root} && find {web_root} -mindepth 1 -delete && "
+               f"tar -C {web_root} -xzf /tmp/stack_site.tgz && rm -f /tmp/stack_site.tgz"],
     ]
     if dry_run:
         print("[deploy DRY-RUN] 실제 배포하려면 ADSENSE_DEPLOY=1")
