@@ -1,7 +1,7 @@
 # daily_local.ps1 — 로컬(Windows) 일일 잡: generate(품질게이트+검수) → killswitch 확인 → 원격 배포(scp).
 # 서버 claude 로그인 전까지 임시로 로컬에서 하루 1편 운영 (로컬은 claude 인증돼 있음).
 # 서버 daily.sh 와 차이: 배포가 로컬-복사가 아니라 원격 scp(ADSENSE_DEPLOY=1, LOCAL 미설정)이며 경로가 로컬(D:\...).
-# 등록: scripts\register_local_task.ps1 (작업 스케줄러, 매일 20:00, 로그온 시).
+# 등록: scripts\register_local_task.ps1 (작업 스케줄러, 매일 20:00 — 로그온 트리거는 이 계정 권한으로 등록 불가 확인됨).
 
 $ErrorActionPreference = 'Continue'
 $proj = 'D:\cashflow\pjt12-adsense'
