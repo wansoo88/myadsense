@@ -153,19 +153,27 @@ def build(cfg) -> str:
             continue
         _write(os.path.join(SITE_DIR, slug, "index.html"),
                renderer.render_hub(name, dek, cat_pages, domain=domain, canonical=f"{base}/{slug}/"))
-        cat_urls.append(f"{base}/{slug}/")
+        cat_urls.append((f"{base}/{slug}/", max((p.get("updated") or "" for p in cat_pages), default="")))
         active_cat_paths.append(f"/{slug}/")
 
     # 3.5) 홈 (활성 카테고리만 그리드에 노출 — 빈 허브 링크 방지)
     _write(os.path.join(SITE_DIR, "index.html"),
            renderer.render_home(pages, domain=domain, canonical=f"{base}/", active_cat_urls=active_cat_paths))
 
-    # 4) sitemap.xml + robots.txt
-    urls = [f"{base}/"] + cat_urls + [f"{base}{p['url']}" for p in pages] + \
-           [f"{base}/{p}/" for p in static_pages]
+    # 4) sitemap.xml + robots.txt — lastmod 는 실제 갱신일만(부정확하면 Google 이 무시하므로 형식 검증)
+    def _lm(d):
+        return d if d and re.fullmatch(r"\d{4}-\d{2}-\d{2}", d) else None
+    site_lastmod = max((p.get("updated") or "" for p in pages), default="")
+    entries = ([(f"{base}/", _lm(site_lastmod))]
+               + [(u, _lm(d)) for u, d in cat_urls]
+               + [(f"{base}{p['url']}", _lm(p.get("updated"))) for p in pages]
+               + [(f"{base}/{sp}/", _lm(PRIVACY_LAST_UPDATED) if sp == "privacy" else None)
+                  for sp in static_pages])
     sitemap = ('<?xml version="1.0" encoding="UTF-8"?>\n'
                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-               + "".join(f"  <url><loc>{esc(u)}</loc></url>\n" for u in urls) + "</urlset>\n")
+               + "".join(f"  <url><loc>{esc(u)}</loc>"
+                         + (f"<lastmod>{d}</lastmod>" if d else "") + "</url>\n"
+                         for u, d in entries) + "</urlset>\n")
     _write(os.path.join(SITE_DIR, "sitemap.xml"), sitemap)
     _write(os.path.join(SITE_DIR, "robots.txt"),
            f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n")
