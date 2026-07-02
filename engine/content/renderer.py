@@ -31,9 +31,9 @@ html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
   --ink:#1a1f2b;--ink-soft:#3d4654;--muted:#5b6573;
   --line:#e5e8ee;--line-strong:#d3d8e2;
   --accent:#2f6df6;--accent-ink:#1b4fd1;
-  --good:#0f8a5f;--warn:#b5791a;--bad:#c2392f;
+  --good:#0d7d55;--warn:#96660f;--bad:#c2392f;
   --good-tint:#e7f5ee;--bad-tint:#fbeceb;
-  --code-bg:#0f1320;--code-ink:#e7ebf2;--ad-bg:#f4f6fa;--ad-label:#9aa4b2;
+  --code-bg:#0f1320;--code-ink:#e7ebf2;--ad-bg:#f4f6fa;--ad-label:#66707e;
   --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Malgun Gothic",sans-serif;
   --font-mono:ui-monospace,SFMono-Regular,"Cascadia Code",Consolas,monospace;
 }
@@ -62,12 +62,13 @@ header.site{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--
 nav.cats{display:flex;gap:18px;font-size:14px;font-weight:500}nav.cats a{color:var(--ink-soft)}
 .right{margin-left:auto;display:flex;align-items:center;gap:10px}
 .searchpill{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--muted);font-size:13px;min-width:170px}
-.searchpill:focus-within{border-color:var(--line-strong)}
+.searchpill:focus-within{border-color:var(--accent)}
 .searchpill input{border:0;background:transparent;outline:none;color:var(--ink);font:13px var(--font-sans);width:100%;min-width:0}
 .tbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer}
 .tbtn:hover{border-color:var(--line-strong);color:var(--ink)}
 .tbtn .ic-sun{display:none}[data-theme=dark] .tbtn .ic-sun{display:inline-flex}[data-theme=dark] .tbtn .ic-moon{display:none}
-@media(max-width:639px){.hide-sm{display:none}}
+@media(max-width:639px){.hide-sm{display:none!important}}  /* !important: nav.cats(0-1-1) 등 더 특이적인 display 선언을 확실히 이김 */
+@media(max-width:639px){body{font-size:16px}h1{font-size:28px}.dek{font-size:17px}.hero{padding:56px 0 48px}}
 /* layout */
 .uv-grid{display:grid;grid-template-columns:minmax(0,720px) 300px;gap:48px;max-width:1120px;margin:0 auto;padding:32px 24px 64px}
 @media(max-width:1023px){.uv-grid{grid-template-columns:1fr;gap:0}.aside{display:none}}
@@ -88,10 +89,11 @@ h1{font-size:33px;line-height:1.2;letter-spacing:-.02em;margin:10px 0 0;font-wei
 .tocm summary{cursor:pointer;font-weight:600;font-size:14px;padding:10px 0;color:var(--ink-soft)}
 .tocm a{display:block;padding:6px 0;font-size:14px;color:var(--ink-soft)}
 /* sections */
+article[id]{scroll-margin-top:80px}
 section.blk{margin-top:44px;scroll-margin-top:80px}
-h2.bar2{font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 6px;color:var(--ink);display:flex;align-items:center;gap:10px;scroll-margin-top:80px}
+h2.bar2{font-size:24px;letter-spacing:-.01em;font-weight:700;margin:0 0 16px;color:var(--ink);display:flex;align-items:center;gap:10px;scroll-margin-top:80px}
 h2.bar2::before{content:"";width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block;flex:none}
-.sub{color:var(--muted);font-size:15px;margin:0 0 18px}
+.sub{color:var(--muted);font-size:15px;margin:-10px 0 18px}
 article h3{font-size:19px;font-weight:700;color:var(--ink);margin:24px 0 8px}
 article p{color:var(--ink-soft);margin:12px 0;max-width:68ch}
 article ul,article ol{color:var(--ink-soft);max-width:68ch}
@@ -113,13 +115,14 @@ table.tbl tbody tr:nth-child(even) td{background:var(--surface)}
 table.tbl td.win{background:var(--good-tint)!important;color:var(--ink)}
 table.tbl td.ctr{text-align:center;font-weight:700}
 .mk-good{color:var(--good)}.mk-warn{color:var(--warn)}.mk-bad{color:var(--bad)}
-.note{vertical-align:super;font-size:12px;color:var(--muted);margin-left:2px}
+.note{display:block;vertical-align:baseline;font-size:12.5px;font-weight:400;line-height:1.5;color:var(--muted);margin:3px 0 0}
 .footnote{font-size:13px;color:var(--muted);margin:10px 2px 0}
 /* pricing */
 .pricing{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
 .price-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px;display:flex;flex-direction:column;gap:4px}
 .price-card .pn{font-size:16px;font-weight:700;color:var(--ink)}
-.price-card .pp{font-size:26px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:2px}
+.price-card .pp{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1.35;margin-top:2px}
+.price-card .pnote{font-size:13px;color:var(--muted);margin-top:2px}
 .price-card ul{margin:6px 0 12px;padding-left:18px;color:var(--ink-soft);font-size:14px;line-height:1.6}
 .cta{display:inline-block;margin-top:auto;background:var(--accent);color:#fff;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;text-align:center}
 .cta:hover{text-decoration:none;background:var(--accent-ink)}
@@ -169,6 +172,7 @@ footer.site .fb{font-weight:700;color:var(--ink-soft)}footer.site nav{display:fl
 .hero .dek{font-size:clamp(17px,2.2vw,20px);line-height:1.55;color:var(--ink-soft);margin:22px auto 0;max-width:58ch;text-wrap:pretty}
 .searchbox{margin:34px auto 0;max-width:560px;display:flex;gap:10px}
 .searchbox .field{flex:1;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;padding:14px 16px}
+.searchbox .field:focus-within{border-color:var(--accent)}
 .searchbox input{flex:1;border:0;background:transparent;outline:none;color:var(--ink);font-size:16px;font-family:var(--font-sans)}
 .searchbox button{flex:none;border:0;background:var(--accent);color:#fff;font-weight:700;font-size:16px;border-radius:12px;padding:0 22px;cursor:pointer}
 .searchbox button:hover{background:var(--accent-ink)}
@@ -208,15 +212,13 @@ footer.site .fb{font-weight:700;color:var(--ink-soft)}footer.site nav{display:fl
 .latest .tt{display:block;font-weight:700;color:var(--ink);font-size:17px;line-height:1.4}
 .latest .mt{display:block;font-size:13.5px;color:var(--muted);margin-top:3px}
 .latest .ar{flex:none;color:var(--muted)}
-.newsletter{padding:80px 0}
+.ctasec{padding:80px 0}
 .nl-card{border:1px solid var(--line);border-radius:20px;background:var(--surface);padding:clamp(28px,5vw,52px);text-align:center}
 .nl-card .ey{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
 .nl-card h2{font-size:clamp(24px,3.2vw,32px);font-weight:800;letter-spacing:-.02em;margin:12px auto 0;color:var(--ink);max-width:22ch;text-wrap:balance}
 .nl-card p{color:var(--ink-soft);margin:14px auto 0;max-width:44ch}
-.nl-form{margin:24px auto 0;max-width:440px;display:flex;gap:10px}
-.nl-form input{flex:1;border:1px solid var(--line-strong);background:var(--bg);border-radius:11px;padding:13px 15px;outline:none;color:var(--ink);font-size:15px}
-.nl-form button{flex:none;border:0;background:var(--accent);color:#fff;font-weight:700;font-size:15px;border-radius:11px;padding:0 22px;cursor:pointer}
-.nl-form button:hover{background:var(--accent-ink)}
+.nl-cta{display:inline-block;margin-top:26px;background:var(--accent);color:#fff;border-radius:11px;padding:13px 26px;font-size:15px;font-weight:700}
+.nl-cta:hover{background:var(--accent-ink);text-decoration:none}
 @media(max-width:860px){.feat-grid{grid-template-columns:1fr}.cat-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.cat-grid{grid-template-columns:1fr}}
 """
@@ -228,7 +230,9 @@ THEME_INIT = ("<script>(function(){try{var t=localStorage.getItem('uv-theme')||"
 _SCRIPTS = ("<script>"
             "var tb=document.querySelector('.tbtn');if(tb)tb.addEventListener('click',function(){"
             "var d=document.documentElement,n=d.getAttribute('data-theme')==='dark'?'light':'dark';"
-            "d.setAttribute('data-theme',n);try{localStorage.setItem('uv-theme',n)}catch(e){}});"
+            "d.setAttribute('data-theme',n);try{localStorage.setItem('uv-theme',n)}catch(e){}"
+            "var c=n==='dark'?'#0f1115':'#ffffff';"
+            "[].forEach.call(document.querySelectorAll('meta[name=theme-color]'),function(m){m.setAttribute('content',c)})});"
             "var ls=[].slice.call(document.querySelectorAll('.toc a'));"
             "if(ls.length&&'IntersectionObserver'in window){"
             "var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){"
@@ -257,7 +261,7 @@ def _head(title, description, canonical="", og_type="article", extra=""):
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(description)}">
 {f'<meta property="og:url" content="{esc(canonical)}">' if canonical else ''}
-<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:card" content="summary">
 {THEME_INIT}
 <style>{CSS}</style>
 {extra}"""
@@ -283,7 +287,8 @@ def _footer():
             '<span class="fb">stack.utilverse.info</span>'
             '<nav><a href="/about/">About</a><a href="/contact/">Contact</a>'
             '<a class="priv" href="/privacy/">Privacy Policy</a>'
-            '<a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a></nav>'
+            '<a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
+            '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
             '<span class="cp">© 2026 stack.utilverse.info</span>'
             '</div></footer>')
 
@@ -332,14 +337,25 @@ def _matrix(m):
             f'</tr></thead><tbody>{rows}</tbody></table></div>')
 
 
+def split_price(price: str) -> tuple[str, str]:
+    """서술형 가격("Paid (…) — confirm current price")의 대시 뒤 단서를 노트로 분리.
+    대시가 괄호 안이면(잘리면 괄호가 깨짐) 분리하지 않는다."""
+    main, sep, note = price.partition("—")
+    if sep and main.count("(") == main.count(")") and note.strip():
+        return main.strip(), note.strip()
+    return price.strip(), ""
+
+
 def _pricing(plans):
     cards = ""
     for p in plans:
         feats = "".join(f"<li>{esc(f)}</li>" for f in p.get("features", []))
         cta = p.get("cta")
         cta_html = f'<a class="cta" href="{esc(cta["url"])}" rel="nofollow sponsored">{esc(cta["label"])}</a>' if cta else ""
+        price, note = split_price(p["price"])
+        note_html = f'<div class="pnote">{esc(note)}</div>' if note else ""
         cards += (f'<div class="price-card"><div class="pn">{esc(p["name"])}</div>'
-                  f'<div class="pp">{esc(p["price"])}</div><ul>{feats}</ul>{cta_html}</div>')
+                  f'<div class="pp">{esc(price)}</div>{note_html}<ul>{feats}</ul>{cta_html}</div>')
     return f'<div class="pricing">{cards}</div>'
 
 
@@ -479,6 +495,20 @@ def render(spec, draft: bool = False) -> str:
 </html>"""
 
 
+def refresh_chrome(doc: str) -> str:
+    """이미 렌더된 문서(발행 큐)의 공통 chrome을 현재 디자인으로 갱신.
+
+    큐 페이지는 생성 시점의 CSS·헤더·푸터·스크립트가 구워져 있어, 렌더러의 디자인
+    수정이 신규 글에만 반영되고 기존 글과 갈라진다. 빌드 시 이 함수로 동기화한다.
+    본문(article)은 건드리지 않는다 — 게이트/검수를 통과한 콘텐츠 그대로.
+    """
+    doc = re.sub(r"<style>.*?</style>", lambda m: f"<style>{CSS}</style>", doc, count=1, flags=re.S)
+    doc = re.sub(r'<header class="site">.*?</header>', lambda m: _header(), doc, count=1, flags=re.S)
+    doc = re.sub(r'<footer class="site">.*?</footer>', lambda m: _footer(), doc, count=1, flags=re.S)
+    doc = re.sub(r"<script>var tb=.*?</script>", lambda m: _SCRIPTS, doc, count=1, flags=re.S)
+    return doc
+
+
 def render_static_page(title: str, body_html: str, *, description: str = "", canonical: str = "") -> str:
     """필수/정적 페이지(Privacy·About·Contact·index) — 동일 셸, 광고 없음."""
     return f"""<!doctype html>
@@ -531,15 +561,15 @@ def _ic(path, w=18, stroke="currentColor"):
 
 
 def _feat_card(p, grad=False):
-    """비교글 카드 (홈 '이번 주 비교' + 카테고리 허브 공용)."""
+    """글 카드 (홈 '이번 주' + 카테고리 허브 공용). 라벨은 페이지 kicker(Comparison/Guide/Best of…)."""
     pair = _vs_pair(p["title"])
     thumb = (f'<span>{esc(pair[0])}</span><span class="vs">vs</span><span>{esc(pair[1])}</span>'
-             if pair else f'<span>{esc(p["title"][:40])}</span>')
+             if pair else f'<span>{esc(p["title"].split(":")[0])}</span>')
     meta = " · ".join([x for x in [p.get("read"),
                                    (f'updated {p["updated"]}' if p.get("updated") else None)] if x])
     return (f'<a class="feat-card" href="{esc(p["url"])}">'
             f'<div class="feat-thumb{" grad" if grad else ""}">{thumb}</div>'
-            f'<div class="bd"><div class="ey">Comparison</div>'
+            f'<div class="bd"><div class="ey">{esc(p.get("kicker") or "Comparison")}</div>'
             f'<div class="tt">{esc(p["title"].split(":")[0])}</div>'
             f'<div class="ds">{esc(p.get("desc") or "Hands-on comparison of pricing, features, and fit.")}</div>'
             f'<div class="mt">{esc(meta)}</div></div></a>')
@@ -574,7 +604,7 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
     rows = "".join(
         f'<a class="row" href="{esc(p["url"])}"><span class="num">{i + 1:02d}</span>'
         f'<span style="flex:1;min-width:0"><span class="tt">{esc(p["title"].split(":")[0])}</span>'
-        f'<span class="mt">Comparison{(" · " + p["read"]) if p.get("read") else ""}</span></span>'
+        f'<span class="mt">{esc(p.get("kicker") or "Comparison")}{(" · " + p["read"]) if p.get("read") else ""}</span></span>'
         f'<span class="ar hide-sm">→</span></a>' for i, p in enumerate(pages)) or \
         '<p style="color:var(--muted);padding:18px 4px">No articles published yet.</p>'
     latest_html = (f'<section class="home-sec alt latest" id="latest"><div class="container">'
@@ -586,14 +616,12 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
                     f'<span><strong>{esc(t)}</strong>{esc(rest)}</span></div>' for (p, t, rest) in _TRUST)
     trustbar = f'<section class="trustbar"><div class="in">{trust}</div></section>'
 
-    # 뉴스레터 (no-backend: onsubmit return false)
-    newsletter = ('<section class="newsletter"><div class="container"><div class="nl-card">'
-                  '<div class="ey">Newsletter</div>'
-                  '<h2>One email a week — only new comparisons and guides.</h2>'
-                  '<p>No ads, no PR. Just tools we have actually tested.</p>'
-                  '<form class="nl-form" onsubmit="return false">'
-                  '<input type="email" placeholder="you@example.com" aria-label="Email">'
-                  '<button type="submit">Subscribe</button></form></div></div></section>')
+    # 비교 요청 CTA (뉴스레터 백엔드가 없으므로 가짜 구독 폼 대신 실제 동작하는 요청 링크 — 정직성)
+    request_cta = ('<section class="ctasec"><div class="container"><div class="nl-card">'
+                   '<div class="ey">Request</div>'
+                   '<h2>Deciding between two tools? Ask us to compare them.</h2>'
+                   '<p>Tell us which tools you are weighing — good requests become full hands-on comparisons.</p>'
+                   '<a class="nl-cta" href="/contact/">Request a comparison</a></div></div></section>')
 
     jsonld = ('<script type="application/ld+json">' + json.dumps({
         "@context": "https://schema.org", "@type": "WebSite", "name": "stack.",
@@ -624,7 +652,7 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
 {featured_html}
 {categories_html}
 {latest_html}
-{newsletter}
+{request_cta}
 {_footer()}
 {_SCRIPTS}
 </body>

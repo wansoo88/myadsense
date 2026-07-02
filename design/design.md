@@ -5,6 +5,8 @@
 > 제약은 디자인에 내장: **Core Web Vitals(LCP/CLS/INP) 안전 · 광고 슬롯 CLS 예약 · E-E-A-T 신뢰 요소 · 가독성 우선.** 근거 @docs/RESEARCH.md(F2·F8), @AUTOMATION.md(§3).
 >
 > **구현**: `engine/content/renderer.py` (자체완결 인라인 CSS/JS·시스템 폰트·외부 fetch 0). 목업 `design/*.dc.html` 기준으로 완성도 반영 — 추가 요소: 토큰 `--good-tint/--bad-tint`, kicker(eyebrow), 상단 "At a glance" 콜아웃, 기능 매트릭스(✓/△/✗), 승자 셀 그린 틴트, 아바타 메타바, 스크롤스파이 사이드바 TOC + 모바일 접이식 TOC, 해/달 테마 토글 + `prefers-color-scheme`, OG·theme-color·SVG 파비콘, BreadcrumbList JSON-LD, skip-link·focus-visible·reduced-motion.
+> **chrome 동기화**: 발행 큐 페이지는 생성 시점 디자인이 구워져 있으므로, `site_builder`가 빌드마다 `renderer.refresh_chrome()`으로 CSS·헤더·푸터·JS를 현행화한다(본문은 불변). 디자인 수정은 렌더러 한 곳만 고치면 전 페이지에 반영.
+> **정직성 규칙**: 동작하지 않는 UI 금지 — 백엔드 없는 뉴스레터 폼 대신 `/contact/` 비교 요청 CTA. 홈 Latest·This week은 갱신일 내림차순(실제 최신). 카드 라벨은 페이지 kicker(Comparison/Guide/Best of)를 그대로 사용.
 
 ---
 
@@ -21,10 +23,10 @@
   --bg:#ffffff; --surface:#f7f8fa; --surface-2:#eef1f6;
   --ink:#1a1f2b; --ink-soft:#3d4654; --muted:#5b6573;
   --line:#e5e8ee; --line-strong:#d3d8e2;
-  --accent:#2f6df6; --accent-ink:#1b4fd1;   /* 테크 블루 — 링크·강조 */
-  --good:#0f8a5f; --warn:#b5791a; --bad:#c2392f;
+  --accent:#2f6df6; --accent-ink:#1b4fd1;   /* 테크 블루 — 링크·강조 (white 대비 4.53:1) */
+  --good:#0d7d55; --warn:#96660f; --bad:#c2392f;  /* AA 검증(2026-07-02): 4.99~5.36:1 */
   --code-bg:#0f1320; --code-ink:#e7ebf2;     /* 코드블록은 라이트에서도 다크 */
-  --ad-bg:#f4f6fa; --ad-label:#9aa4b2;       /* 광고 영역 — 본문과 미세 구분 */
+  --ad-bg:#f4f6fa; --ad-label:#66707e;       /* 광고 영역 — 라벨도 AA(4.64:1) */
 }
 :root[data-theme="dark"]{   /* 개발자 선호 다크 (토글) */
   --bg:#0f1115; --surface:#171a21; --surface-2:#1d212b;

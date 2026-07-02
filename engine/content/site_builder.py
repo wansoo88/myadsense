@@ -40,16 +40,18 @@ def _title_of(html_doc: str, fallback: str) -> str:
 
 
 def _meta_of(doc: str) -> dict:
-    """렌더된 페이지에서 홈 카드용 메타 추출(읽는 시간·갱신일·설명)."""
+    """렌더된 페이지에서 홈 카드용 메타 추출(읽는 시간·갱신일·설명·kicker)."""
     read = re.search(r"(\d+)\s*min read", doc)
     upd = re.search(r"Updated <time>([^<]+)</time>", doc)
     desc = re.search(r'<meta name="description" content="([^"]*)">', doc)
     cl = re.search(r'<meta name="cluster" content="([^"]*)">', doc)
+    kick = re.search(r'<div class="kicker">([^<]+)</div>', doc)
     return {
         "read": f"{read.group(1)} min read" if read else None,
         "updated": upd.group(1).strip() if upd else None,
         "desc": html.unescape(desc.group(1)) if desc else None,
         "cluster": cl.group(1) if cl else None,
+        "kicker": html.unescape(kick.group(1)) if kick else None,
     }
 
 
@@ -104,14 +106,17 @@ def build(cfg) -> str:
     os.makedirs(SITE_DIR, exist_ok=True)
 
     # 1) 콘텐츠 페이지 (dist/queue → /compare/<slug>/)
+    #    큐 문서는 생성 시점 디자인이 구워져 있음 → 빌드마다 chrome(CSS·헤더·푸터·JS)을 현행화
     pages = []
     for qf in sorted(glob.glob(os.path.join(QUEUE_DIR, "*.html"))):
         slug = os.path.splitext(os.path.basename(qf))[0]
         with open(qf, encoding="utf-8") as f:
-            doc = f.read()
+            doc = renderer.refresh_chrome(f.read())
         _write(os.path.join(SITE_DIR, "compare", slug, "index.html"), doc)
         pages.append({"slug": slug, "title": _title_of(doc, slug),
                       "url": f"/compare/{slug}/", **_meta_of(doc)})
+    # 홈 '이번 주'·Latest가 실제 최신이 되도록 갱신일 내림차순(동률은 슬러그순 유지)
+    pages.sort(key=lambda p: p.get("updated") or "", reverse=True)
 
     # 2) 필수/정적 페이지 (Privacy 필수 — F2)
     email = _contact_email(cfg)
