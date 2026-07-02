@@ -22,7 +22,13 @@ CREATE TABLE IF NOT EXISTS pages (
   slug TEXT PRIMARY KEY, url TEXT, title TEXT, cluster TEXT,
   status TEXT, published_at TEXT
 );
+CREATE TABLE IF NOT EXISTS index_status (
+  url TEXT, date TEXT, verdict TEXT, coverage_state TEXT,
+  last_crawl TEXT, indexed INTEGER, fetched_at TEXT,
+  PRIMARY KEY (url, date)
+);
 CREATE INDEX IF NOT EXISTS idx_metrics_src_metric ON metrics(source, metric, date);
+CREATE INDEX IF NOT EXISTS idx_index_status_date ON index_status(date);
 """
 
 
@@ -65,6 +71,38 @@ def upsert_page(slug, url, title, cluster, status, published_at):
             "cluster=excluded.cluster,status=excluded.status,published_at=excluded.published_at",
             (slug, url, title, cluster, status, published_at),
         )
+
+
+def record_index_status(rows, fetched_at: str):
+    """rows: iterable of (url, date, verdict, coverage_state, last_crawl, indexed). UPSERT (url,date)."""
+    data = [(u, d, v, cov, lc, int(idx), fetched_at) for (u, d, v, cov, lc, idx) in rows]
+    if not data:
+        return 0
+    with connect() as c:
+        c.executemany(
+            "INSERT INTO index_status(url,date,verdict,coverage_state,last_crawl,indexed,fetched_at) "
+            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(url,date) DO UPDATE SET "
+            "verdict=excluded.verdict,coverage_state=excluded.coverage_state,"
+            "last_crawl=excluded.last_crawl,indexed=excluded.indexed,fetched_at=excluded.fetched_at",
+            data,
+        )
+    return len(data)
+
+
+def index_snapshot(date: str | None = None):
+    """지정일(없으면 최신일)의 색인 상태 스냅샷: (total, indexed, not_indexed, rows). health/report 용."""
+    with connect() as c:
+        if date is None:
+            row = c.execute("SELECT MAX(date) FROM index_status").fetchone()
+            date = row[0] if row else None
+        if not date:
+            return (0, 0, 0, [])
+        rows = c.execute(
+            "SELECT url,verdict,coverage_state,indexed FROM index_status WHERE date=? ORDER BY url",
+            (date,)).fetchall()
+    total = len(rows)
+    indexed = sum(1 for r in rows if r[3])
+    return (total, indexed, total - indexed, rows)
 
 
 def latest(source: str, metric: str, limit: int = 20):
