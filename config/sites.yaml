@@ -5,7 +5,7 @@ sites:
   - id: main
     domain: stack.utilverse.info     # 기술 니치 라벨 (보유: utilverse.info). 변경은 이 줄만 수정
     contact_email: kimcomplete8888@gmail.com   # Privacy/Contact 노출용 (메일서버 없음 → 개인메일 직접). 포워딩 도입 시 contact@도메인으로 교체
-    google_site_verification:        # GSC URL-접두어 소유권 확인: Google 이 준 파일명(googleXXXX.html)을 그대로 넣으면 빌드가 그 파일을 생성(내용 자동). 비우면 미생성. 확인 완료 후에도 유지(구글 재확인 대비). ⚠️ cron 이 web_root 를 비우므로 수동 업로드는 지워짐 → 반드시 이 값으로 관리
+    google_site_verification: googleb6e6d11d4e30b353.html   # GSC URL-접두어 소유권 확인: Google 이 준 파일명(googleXXXX.html)을 그대로 넣으면 빌드가 그 파일을 생성(내용 자동). 비우면 미생성. 확인 완료 후에도 유지(구글 재확인 대비). ⚠️ cron 이 web_root 를 비우므로 수동 업로드는 지워짐 → 반드시 이 값으로 관리
     cms:
       adapter: static_ssg        # wordpress | static_ssg  (어댑터 선택)
       base_url: https://stack.utilverse.info
