@@ -77,15 +77,15 @@ def stage_research(cfg):
 
 
 def stage_generate(cfg):
-    """초안 생성 → 품질 게이트 → 발행 큐(dist/queue). 통과분만.
+    """초안 생성 → 품질 게이트 → (샘플 일부는 사람 승인 대기) → 발행 큐(dist/queue). 통과분만.
 
     ANTHROPIC_API_KEY 있으면 Claude(claude-opus-4-8) 실생성, 없으면 fixture(오프라인 드래프트).
-    개별 생성 실패(거절·오류)는 스킵하고 계속.
+    거절(게이트/검수) 시 사유를 피드백으로 재생성 — 최대 content.yaml on_reject.max_regeneration_attempts 회.
     """
     import json
-    from content import generator, quality_gate
+    from content import generator, human_gate, quality_gate
     backlog_path = "dist/research/backlog.json"
-    if os.path.exists(backlog_path):                     # research 가 만든 순위 백로그 우선
+    if os.path.exists(backlog_path):                     # research 가 만든 순위 백로그 우선(시드 + SC 트렌드 후보)
         with open(backlog_path, encoding="utf-8") as f:
             ranked = json.load(f)
         seeds = [(e["keyword"], e["cluster"]) for e in ranked[:10]]
@@ -105,33 +105,50 @@ def stage_generate(cfg):
     daily = (cfg["guardrails"].get("rollout", {}) or {}).get("daily_generate", 4)
     if review_on:
         seeds = [s for s in seeds if s[0] not in published]
+    max_attempts = 1 + int((cfg["content"].get("on_reject", {}) or {}).get("max_regeneration_attempts", 0))
+    hsg = (cfg["content"].get("quality_gate", {}).get("human_sample_gate", {}) or {})
     corpus, passed, rejected = [], 0, 0
     for kw, cid in seeds:
         if review_on and passed >= daily:                # 하루 신규 상한 도달
             break
-        try:
-            spec, page = generator.generate(kw, cfg["content"], cluster=cid)
-        except Exception as e:
-            print(f"SKIP {kw}: 생성 실패 {e}"); rejected += 1; continue
-        r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
-        if not r.passed:
-            print(f"GATE REJECT {kw}: {r.reasons}"); rejected += 1; continue
-        if review_on:                                    # 검수 게이트
-            from content import reviewer
+        feedback, accepted = None, False
+        for attempt in range(1, max_attempts + 1):
             try:
-                rv = reviewer.review(spec, cfg["content"])
+                spec, page = generator.generate(kw, cfg["content"], cluster=cid, feedback=feedback)
             except Exception as e:
-                print(f"REVIEW 실패→미발행 {kw}: {e}"); rejected += 1; continue
-            os.makedirs("dist/review", exist_ok=True)
-            with open(f"dist/review/{spec.slug}.json", "w", encoding="utf-8") as f:
-                json.dump(rv, f, ensure_ascii=False, indent=2)
-            if not rv.get("passed"):
-                tps = [i.get("type") for i in rv.get("issues", [])][:5]
-                print(f"REVIEW REJECT {kw}: sev={rv.get('severity')} {tps} (상세 dist/review/{spec.slug}.json)")
-                rejected += 1; continue
-        with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
-            f.write(page.html)
-        corpus.append(" ".join(page.blocks)); published.add(kw); passed += 1
+                print(f"SKIP {kw}: 생성 실패 {e}"); break         # 시스템 오류는 피드백으로 못 고침 — 재시도 안 함
+            r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
+            if not r.passed:
+                print(f"GATE REJECT {kw} (시도 {attempt}/{max_attempts}): {r.reasons}")
+                feedback = "; ".join(r.reasons); continue
+            if review_on:                                # 검수 게이트
+                from content import reviewer
+                try:
+                    rv = reviewer.review(spec, cfg["content"])
+                except Exception as e:
+                    print(f"REVIEW 실패→미발행 {kw}: {e}"); break  # 검수 자체 오류 — 재시도 무의미
+                os.makedirs("dist/review", exist_ok=True)
+                with open(f"dist/review/{spec.slug}.json", "w", encoding="utf-8") as f:
+                    json.dump(rv, f, ensure_ascii=False, indent=2)
+                if not rv.get("passed"):
+                    tps = [i.get("type") for i in rv.get("issues", [])][:5]
+                    print(f"REVIEW REJECT {kw} (시도 {attempt}/{max_attempts}): sev={rv.get('severity')} {tps} "
+                          f"(상세 dist/review/{spec.slug}.json)")
+                    fixes = [f"[{i.get('type')}] {i.get('detail', '')} → {i.get('fix', '')}"
+                             for i in rv.get("issues", [])[:6]]
+                    feedback = "; ".join(fixes) or "; ".join(rv.get("ai_tells", [])); continue
+            # 게이트·검수 통과 — human_sample_gate 대상이면 발행 큐 대신 승인 대기로.
+            if hsg.get("enabled") and human_gate.is_sampled(spec.slug, hsg.get("sample_pct", 0)):
+                human_gate.hold(spec.slug, page.html)
+                print(f"HUMAN GATE 대기(샘플 {hsg.get('sample_pct')}%): {kw} → dist/pending_approval/{spec.slug}.html "
+                      f"(승인: python engine/orchestrator.py --approve {spec.slug})")
+            else:
+                with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
+                    f.write(page.html)
+            corpus.append(" ".join(page.blocks)); published.add(kw); passed += 1
+            accepted = True; break
+        if not accepted:
+            rejected += 1
     if review_on:                                        # 발행 키워드 영속화(다음 날 중복 방지)
         os.makedirs("engine/store", exist_ok=True)
         json.dump(sorted(published), open(pub_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
@@ -210,8 +227,22 @@ def main(argv=None):
     except Exception:
         pass
     p = argparse.ArgumentParser()
-    p.add_argument("--stage", required=True, choices=list(STAGES))
+    p.add_argument("--stage", choices=list(STAGES))
+    p.add_argument("--approve", metavar="SLUG", help="휴먼 샘플 게이트 대기 글 승인(dist/pending_approval → dist/queue)")
+    p.add_argument("--list-pending", action="store_true", help="휴먼 샘플 게이트 대기 목록 출력")
     args = p.parse_args(argv)
+    if args.list_pending:
+        from content import human_gate
+        for slug in human_gate.pending():
+            print(slug)
+        return 0
+    if args.approve:
+        from content import human_gate
+        path = human_gate.approve(args.approve)
+        print(f"승인 완료 → {path} (다음 build/deploy부터 라이브)")
+        return 0
+    if not args.stage:
+        p.error("--stage 필요(또는 --approve/--list-pending)")
     cfg = load_config()
     STAGES[args.stage](cfg)             # 반환값은 종료코드로 쓰지 않음(예외 시에만 비0)
     return 0

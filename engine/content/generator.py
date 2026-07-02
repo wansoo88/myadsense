@@ -68,16 +68,18 @@ def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
 
 
 def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False,
-             draft: bool = False, cluster: str | None = None):
-    """topic(시드 키워드) → (spec, page). page.html 은 design.md 렌더 결과."""
-    spec = _resolve_provider(topic, content_cfg, force_fixture)
+             draft: bool = False, cluster: str | None = None, feedback: str | None = None):
+    """topic(시드 키워드) → (spec, page). page.html 은 design.md 렌더 결과.
+    feedback: 이전 시도의 게이트/검수 거절 사유(있으면 재생성 시 고쳐야 할 지시로 주입)."""
+    spec = _resolve_provider(topic, content_cfg, force_fixture, feedback=feedback)
     if cluster:
         spec.cluster = cluster                # 카테고리 허브 그룹핑용(렌더 시 meta로 기록)
     html_doc = renderer.render(spec, draft=draft)
     return spec, spec_to_page(spec, html_doc)
 
 
-def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool) -> ContentSpec:
+def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
+                       feedback: str | None = None) -> ContentSpec:
     """provider 선택: api(키) | claude_cli(구독 헤드리스) | auto | fixture(오프라인)."""
     if force_fixture or os.environ.get("ADSENSE_FIXTURE") == "1":
         return _fixture(topic)                # 스테이징/프리뷰 빠른 빌드(LLM 호출 없음)
@@ -90,9 +92,9 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool) -> Con
         else:
             provider = "fixture"
     if provider == "api":
-        return _via_api(topic, content_cfg)
+        return _via_api(topic, content_cfg, feedback=feedback)
     if provider == "claude_cli":
-        return _via_claude_cli(topic, content_cfg)
+        return _via_claude_cli(topic, content_cfg, feedback=feedback)
     return _fixture(topic)
 
 
@@ -101,11 +103,36 @@ def _claude_cli_available() -> bool:
     return shutil.which("claude") is not None
 
 
-def _user_prompt(topic: str, language: str) -> str:
-    return (f"Write a {language} article for this search query: \"{topic}\".\n"
+# adsense-review 스킬 블록리스트(SKILL.md) — 생성·검수 양쪽에서 같은 목록을 씀(예방 + 탐지).
+AI_CLICHE_PATTERNS = [
+    (r"in today'?s fast-paced world", "in today's fast-paced world"),
+    (r"whether you'?re\b", "whether you're A or B"),
+    (r"it'?s worth noting", "it's worth noting"),
+    (r"look no further", "look no further"),
+    (r"\bdelve[sd]?\b|\bdelving\b", "delve"),
+    (r"\belevate[sd]?\b", "elevate"),
+    (r"\brobust\b", "robust"),
+    (r"\bseamless(?:ly)?\b", "seamless"),
+    (r"\bgame[- ]?changer\b", "game-changer"),
+]
+AI_CLICHE_LABELS = [label for _, label in AI_CLICHE_PATTERNS]
+
+
+def scan_ai_cliches(text: str) -> list[str]:
+    """블록리스트 정규식 스캔 — LLM 호출 전 무료 사전 필터(reviewer.py 가 사용)."""
+    t = text or ""
+    return [label for pattern, label in AI_CLICHE_PATTERNS if re.search(pattern, t, re.I)]
+
+
+def _user_prompt(topic: str, language: str, feedback: str | None = None) -> str:
+    base = (f"Write a {language} article for this search query: \"{topic}\".\n"
             "If it is an 'X vs Y' query, make page_type 'comparison' and fill comparison/pricing/pros_cons. "
             "If it is 'best ...' make it 'listicle'; if 'how to ...' make it 'guide' (comparison may be null). "
             "Include 2+ official sources. Aim for depth that fully answers the query.")
+    if feedback:
+        base += ("\n\nIMPORTANT: a previous draft for this exact topic was rejected in quality review. "
+                  f"You MUST fix these specific problems in this rewrite — do not repeat them:\n{feedback}")
+    return base
 
 
 def complete_text(system: str, user: str, content_cfg: dict, *, max_tokens: int = 6000) -> str:
@@ -206,11 +233,12 @@ Write genuinely useful, original content that satisfies search intent. Rules:
 - E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of. Describe pricing as tiers (e.g. "free tier + paid Pro") and tell readers to confirm current pricing on the vendor's site.
 - Structure: at least 4 substantive sections. For comparisons include: a one-line tldr_html verdict; a comparison table (real differentiating features, set winner to 'a'/'b'/null); a feature_matrix where each row's a/b is exactly one of "✓" (full), "△" (partial/paid), or "✗" (none), with an optional footnote in note; tiered pricing; pros/cons per option; and a clear, evidence-based verdict_html.
 - NO false experience: do NOT claim first-person testing or personal use you did not perform (never write "after working with both", "I tested for weeks", "in my experience", "a joy to use"). Write from documented features and typical workflows. Do NOT state absolute superlatives ("the best", "#1", "fastest") as fact — attribute them or frame as opinion.
+- Never use these AI-cliché words/phrases: "in today's fast-paced world", "whether you're X or Y", "it's worth noting", "look no further", "delve", "elevate", "robust", "seamless", "game-changer". Vary sentence structure — do not open every paragraph or section the same way.
 - HTML fields (*_html): simple semantic HTML only — <p>, <strong>, <em>, <ul>, <li>, <h3>. NO <script>, NO inline styles, NO ad/clickbait language, NO "click the ad". Styling is handled by the site theme.
 - Neutral, trustworthy, editorial tone. No fabricated testimonials or reviews. Output must match the provided JSON schema exactly."""
 
 
-def _via_api(topic: str, content_cfg: dict) -> ContentSpec:
+def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None) -> ContentSpec:
     """ANTHROPIC_API_KEY 사용 시 Claude(claude-opus-4-8)로 ContentSpec 생성 — 구조화 출력."""
     try:
         import anthropic  # SDK는 이 경로에서만 필요(드라이런 fixture는 불필요)
@@ -222,7 +250,7 @@ def _via_api(topic: str, content_cfg: dict) -> ContentSpec:
     language = gen.get("language", "en")
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수에서 인증
 
-    user = _user_prompt(topic, language)
+    user = _user_prompt(topic, language, feedback=feedback)
 
     resp = client.messages.create(
         model=model,
@@ -275,7 +303,7 @@ def _extract_json(text: str) -> dict:
     return json.loads(t)
 
 
-def _via_claude_cli(topic: str, content_cfg: dict) -> ContentSpec:
+def _via_claude_cli(topic: str, content_cfg: dict, *, feedback: str | None = None) -> ContentSpec:
     """Claude Code 헤드리스(구독 로그인)로 ContentSpec 생성 — API 키 불필요.
 
     `claude -p <prompt> --append-system-prompt <sys> --output-format json --model <m>`.
@@ -289,7 +317,7 @@ def _via_claude_cli(topic: str, content_cfg: dict) -> ContentSpec:
     model = gen.get("model", "claude-opus-4-8")
     language = gen.get("language", "en")
     schema_str = json.dumps(_CONTENT_SCHEMA, ensure_ascii=False)
-    user = (_user_prompt(topic, language)
+    user = (_user_prompt(topic, language, feedback=feedback)
             + "\n\nReturn ONLY a single JSON object — no markdown, no code fences, no commentary — "
               "that strictly matches this JSON schema (every required key present; nullable fields "
               "may be null):\n" + schema_str)

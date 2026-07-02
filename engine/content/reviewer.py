@@ -11,7 +11,10 @@ from content import generator
 
 _SYSTEM = (
     "You are a strict editorial AND legal reviewer for an independent software-comparison site. "
-    "Catch: (1) AI-tells/cliches and unnatural filler; (2) factual or contextual errors and internal "
+    "Catch: (1) AI-tells/cliches and unnatural filler — flag on sight if present (case-insensitive): "
+    "\"in today's fast-paced world\", \"whether you're X or Y\", \"it's worth noting\", \"look no further\", "
+    "\"delve\", \"elevate\", \"robust\", \"seamless\", \"game-changer\", plus any other unnatural filler/cliche "
+    "even if not in this list, and all-paragraphs-same-rhythm writing; (2) factual or contextual errors and internal "
     "contradictions (table vs prose vs verdict), and unhedged volatile specifics (exact prices/benchmarks) "
     "stated as fact; (3) LEGAL risk — especially FALSE first-person experience claims (e.g. 'after working "
     "with both', 'I tested for 8 weeks', 'a joy to use') when the text was AI-generated without real testing; "
@@ -35,13 +38,26 @@ def _flatten(spec) -> str:
 
 
 def review(spec, content_cfg: dict) -> dict:
-    """검수 → {passed, severity, ai_tells, issues:[{type,detail,fix}], notes}."""
+    """검수 → {passed, severity, ai_tells, issues:[{type,detail,fix}], notes}.
+
+    먼저 블록리스트를 정규식으로 스캔(generator.scan_ai_cliches) — 확정 위반이면
+    LLM 호출 없이 즉시 반려(비용 절감). 없으면 전체 루브릭으로 LLM 검수.
+    """
+    flat = _flatten(spec)
+    hits = generator.scan_ai_cliches(flat)
+    if hits:
+        return {
+            "passed": False, "severity": "medium", "ai_tells": hits,
+            "issues": [{"type": "ai_tone", "detail": f"banned cliché phrase(s) found: {', '.join(hits)}",
+                        "fix": "rewrite the affected sentence(s) without these words/phrases"}],
+            "notes": "규칙 기반 사전 필터에서 확정 검출 — LLM 미호출",
+        }
     user = (
         "Review this article draft against the rubric and return ONLY JSON "
         '{"passed":bool,"severity":"none|low|medium|high","ai_tells":[str],'
         '"issues":[{"type":"factual|legal|policy|coherence|ai_tone","detail":str,"fix":str}],"notes":str}. '
         "passed=false if any high-severity legal/factual/policy issue (esp. false first-person testing claims).\n\n"
-        + _flatten(spec))
+        + flat)
     raw = generator.complete_text(_SYSTEM, user, content_cfg, max_tokens=4000)
     data = generator._extract_json(raw)
     data.setdefault("passed", False)
