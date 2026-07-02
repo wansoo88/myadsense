@@ -10,7 +10,7 @@
 **Tier-1 영어권 검색 의도 + 고CPC 니치(금융·보험·기술·건강) 콘텐츠를, 품질·권위·Privacy Policy로 승인받아, Auto ads experiments로 RPM을 자체 최적화하고, 25k PV/월에서 프리미엄 네트워크 전환을 검토한다. 유료·조작 트래픽은 쓰지 않는다.**
 
 ## 0.5 자동화 오버레이 (풀스택 + 대량 프로그래매틱 SEO — @AUTOMATION.md)
-- **구동**: 보유 Ubuntu 서버 cron 24/7 (`ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40`, **nginx+certbot**, Caddy 아님). 운영·디버그는 스킬. `stack.utilverse.info` 라이브([STAGING] noindex).
+- **구동**: 보유 Ubuntu 서버 cron 24/7 (`ssh -i ~/.ssh/autobtc_iwinv root@115.68.230.40`, **nginx+certbot**, Caddy 아님). 운영·디버그는 스킬. `stack.utilverse.info` 라이브(실콘텐츠 배포·noindex 해제·색인 허용).
 - **단계별 자동화 등급**: 🟢 수집·리서치·생성·모니터·리포트 = 풀 자동 / 🟡 발행 = 품질 게이트+킬스위치+일일 cap / 🔴 승인 신청·정책 이의제기·게이트 캘리브레이션·전환 결정 = 사람 / ⛔ 트래픽·클릭 생성 = 금지(정지).
 - **생존 장치**: 품질 게이트(고유 가치·근접중복·E-E-A-T) → 점진 롤아웃 → 킬스위치. 게이트 없는 대량 = 정지.
 
