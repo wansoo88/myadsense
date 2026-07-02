@@ -252,7 +252,7 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
         slug=slug, title=title, dek=d["dek"], page_type=d.get("page_type", "comparison"),
         breadcrumb=[("Home", "/"), ("Compare", "/compare/"), (title, "")],
         author=gen.get("author", "The stack. editors"),
-        author_bio="Independent, hands-on software reviews.",
+        author_bio="Independent software comparisons from official docs and public data.",
         published_at=today, updated_at=today, reading_time=max(3, round(words / 200)),
         canonical=f"https://{domain}/compare/{slug}/",
         intro_html=d["intro_html"], sections=d["sections"],
@@ -328,18 +328,18 @@ def _cursor_vs_copilot() -> ContentSpec:
     return ContentSpec(
         slug="cursor-vs-github-copilot",
         title="Cursor vs GitHub Copilot: Which AI Coding Assistant Wins in 2026?",
-        dek="A hands-on comparison of pricing, features, and real-world workflow — so you can pick the right AI coding assistant for your stack.",
+        dek="A comparison of pricing, features, and real-world workflow — so you can pick the right AI coding assistant for your stack.",
         page_type="comparison",
         breadcrumb=[("Home", "/"), ("AI Coding", "/ai-coding/"), ("Cursor vs GitHub Copilot", "")],
         author="The stack. editors",
-        author_bio="Independent, hands-on software reviews.",
+        author_bio="Independent software comparisons from official docs and public data.",
         published_at="2026-06-28", updated_at="2026-06-28", reading_time=8,
         canonical="https://stack.utilverse.info/ai-coding/cursor-vs-github-copilot/",
         intro_html=(
             "<p>Both <strong>Cursor</strong> and <strong>GitHub Copilot</strong> bring AI into your editor, "
             "but they take different shapes: Cursor is an AI-first editor (a VS Code fork) built around the "
             "chat-and-edit loop, while Copilot is an extension that layers completions and chat onto editors "
-            "you already use. We tested both on real refactors and greenfield work; here is how they compare.</p>"
+            "you already use. Here is how they compare on real refactors and greenfield work, based on documented features.</p>"
         ),
         sections=[
             {"heading": "What they are",
@@ -414,7 +414,7 @@ def _generic_comparison(topic: str) -> ContentSpec:
     slug = renderer.slugify(topic)
     return ContentSpec(
         slug=slug, title=f"{a} vs {b}: Comparison (2026)",
-        dek=f"Hands-on comparison of {a} and {b} — pricing, features, and which to choose.",
+        dek=f"A comparison of {a} and {b} — pricing, features, and which to choose.",
         page_type="comparison",
         breadcrumb=[("Home", "/"), ("Compare", "/compare/"), (f"{a} vs {b}", "")],
         author="The stack. editors", author_bio="Independent, hands-on software reviews.",

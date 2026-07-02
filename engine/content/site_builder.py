@@ -23,6 +23,21 @@ def _domain(cfg) -> str:
         return "stack.utilverse.info"
 
 
+def _gsc_verify_file(cfg) -> str | None:
+    """GSC URL-접두어 소유권 확인 파일명(googleXXXX.html). config 에 있으면 빌드가 SITE_DIR 에 생성.
+    형식 검증(경로조작·오타 방지): 반드시 google<영숫자>.html."""
+    try:
+        v = (cfg["sites"]["sites"][0].get("google_site_verification") or "").strip()
+    except Exception:
+        return None
+    if not v:
+        return None
+    if not re.fullmatch(r"google[A-Za-z0-9_-]+\.html", v):
+        print(f"build: ⚠️ google_site_verification 형식 이상({v!r}) — 무시(google<영숫자>.html 이어야 함)")
+        return None
+    return v
+
+
 def _contact_email(cfg) -> str:
     """Privacy/Contact 노출용 이메일. config 우선, 없으면 contact@도메인(포워딩 전제)."""
     try:
@@ -57,11 +72,11 @@ def _meta_of(doc: str) -> dict:
 
 # 카테고리 허브 (헤더·홈 nav 가 링크하는 URL) — topics.yaml 클러스터 id 매핑
 CATEGORIES = [
-    ("ai-coding", "AI Coding", "Editors, assistants, and AI coding tools — compared hands-on.", {"ai-coding-tools"}),
-    ("hosting", "Hosting & Self-host", "VPS, cloud hosting, and self-hosting — compared hands-on.", {"hosting-selfhost"}),
-    ("dev-tools", "Dev Tools", "SaaS and developer tools — compared hands-on.", {"dev-saas-compare"}),
-    ("ai-tools", "AI Tools", "Productivity and creative AI tools — compared hands-on.", {"ai-productivity"}),
-    ("vpn-security", "VPN & Security", "VPNs, password managers, and security tools — compared hands-on.", {"vpn-security"}),
+    ("ai-coding", "AI Coding", "Editors, assistants, and AI coding tools — compared in depth.", {"ai-coding-tools"}),
+    ("hosting", "Hosting & Self-host", "VPS, cloud hosting, and self-hosting — compared in depth.", {"hosting-selfhost"}),
+    ("dev-tools", "Dev Tools", "SaaS and developer tools — compared in depth.", {"dev-saas-compare"}),
+    ("ai-tools", "AI Tools", "Productivity and creative AI tools — compared in depth.", {"ai-productivity"}),
+    ("vpn-security", "VPN & Security", "VPNs, password managers, and security tools — compared in depth.", {"vpn-security"}),
 ]
 
 
@@ -122,7 +137,7 @@ def build(cfg) -> str:
     email = _contact_email(cfg)
     static_pages = {
         "privacy": ("Privacy Policy", _privacy_body(domain, email)),
-        "about": ("About", "<p>We publish independent, hands-on comparisons and guides for SaaS, developer, and AI tools.</p>"),
+        "about": ("About", "<p>We publish independent comparisons and guides for SaaS, developer, and AI tools, based on official documentation and publicly available information rather than paid placement.</p>"),
         "contact": ("Contact", f'<p>Reach us at <a href="mailto:{esc(email)}">{esc(email)}</a>.</p>'),
     }
     for path, (title, body) in static_pages.items():
@@ -155,6 +170,11 @@ def build(cfg) -> str:
     _write(os.path.join(SITE_DIR, "robots.txt"),
            f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n")
 
+    # 5) Google Search Console 소유권 확인 파일 (URL 접두어) — cron 이 web_root 를 비우므로 매 빌드 재생성
+    gsc = _gsc_verify_file(cfg)
+    if gsc:
+        _write(os.path.join(SITE_DIR, gsc), f"google-site-verification: {gsc}\n")
+
     print(f"build: {len(pages)} 콘텐츠 + {len(cat_urls)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
-          f"+ sitemap/robots → {SITE_DIR}/")
+          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''} → {SITE_DIR}/")
     return SITE_DIR

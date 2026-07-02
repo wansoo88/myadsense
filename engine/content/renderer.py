@@ -434,7 +434,7 @@ def render(spec, draft: bool = False) -> str:
     # 저자 박스
     body.append(f'<div class="authorbox"><span class="av lg">{esc(spec.author[:1].upper())}</span><div>'
                 f'<div class="nm">{esc(spec.author)}</div>'
-                f'<div class="bio">{esc(getattr(spec, "author_bio", "") or "Independent, hands-on software reviews.")}</div>'
+                f'<div class="bio">{esc(getattr(spec, "author_bio", "") or "Independent software comparisons from official docs and public data.")}</div>'
                 f'<div class="upd">Updated {esc(spec.updated_at or spec.published_at)}</div></div></div>')
 
     if spec.sources:
@@ -543,7 +543,7 @@ _HOME_CATS = [
      '<path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"></path>'),
 ]
 _TRUST = [
-    ('<path d="M20 6 9 17l-5-5"></path>', "Hands-on tested", " before every verdict"),
+    ('<path d="M20 6 9 17l-5-5"></path>', "Fact-checked", " against official docs"),
     ('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M9 13h6M9 17h6"></path>', "Sources cited", " on every claim"),
     ('<path d="M3 12a9 9 0 1 0 9-9 9.7 9.7 0 0 0-6.7 2.7L3 8"></path><path d="M3 3v5h5"></path>', "Regularly updated", " pricing & features"),
 ]
@@ -571,7 +571,7 @@ def _feat_card(p, grad=False):
             f'<div class="feat-thumb{" grad" if grad else ""}">{thumb}</div>'
             f'<div class="bd"><div class="ey">{esc(p.get("kicker") or "Comparison")}</div>'
             f'<div class="tt">{esc(p["title"].split(":")[0])}</div>'
-            f'<div class="ds">{esc(p.get("desc") or "Hands-on comparison of pricing, features, and fit.")}</div>'
+            f'<div class="ds">{esc(p.get("desc") or "A comparison of pricing, features, and fit.")}</div>'
             f'<div class="mt">{esc(meta)}</div></div></a>')
 
 
@@ -620,7 +620,7 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
     request_cta = ('<section class="ctasec"><div class="container"><div class="nl-card">'
                    '<div class="ey">Request</div>'
                    '<h2>Deciding between two tools? Ask us to compare them.</h2>'
-                   '<p>Tell us which tools you are weighing — good requests become full hands-on comparisons.</p>'
+                   '<p>Tell us which tools you are weighing — good requests become full comparisons.</p>'
                    '<a class="nl-cta" href="/contact/">Request a comparison</a></div></div></section>')
 
     jsonld = ('<script type="application/ld+json">' + json.dumps({
@@ -631,7 +631,7 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head("stack. — independent software comparisons & guides", "We test SaaS, developer, and AI tools hands-on and compare them — pricing, features, and data ownership.", canonical or base + "/", "website", jsonld)}
+{_head("stack. — independent software comparisons & guides", "We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership.", canonical or base + "/", "website", jsonld)}
 </head>
 <body>
 <a class="skip" href="#featured">Skip to content</a>
@@ -639,7 +639,7 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
 <section class="hero"><div class="container">
 <span class="pill"><span class="dot"></span>{esc(domain)}</span>
 <h1>Tool choices, backed by <span class="ac">data</span> — not vibes.</h1>
-<p class="dek">We test SaaS, developer, and AI tools hands-on and compare them — pricing, features, and data ownership, distilled to what your decision needs.</p>
+<p class="dek">We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership, distilled to what your decision needs.</p>
 <form class="searchbox" action="https://www.google.com/search" method="get" role="search">
 <div class="field">{_ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 19, "var(--muted)")}
 <input name="q" placeholder="Search tools to compare…  e.g. Cursor, Notion" aria-label="Search tools"></div>
