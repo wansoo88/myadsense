@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 import glob
 import html
+import json
 import os
 import re
 
@@ -259,6 +260,27 @@ and affiliate disclosure.</p>
 <a href="/contact/">let us know</a> and we will verify against the source and update the page.</p>"""
 
 
+def _og_svg(domain: str) -> str:
+    """소셜 공유용 브랜디드 OG 카드(1200×630 정적 SVG). head 의 og:image/twitter:image 가 가리킴.
+    ⚠️ 일부 플랫폼은 SVG og:image 미지원 — 오가닉 중심이라 후순위 보강(래스터 필요 시 별도)."""
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" '
+        'font-family="Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#0f1115"/><stop offset="1" stop-color="#1b2233"/></linearGradient></defs>'
+        '<rect width="1200" height="630" fill="url(#bg)"/>'
+        '<rect x="80" y="86" width="64" height="64" rx="15" fill="#2f6df6"/>'
+        '<text x="112" y="132" font-size="38" font-weight="700" fill="#fff" text-anchor="middle" '
+        'font-family="Consolas,monospace">S</text>'
+        '<text x="164" y="134" font-size="40" font-weight="700" fill="#e7ebf2">stack.'
+        '<tspan fill="#9aa4b2" font-weight="500">' + esc(domain.replace("stack", "", 1) or ".utilverse.info") + '</tspan></text>'
+        '<text x="80" y="330" font-size="72" font-weight="800" fill="#e7ebf2">Tool choices, backed'
+        '<tspan x="80" dy="86">by <tspan fill="#5b9cff">data</tspan> — not vibes.</tspan></text>'
+        '<text x="80" y="548" font-size="30" fill="#9aa4b2">Independent SaaS, developer &amp; AI tool comparisons '
+        'from official docs.</text>'
+        '</svg>\n')
+
+
 def build(cfg) -> str:
     domain = _domain(cfg)
     base = f"https://{domain}"
@@ -356,8 +378,23 @@ def build(cfg) -> str:
     # 7) RSS 피드 (발견 통로) + 홈 head 의 <link rel=alternate> 가 가리킴
     _write(os.path.join(SITE_DIR, "feed.xml"), _build_feed(pages, base, domain))
 
+    # 8) 온사이트 검색 — 프리빌트 인덱스(JSON) + /search/ (인라인 JS 필터). Google 오프로드 제거 → 리텐션.
+    search_index = [{"title": _short(p["title"]), "url": p["url"],
+                     "cat": _cat_label(p), "desc": p.get("desc") or ""} for p in pages]
+    for cslug, cname, dek, _cids in CATEGORIES:
+        if f"/{cslug}/" in active_cat_paths:
+            search_index.append({"title": cname, "url": f"/{cslug}/", "cat": "Category", "desc": dek})
+    _write(os.path.join(SITE_DIR, "search-index.json"),
+           json.dumps(search_index, ensure_ascii=False, separators=(",", ":")))
+    _write(os.path.join(SITE_DIR, "search", "index.html"),
+           renderer.render_search_page(canonical=f"{base}/search/"))
+
+    # 9) og:image 소셜 카드 — 브랜디드 정적 SVG (head 의 og:image/twitter:image 가 가리킴)
+    _write(os.path.join(SITE_DIR, "og.svg"), _og_svg(domain))
+
     print(f"build: {len(pages)} 콘텐츠 + {len(cat_urls)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
-          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''}{' + IndexNow-key' if inkey else ''} + feed.xml → {SITE_DIR}/")
+          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''}{' + IndexNow-key' if inkey else ''} "
+          f"+ feed.xml + search({len(search_index)}) + og.svg → {SITE_DIR}/")
     print(f"build: 내부 링크 교정: Related {fixed_related}개 링크 + 브레드크럼 {fixed_crumb}개 페이지 "
           f"(실제 발행 페이지로 재작성)")
     return SITE_DIR

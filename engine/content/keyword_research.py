@@ -122,6 +122,57 @@ def find_rising_queries(db, known_keywords: list, *, min_impressions: int = 15,
     return out
 
 
+def find_striking_distance(db, known_keywords: list | None = None, *, pos_lo: float = 8.0,
+                           pos_hi: float = 30.0, min_impressions: int = 20, limit: int = 40) -> list:
+    """자체 GSC 실측에서 '거의 1페이지'(평균순위 pos_lo~pos_hi, 노출 충분) 쿼리를 찾는다(F7).
+    이미 순위가 붙어 노출되는 = 실수요 확정 + 소폭 보강으로 상위 진입 가능 = 최고 ROI 기회.
+    자격증명·데이터 없으면 빈 리스트(no-op). in_backlog=True 면 기존 글 보강, False 면 신규 타깃 기회."""
+    if db is None:
+        return []
+    try:
+        dates = [r[0] for r in db.query(
+            "SELECT DISTINCT date FROM metrics WHERE source='search_console' AND dimension='query' "
+            "AND metric='position' ORDER BY date DESC LIMIT 1")]
+        if not dates:
+            return []
+        latest = dates[0]
+        pos = {r[0]: r[1] for r in db.query(
+            "SELECT dim_value, value FROM metrics WHERE source='search_console' AND dimension='query' "
+            "AND metric='position' AND date=?", (latest,))}
+        impr = {r[0]: r[1] for r in db.query(
+            "SELECT dim_value, value FROM metrics WHERE source='search_console' AND dimension='query' "
+            "AND metric='impressions' AND date=?", (latest,))}
+    except Exception:
+        return []
+    known_lower = [k.lower() for k in (known_keywords or [])]
+    out = []
+    for q, p in pos.items():
+        im = impr.get(q, 0)
+        if im < min_impressions or not (pos_lo <= p <= pos_hi):
+            continue
+        covered = any(k in q.lower() or q.lower() in k for k in known_lower)
+        out.append({"keyword": q, "position": round(p, 1), "impressions": round(im),
+                    "in_backlog": covered})
+    out.sort(key=lambda e: -e["impressions"])
+    return out[:limit]
+
+
+def coverage_report(topics: dict, published_keywords: list | None = None) -> list:
+    """클러스터별 커버리지(발행/전체 시드) + 남은 시드 목록 → 리포트용. 발행 여부는 published.json
+    시드 키워드 정확 일치로 판정. priority 오름차순, 커버 많은 순."""
+    pub = {str(p).lower().strip() for p in (published_keywords or [])}
+    out = []
+    for c in topics.get("clusters", []):
+        seeds = c.get("seeds", []) or []
+        remaining = [s for s in seeds if s.lower().strip() not in pub]
+        out.append({
+            "cluster": c["id"], "priority": c.get("priority", 3), "hub": c.get("hub", ""),
+            "total": len(seeds), "covered": len(seeds) - len(remaining), "remaining": remaining,
+        })
+    out.sort(key=lambda x: (x["priority"], -x["covered"]))
+    return out
+
+
 def run(topics: dict, niches: dict, db=None) -> list:
     """시드 전체를 스코어링 + (SC 데이터 있으면) 신규 트렌드 후보를 병합해 순위 내림차순 백로그 반환."""
     w = (niches.get("scoring", {}) or {}).get("weights", {}) or {}
@@ -146,6 +197,18 @@ def run(topics: dict, niches: dict, db=None) -> list:
             "keyword": e["keyword"], "cluster": cid, "priority": prio, "intent": classify_intent(e["keyword"]),
             "competition": None, "sc_impressions": e["impressions"], "score": round(score, 4),
             "source": "sc_trend", "is_new": e["is_new"], "growth_pct": e["growth_pct"],
+        })
+    # striking distance(거의 1페이지) — 실수요 확정 최고 ROI. 미커버 쿼리만 신규 백로그로(커버분은
+    # 기존 글 보강 신호 → 리포트에서 다룸). 노출 확정이라 트렌드보다 약간 높은 상한 점수.
+    for e in find_striking_distance(db, known):
+        if e["in_backlog"]:
+            continue                                    # 이미 다루는 주제 = 신규 아님(보강 대상 — report)
+        cid, prio = _guess_cluster(e["keyword"], topics)
+        score = 0.5 + min(0.4, e["impressions"] / 250.0)
+        out.append({
+            "keyword": e["keyword"], "cluster": cid, "priority": prio, "intent": classify_intent(e["keyword"]),
+            "competition": None, "sc_impressions": e["impressions"], "score": round(score, 4),
+            "source": "sc_striking", "position": e["position"],
         })
     out.sort(key=lambda x: -x["score"])
     return out

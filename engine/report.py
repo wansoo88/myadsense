@@ -7,9 +7,62 @@ from __future__ import annotations
 import datetime
 import glob
 import html
+import json
 import os
 
 esc = html.escape
+
+
+def _published_keywords() -> list:
+    try:
+        with open("engine/store/published.json", encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, list) else list(d.keys())
+    except Exception:
+        return []
+
+
+def _coverage_section(cfg) -> str:
+    """클러스터별 커버리지(발행/전체) + 남은 시드 — 콘텐츠 갭 가시화(기획)."""
+    try:
+        from content import keyword_research
+        rows = keyword_research.coverage_report(cfg.get("topics", {}) or {}, _published_keywords())
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    body = ""
+    for r in rows:
+        rem = ", ".join(r["remaining"][:4]) + (f" 외 {len(r['remaining']) - 4}건" if len(r["remaining"]) > 4 else "")
+        body += (f"<tr><td>{esc(r['cluster'])} <span style='color:#6b7280'>(P{r['priority']})</span></td>"
+                 f"<td class='n'>{r['covered']}/{r['total']}</td>"
+                 f"<td style='color:#9aa4b2'>{esc(rem) or '—'}</td></tr>")
+    return ('<h2>콘텐츠 커버리지 (클러스터별 발행/시드)</h2>'
+            '<table><thead><tr><th>클러스터</th><th>발행/전체</th><th>남은 시드(갭)</th></tr></thead>'
+            f'<tbody>{body}</tbody></table>')
+
+
+def _striking_section(db, cfg) -> str:
+    """GSC striking distance(8~30위) — '거의 1페이지' 실수요 기회(신규/보강 구분)."""
+    try:
+        from content import keyword_research
+        known = []
+        for c in (cfg.get("topics", {}) or {}).get("clusters", []):
+            known.extend(c.get("seeds", []))
+        rows = keyword_research.find_striking_distance(db, known, limit=15)
+    except Exception:
+        return ""
+    if not rows:
+        return ('<h2>Striking distance (거의 1페이지)</h2>'
+                '<p class="empty">GSC 데이터 없음 — 색인·노출이 쌓이면 여기에 상위 진입 임박 쿼리가 표시됩니다.</p>')
+    body = ""
+    for e in rows:
+        action = "기존 글 보강" if e["in_backlog"] else "신규 타깃"
+        body += (f"<tr><td>{esc(e['keyword'])}</td><td class='n'>{e['position']}</td>"
+                 f"<td class='n'>{e['impressions']}</td><td>{action}</td></tr>")
+    return ('<h2>Striking distance (거의 1페이지 · 최고 ROI)</h2>'
+            '<table><thead><tr><th>쿼리</th><th>평균순위</th><th>노출</th><th>액션</th></tr></thead>'
+            f'<tbody>{body}</tbody></table>')
 
 CSS = (
     "body{margin:0;background:#0f1115;color:#e7ebf2;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif}"
@@ -84,6 +137,8 @@ def build(cfg, db) -> str:
 {_table(["URL", "지표", "값"], cwv, numcols=(2,))}
 <h2>검색 쿼리 (클릭 상위 10)</h2>
 {_table(["쿼리", "클릭"], queries, numcols=(1,))}
+{_striking_section(db, cfg)}
+{_coverage_section(cfg)}
 <p class="sub" style="margin-top:30px">생성: engine/report.py · 근거 docs/RESEARCH.md · 절대 수치는 자체 AdSense 리포트로 검증</p>
 </div></body></html>"""
     with open(path, "w", encoding="utf-8") as f:

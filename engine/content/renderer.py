@@ -152,6 +152,16 @@ table.tbl td.ctr{text-align:center;font-weight:700}
 .related .card:hover{border-color:var(--accent);text-decoration:none}
 .related .cat{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px}
 .related .ttl{color:var(--ink);font-weight:600;font-size:15px;line-height:1.4}
+/* search */
+.searchpage .sbar{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;padding:12px 16px;max-width:560px;margin:8px 0 8px}
+.searchpage .sbar:focus-within{border-color:var(--accent)}
+.searchpage .sbar input{flex:1;border:0;background:transparent;outline:none;color:var(--ink);font:16px var(--font-sans)}
+.searchpage .cnt{font-size:13px;color:var(--muted);margin:6px 0 18px}
+.sres{display:block;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
+.sres:hover{border-color:var(--accent);text-decoration:none}
+.sres .scat{display:block;font-size:12px;color:var(--accent);font-weight:600}
+.sres .stt{display:block;font-weight:700;color:var(--ink);font-size:16px;margin-top:3px}
+.sres .sds{display:block;color:var(--muted);font-size:14px;margin-top:4px}
 /* sidebar toc */
 .aside{min-width:0}.aside .sticky{position:sticky;top:80px}
 .aside .hd{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
@@ -268,7 +278,9 @@ def _head(title, description, canonical="", og_type="article", extra=""):
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(description)}">
 {f'<meta property="og:url" content="{esc(canonical)}">' if canonical else ''}
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{SITE_URL}/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{SITE_URL}/og.svg">
 <link rel="alternate" type="application/rss+xml" title="{SITE_NAME} — latest" href="{SITE_URL}/feed.xml">
 {THEME_INIT}
 <style>{CSS}</style>
@@ -281,10 +293,9 @@ def _header():
             '<nav class="cats hide-sm"><a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
             '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
             '<div class="right">'
-            '<form class="searchpill hide-sm" action="https://www.google.com/search" method="get" role="search">'
+            '<form class="searchpill hide-sm" action="/search/" method="get" role="search">'
             + _ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 15, "var(--muted)")
             + '<input name="q" placeholder="Search tools…" aria-label="Search tools">'
-            '<input type="hidden" name="as_sitesearch" value="stack.utilverse.info">'
             '</form>'
             f'<button class="tbtn" aria-label="Toggle theme">{_SUN}{_MOON}</button></div>'
             '</div></header>')
@@ -403,6 +414,12 @@ def _jsonld(spec):
     }]
     if spec.breadcrumb:
         blocks.append(_breadcrumb_jsonld_dict(spec.breadcrumb))
+    faq = getattr(spec, "faq", None)
+    if faq:                                     # FAQPage (F14) — 데이터 있는 것만, 유효 스키마
+        blocks.append({"@context": "https://schema.org", "@type": "FAQPage",
+                       "mainEntity": [{"@type": "Question", "name": f["q"],
+                                       "acceptedAnswer": {"@type": "Answer", "text": f["a"]}}
+                                      for f in faq if f.get("q") and f.get("a")]})
     return "".join('<script type="application/ld+json">' + json.dumps(b, ensure_ascii=False) + "</script>"
                    for b in blocks)
 
@@ -456,6 +473,13 @@ def render(spec, draft: bool = False) -> str:
         body.append('<section class="blk" id="verdict"><div class="callout good">'
                     f'<div class="lbl">Verdict</div>{spec.verdict_html}</div></section>')
         add("Verdict", "verdict")
+
+    if getattr(spec, "faq", None):              # FAQ 섹션(People-Also-Ask 대응) + FAQPage 스키마(_jsonld)
+        qa = "".join(f'<h3>{esc(f["q"])}</h3><p>{esc(f["a"])}</p>'
+                     for f in spec.faq if f.get("q") and f.get("a"))
+        if qa:
+            body.append(_section("FAQ", "faq", qa))
+            add("FAQ", "faq")
 
     # 저자 박스
     body.append(f'<div class="authorbox"><span class="av lg">{esc(spec.author[:1].upper())}</span><div>'
@@ -532,6 +556,13 @@ def refresh_chrome(doc: str) -> str:
     doc = re.sub(r'<header class="site">.*?</header>', lambda m: _header(), doc, count=1, flags=re.S)
     doc = re.sub(r'<footer class="site">.*?</footer>', lambda m: _footer(), doc, count=1, flags=re.S)
     doc = re.sub(r"<script>var tb=.*?</script>", lambda m: _SCRIPTS, doc, count=1, flags=re.S)
+    # og:image/twitter:image 소급(구 문서 head 에 없으면 og:type 뒤에 삽입) + 구 twitter:card 업그레이드. 멱등.
+    if "og:image" not in doc:
+        og = (f'<meta property="og:image" content="{SITE_URL}/og.svg">'
+              f'<meta name="twitter:image" content="{SITE_URL}/og.svg">')
+        doc = re.sub(r'(<meta property="og:type"[^>]*>)', lambda m: m.group(1) + og, doc, count=1)
+    doc = doc.replace('<meta name="twitter:card" content="summary">',
+                      '<meta name="twitter:card" content="summary_large_image">')
     return doc
 
 
@@ -604,6 +635,53 @@ def render_static_page(title: str, body_html: str, *, description: str = "", can
 </article></main></div>
 {_footer()}
 {_SCRIPTS}
+</body>
+</html>"""
+
+
+_SEARCH_JS = ("<script>(function(){"
+              "var q=(new URLSearchParams(location.search).get('q'))||'';"
+              "var box=document.getElementById('sq'),out=document.getElementById('sr'),cnt=document.getElementById('scnt');"
+              "if(box)box.value=q;"
+              "function esc(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){"
+              "return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}"
+              "fetch('/search-index.json',{cache:'no-store'}).then(function(r){return r.json()}).then(function(idx){"
+              "function run(t){t=(t||'').trim().toLowerCase();"
+              "var res=!t?idx:idx.filter(function(x){return (x.title+' '+(x.desc||'')+' '+(x.cat||'')).toLowerCase().indexOf(t)>=0});"
+              "if(cnt)cnt.textContent=t?(res.length+' result'+(res.length===1?'':'s')+' for \\u201c'+t+'\\u201d'):(idx.length+' comparisons & guides');"
+              "out.innerHTML=res.length?res.map(function(x){return '<a class=\"sres\" href=\"'+esc(x.url)+'\">"
+              "<span class=\"scat\">'+esc(x.cat||'')+'</span><span class=\"stt\">'+esc(x.title)+'</span>'"
+              "+(x.desc?'<span class=\"sds\">'+esc(x.desc)+'</span>':'')+'</a>'}).join(''):"
+              "'<p class=\"cnt\">No matches. Try a tool name like Cursor or Notion.</p>';}"
+              "run(q);if(box)box.addEventListener('input',function(){run(box.value);"
+              "var u=new URL(location.href);box.value?u.searchParams.set('q',box.value):u.searchParams.delete('q');"
+              "history.replaceState(0,'',u)});"
+              "}).catch(function(){out.innerHTML='<p class=\"cnt\">Search is unavailable right now.</p>'});"
+              "})()</script>")
+
+
+def render_search_page(*, canonical: str = "") -> str:
+    """온사이트 검색 페이지 — 프리빌트 search-index.json 을 인라인 JS로 필터(외부 오프로드 제거).
+    검색 결과 페이지는 색인 대상 아님 → noindex,follow."""
+    body = ('<div class="searchpage"><h1>Search</h1>'
+            '<div class="sbar">'
+            + _ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 19, "var(--muted)")
+            + '<input id="sq" name="q" placeholder="Search tools, comparisons, guides…" aria-label="Search" autofocus></div>'
+            '<div class="cnt" id="scnt"></div><div id="sr"></div></div>')
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+{_head("Search — " + SITE_NAME, "Search independent tool comparisons and guides.", canonical, "website", '<meta name="robots" content="noindex, follow">')}
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{_header()}
+<div class="container" style="padding-top:32px;padding-bottom:64px"><main id="main">
+{body}
+</main></div>
+{_footer()}
+{_SCRIPTS}
+{_SEARCH_JS}
 </body>
 </html>"""
 
@@ -719,10 +797,9 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
 <span class="pill"><span class="dot"></span>{esc(domain)}</span>
 <h1>Tool choices, backed by <span class="ac">data</span> — not vibes.</h1>
 <p class="dek">We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership, distilled to what your decision needs.</p>
-<form class="searchbox" action="https://www.google.com/search" method="get" role="search">
+<form class="searchbox" action="/search/" method="get" role="search">
 <div class="field">{_ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 19, "var(--muted)")}
 <input name="q" placeholder="Search tools to compare…  e.g. Cursor, Notion" aria-label="Search tools"></div>
-<input type="hidden" name="as_sitesearch" value="{esc(domain)}">
 <button type="submit">Search</button>
 </form>
 <div class="pills"><span class="lab">Popular:</span>{pills}</div>

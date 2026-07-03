@@ -13,7 +13,7 @@ import json
 import os
 import re
 
-from content import renderer
+from content import renderer, source_fetch
 from content.quality_gate import Page
 
 
@@ -42,6 +42,8 @@ class ContentSpec:
     tldr_html: str | None = None        # 상단 'At a glance' 한 줄 결론
     feature_matrix: dict | None = None  # {"a","b","rows":[{"label","a","b"(✓/△/✗),"note"}]}
     cluster: str | None = None          # topics.yaml 클러스터 id(카테고리 허브 그룹핑용)
+    grounding_context: str = ""         # 생성 시 주입한 공식 소스 텍스트(검수 사실대조용, 렌더 미노출)
+    faq: list = field(default_factory=list)  # [{"q","a"}] — People-Also-Ask 대응 + FAQPage 스키마
 
 
 def _strip(h: str) -> str:
@@ -52,6 +54,8 @@ def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
     blocks = [_strip(spec.intro_html)] + [_strip(s["html"]) for s in spec.sections]
     if spec.verdict_html:
         blocks.append(_strip(spec.verdict_html))
+    for f in (spec.faq or []):                 # FAQ 답변도 실질 산문으로 집계
+        blocks.append(_strip(f.get("a", "")))
     unique = []
     if spec.comparison:
         unique.append("comparison-table")
@@ -91,11 +95,86 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
             provider = "claude_cli"
         else:
             provider = "fixture"
+    grounding_text, fetched = _ground(topic, content_cfg)   # 공식 소스 페치(실패/비활성 시 "", [])
     if provider == "api":
-        return _via_api(topic, content_cfg, feedback=feedback)
-    if provider == "claude_cli":
-        return _via_claude_cli(topic, content_cfg, feedback=feedback)
-    return _fixture(topic)
+        spec = _via_api(topic, content_cfg, feedback=feedback, grounding=grounding_text)
+    elif provider == "claude_cli":
+        spec = _via_claude_cli(topic, content_cfg, feedback=feedback, grounding=grounding_text)
+    else:
+        return _fixture(topic)
+    _finalize_sources(spec, content_cfg, fetched, grounding_text)
+    return spec
+
+
+# ── 소스 그라운딩 (F10·F14) — 공식 페이지 페치 → 프롬프트 주입. 전 과정 방어적(실패=기억기반 폴백) ──
+def _ground(topic: str, cfg: dict) -> tuple[str, list]:
+    """(주입 텍스트, 페치된 URL 목록). grounding.enabled=false 이거나 어떤 단계든 실패하면 ('', [])."""
+    g = (cfg.get("grounding") or {})
+    if not g.get("enabled"):
+        return "", []
+    try:
+        urls = _discover_source_urls(topic, cfg)
+        if not urls:
+            return "", []
+        docs = source_fetch.gather(
+            urls, timeout=int(g.get("fetch_timeout", 12)),
+            max_chars=int(g.get("max_chars_per_source", 3500)),
+            max_sources=int(g.get("max_sources", 5)))
+        if not docs:
+            return "", []
+        text = "\n\n".join(f"[SOURCE {i + 1}] {d['url']}\n{d['text']}" for i, d in enumerate(docs))
+        print(f"generate: 그라운딩 — 공식 소스 {len(docs)}개 페치({sum(len(d['text']) for d in docs)}자)")
+        return text, [d["url"] for d in docs]
+    except Exception as e:                          # 그라운딩은 부가기능 — 실패해도 생성은 진행
+        print(f"generate: 그라운딩 건너뜀({type(e).__name__}: {e}) — 기억기반 생성으로 폴백")
+        return "", []
+
+
+def _discover_source_urls(topic: str, cfg: dict) -> list:
+    """토픽의 공식 벤더 URL(홈/pricing/docs)을 모델에게 물어 목록만 받는다(짧은 호출)."""
+    sys = ("You return only official vendor URLs for research — no prose. For the given topic, list the "
+           "official homepage, pricing, and docs URLs of the product(s) involved. One URL per line. "
+           "Only real, canonical official domains you are confident exist.")
+    user = f"Topic: {topic}\nOfficial pricing/docs/homepage URLs (one per line):"
+    raw = complete_text(sys, user, cfg, max_tokens=500)
+    seen = []
+    for u in re.findall(r"https?://[^\s<>\"')]+", raw or ""):
+        u = u.rstrip(".,);]")
+        if u not in seen:
+            seen.append(u)
+    return seen[:8]
+
+
+def _url_title(u: str) -> str:
+    try:
+        p = re.sub(r"^https?://(www\.)?", "", u).rstrip("/")
+        host = p.split("/")[0]
+        tail = p.split("/")[-1] if "/" in p else ""
+        return f"{host} — {tail}".rstrip(" —") if tail and tail != host else host
+    except Exception:
+        return u
+
+
+def _finalize_sources(spec: ContentSpec, cfg: dict, fetched: list, grounding_text: str) -> None:
+    """검수 사실대조용 grounding 저장 + 죽은 소스 URL 제거 + 실제 페치한 URL을 인용에 포함."""
+    g = (cfg.get("grounding") or {})
+    try:
+        spec.grounding_context = grounding_text or ""
+    except Exception:
+        pass
+    if g.get("validate_source_urls") and spec.sources:
+        try:
+            good, dropped = source_fetch.validate_sources(spec.sources, timeout=int(g.get("fetch_timeout", 12)))
+            if dropped:
+                print(f"generate: 죽은 소스 URL {len(dropped)}개 제거 — {[d.get('url') for d in dropped]}")
+                spec.sources = good
+        except Exception:
+            pass
+    have = {s.get("url") for s in (spec.sources or [])}
+    for u in (fetched or []):
+        if u not in have:
+            spec.sources.append({"title": _url_title(u), "url": u})
+            have.add(u)
 
 
 def _claude_cli_available() -> bool:
@@ -124,11 +203,16 @@ def scan_ai_cliches(text: str) -> list[str]:
     return [label for pattern, label in AI_CLICHE_PATTERNS if re.search(pattern, t, re.I)]
 
 
-def _user_prompt(topic: str, language: str, feedback: str | None = None) -> str:
+def _user_prompt(topic: str, language: str, feedback: str | None = None, grounding: str = "") -> str:
     base = (f"Write a {language} article for this search query: \"{topic}\".\n"
             "If it is an 'X vs Y' query, make page_type 'comparison' and fill comparison/pricing/pros_cons. "
             "If it is 'best ...' make it 'listicle'; if 'how to ...' make it 'guide' (comparison may be null). "
             "Include 2+ official sources. Aim for depth that fully answers the query.")
+    if grounding:
+        base += ("\n\n=== SOURCE MATERIAL (fetched from official pages just now) ===\n"
+                 "Use this for ACCURATE, CURRENT pricing tiers and features — prefer it over prior knowledge. "
+                 "Still express prices as tiers and tell readers to confirm on the vendor's site. "
+                 "Cite these source URLs in the 'sources' field.\n\n" + grounding[:12000])
     if feedback:
         base += ("\n\nIMPORTANT: a previous draft for this exact topic was rejected in quality review. "
                   f"You MUST fix these specific problems in this rewrite — do not repeat them:\n{feedback}")
@@ -222,15 +306,20 @@ _CONTENT_SCHEMA = {
             "type": "object", "additionalProperties": False,
             "properties": {"title": {"type": "string"}, "url": {"type": "string"}},
             "required": ["title", "url"]}},
+        "faq": {"type": ["array", "null"], "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"q": {"type": "string"}, "a": {"type": "string"}},
+            "required": ["q", "a"]}},
     },
     "required": ["title", "dek", "page_type", "intro_html", "sections", "comparison",
                  "pricing", "pros_cons", "tldr_html", "feature_matrix",
-                 "verdict_html", "sources", "related"],
+                 "verdict_html", "sources", "related", "faq"],
 }
 
 _SYSTEM = """You are an editor for an independent software-comparison site (SaaS, developer, and AI tools) for an English-speaking audience.
 Write genuinely useful, original content that satisfies search intent. Rules:
 - E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of. Describe pricing as tiers (e.g. "free tier + paid Pro") and tell readers to confirm current pricing on the vendor's site.
+- FAQ: include 2-4 faq entries (q/a) answering real follow-up questions a searcher would ask (e.g. "Is X free?", "Can I switch from X to Y?"). Concise, factual, no fluff — these render as an FAQ section and FAQPage structured data.
 - Structure: at least 4 substantive sections. For comparisons include: a one-line tldr_html verdict; a comparison table (real differentiating features, set winner to 'a'/'b'/null); a feature_matrix where each row's a/b is exactly one of "✓" (full), "△" (partial/paid), or "✗" (none), with an optional footnote in note; tiered pricing; pros/cons per option; and a clear, evidence-based verdict_html.
 - NO false experience: do NOT claim first-person testing or personal use you did not perform (never write "after working with both", "I tested for weeks", "in my experience", "a joy to use"). Write from documented features and typical workflows. Do NOT state absolute superlatives ("the best", "#1", "fastest") as fact — attribute them or frame as opinion.
 - Never use these AI-cliché words/phrases: "in today's fast-paced world", "whether you're X or Y", "it's worth noting", "look no further", "delve", "elevate", "robust", "seamless", "game-changer". Vary sentence structure — do not open every paragraph or section the same way.
@@ -238,7 +327,7 @@ Write genuinely useful, original content that satisfies search intent. Rules:
 - Neutral, trustworthy, editorial tone. No fabricated testimonials or reviews. Output must match the provided JSON schema exactly."""
 
 
-def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None) -> ContentSpec:
+def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None, grounding: str = "") -> ContentSpec:
     """ANTHROPIC_API_KEY 사용 시 Claude(claude-opus-4-8)로 ContentSpec 생성 — 구조화 출력."""
     try:
         import anthropic  # SDK는 이 경로에서만 필요(드라이런 fixture는 불필요)
@@ -250,7 +339,7 @@ def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None) -> C
     language = gen.get("language", "en")
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수에서 인증
 
-    user = _user_prompt(topic, language, feedback=feedback)
+    user = _user_prompt(topic, language, feedback=feedback, grounding=grounding)
 
     resp = client.messages.create(
         model=model,
@@ -288,6 +377,7 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
         pros_cons=d.get("pros_cons"), verdict_html=d.get("verdict_html"),
         tldr_html=d.get("tldr_html"), feature_matrix=d.get("feature_matrix"),
         sources=d.get("sources", []), related=d.get("related") or [],
+        faq=d.get("faq") or [],
     )
 
 
@@ -303,7 +393,8 @@ def _extract_json(text: str) -> dict:
     return json.loads(t)
 
 
-def _via_claude_cli(topic: str, content_cfg: dict, *, feedback: str | None = None) -> ContentSpec:
+def _via_claude_cli(topic: str, content_cfg: dict, *, feedback: str | None = None,
+                    grounding: str = "") -> ContentSpec:
     """Claude Code 헤드리스(구독 로그인)로 ContentSpec 생성 — API 키 불필요.
 
     `claude -p <prompt> --append-system-prompt <sys> --output-format json --model <m>`.
@@ -317,7 +408,7 @@ def _via_claude_cli(topic: str, content_cfg: dict, *, feedback: str | None = Non
     model = gen.get("model", "claude-opus-4-8")
     language = gen.get("language", "en")
     schema_str = json.dumps(_CONTENT_SCHEMA, ensure_ascii=False)
-    user = (_user_prompt(topic, language, feedback=feedback)
+    user = (_user_prompt(topic, language, feedback=feedback, grounding=grounding)
             + "\n\nReturn ONLY a single JSON object — no markdown, no code fences, no commentary — "
               "that strictly matches this JSON schema (every required key present; nullable fields "
               "may be null):\n" + schema_str)
@@ -438,6 +529,18 @@ def _cursor_vs_copilot() -> ContentSpec:
         related=[
             {"title": "Claude Code vs Cursor", "url": "/ai-coding/claude-code-vs-cursor/"},
             {"title": "Best GitHub Copilot alternatives", "url": "/ai-coding/github-copilot-alternatives/"},
+        ],
+        faq=[
+            {"q": "Is Cursor or GitHub Copilot free?",
+             "a": "Both offer a free tier and paid plans. Cursor has a free hobby tier plus a paid Pro plan; "
+                  "GitHub Copilot has a free tier plus Pro, Business, and Enterprise plans. Confirm current "
+                  "limits on each vendor's pricing page, as free-tier caps change."},
+            {"q": "Can I use GitHub Copilot inside my existing editor?",
+             "a": "Yes. Copilot is an extension for VS Code, Visual Studio, JetBrains IDEs, Neovim, and more, "
+                  "so you keep your current setup. Cursor is a standalone editor, so adopting it means switching editors."},
+            {"q": "Which is better for large multi-file changes?",
+             "a": "Cursor is designed around repo-aware, multi-file edits and an agent mode, which suits larger "
+                  "refactors. Copilot also has an agent mode but is strongest at fast inline completions in your existing tools."},
         ],
     )
 

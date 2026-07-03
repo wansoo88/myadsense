@@ -8,6 +8,15 @@ generation:
   template_dir: templates/      # 페이지 유형별 템플릿 (비교/리스트/가이드 등)
   inject_unique_data: true      # 페이지별 고유 데이터/계산/표 주입 (필수)
 
+# 소스 그라운딩(F10·F14): 생성 전 공식 페이지(pricing/docs)를 페치해 실제 데이터를 프롬프트에 주입 →
+# 정확·최신 비교. ⛔ 트래픽 생성 아님(읽기전용·robots 존중). 실패 시 기존 기억-기반 생성으로 폴백.
+grounding:
+  enabled: true
+  max_sources: 5                # 페치 상한(article 당)
+  fetch_timeout: 12             # 초
+  max_chars_per_source: 3500    # 소스별 주입 텍스트 상한
+  validate_source_urls: true    # 모델이 붙인 sources 중 유효(200~3xx)만 유지 — 죽은 인용 제거
+
 # 품질 게이트 — 발행 전 전부 PASS 해야 발행 큐 진입 (quality_gate.py)
 quality_gate:
   unique_value:

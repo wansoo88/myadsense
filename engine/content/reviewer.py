@@ -33,6 +33,8 @@ def _flatten(spec) -> str:
     for s in spec.sections:
         parts.append(f"## {s['heading']}\n{strip(s['html'])}")
     parts.append(f"VERDICT: {strip(spec.verdict_html)}")
+    for f in (getattr(spec, "faq", None) or []):
+        parts.append(f"FAQ Q: {f.get('q', '')}\nFAQ A: {strip(f.get('a', ''))}")
     parts.append("SOURCES: " + "; ".join(s.get("url", "") for s in (spec.sources or [])))
     return "\n\n".join(parts)[:12000]
 
@@ -52,12 +54,18 @@ def review(spec, content_cfg: dict) -> dict:
                         "fix": "rewrite the affected sentence(s) without these words/phrases"}],
             "notes": "규칙 기반 사전 필터에서 확정 검출 — LLM 미호출",
         }
+    ground = (getattr(spec, "grounding_context", "") or "")[:5000]
+    src_block = (
+        "\n\n=== SOURCE MATERIAL (official pages fetched at generation time) ===\n"
+        "The article MUST NOT contradict these on pricing tiers or features. Flag any contradiction "
+        "as a 'factual' issue with high severity.\n" + ground) if ground else ""
     user = (
         "Review this article draft against the rubric and return ONLY JSON "
         '{"passed":bool,"severity":"none|low|medium|high","ai_tells":[str],'
         '"issues":[{"type":"factual|legal|policy|coherence|ai_tone","detail":str,"fix":str}],"notes":str}. '
-        "passed=false if any high-severity legal/factual/policy issue (esp. false first-person testing claims).\n\n"
-        + flat)
+        "passed=false if any high-severity legal/factual/policy issue (esp. false first-person testing claims "
+        "or claims contradicting the source material).\n\n"
+        + flat + src_block)
     raw = generator.complete_text(_SYSTEM, user, content_cfg, max_tokens=4000)
     data = generator._extract_json(raw)
     data.setdefault("passed", False)
