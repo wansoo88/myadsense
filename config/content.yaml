@@ -18,6 +18,7 @@ quality_gate:
   structure:
     require_intent_sections: true   # 검색 의도 충족 섹션 구비
     min_substantive_blocks: 4       # 빈 골격 거부 (숫자 단어수 아님 — 의도 충족 기준)
+    min_prose_words: 300            # 실질 산문 최소 단어수(표/헤드라인 제외 intro+섹션+verdict). thin·headline-only = AdSense 거절 1순위 트리거(Google answer/81904) 방지
   eeat:
     require_sources: true       # 출처 인용
     require_dates: true         # 작성/갱신일

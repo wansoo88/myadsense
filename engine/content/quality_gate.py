@@ -69,6 +69,15 @@ def check(page: Page, cfg: dict, existing_corpus: list[str]) -> GateResult:
         if len([b for b in page.blocks if b.strip()]) < g["structure"]["min_substantive_blocks"]:
             r.fail("structure: 실질 섹션 부족(빈 골격)")
 
+    # 3.5 실질 산문 최소량 — 표/헤드라인만 있는 thin·auto-generated 페이지는 AdSense 거절 1순위 트리거
+    #     (Google answer/81904: "complete sentences and paragraphs, not only headlines" / "little to no
+    #     original content"). page.blocks = 태그 제거된 intro+섹션+verdict 산문(비교표는 unique_blocks 별도).
+    min_words = g["structure"].get("min_prose_words", 0)
+    if min_words:
+        prose_words = sum(len(b.split()) for b in page.blocks)
+        if prose_words < min_words:
+            r.fail(f"structure: 산문 부족({prose_words} < {min_words} words) — 표/헤드라인만은 승인 거절 트리거")
+
     # 4. E-E-A-T 신호
     e = g["eeat"]
     if e["require_sources"] and not page.sources:

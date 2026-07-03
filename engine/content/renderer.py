@@ -13,6 +13,11 @@ import re
 # AdSense 승인 전에는 광고 슬롯 비노출(빈 플레이스홀더가 심사에 불리). 승인 후 ADSENSE_ADS=1 로 켬.
 ADS_ENABLED = os.environ.get("ADSENSE_ADS", "0") == "1"
 
+# E-E-A-T: "누가 사이트/콘텐츠를 책임지는지 명확히"(SQRG) — publisher/author 엔티티가 /about/(편집 기준·방법론)로 연결.
+SITE_NAME = "stack."
+SITE_URL = "https://stack.utilverse.info"
+ABOUT_URL = "/about/"
+
 esc = html.escape
 
 
@@ -137,6 +142,7 @@ table.tbl td.ctr{text-align:center;font-weight:700}
 /* author / sources / related */
 .authorbox{margin-top:36px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px 20px;display:flex;gap:16px;align-items:flex-start}
 .authorbox .nm{font-weight:700;color:var(--ink)}.authorbox .bio{font-size:14px;color:var(--muted);margin:2px 0 8px}.authorbox .upd{font-size:13px;color:var(--muted)}
+.authorbox .nm a,.metabar .who a{color:inherit}.authorbox .nm a:hover,.metabar .who a:hover{color:var(--accent)}
 .sources{margin-top:36px;scroll-margin-top:80px}.sources h2{font-size:17px;font-weight:700;color:var(--ink);margin:0 0 10px}
 .sources ol{margin:0;padding-left:20px;color:var(--muted);font-size:14px;line-height:1.8}
 .related{margin-top:36px;border-top:1px solid var(--line);padding-top:24px}
@@ -375,20 +381,38 @@ def _section(label, sid, inner, sub=""):
     return f'<section class="blk" id="{sid}"><h2 class="bar2">{esc(label)}</h2>{sub_html}{inner}</section>'
 
 
+def _breadcrumb_jsonld_dict(items):
+    els = [{"@type": "ListItem", "position": i + 1, "name": n,
+            **({"item": u} if u else {})} for i, (n, u) in enumerate(items)]
+    return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": els}
+
+
 def _jsonld(spec):
+    # author = 편집 주체(팀 별칭 — SQRG 상 alias 허용), publisher = 사이트 운영 주체.
+    # 둘 다 /about/(편집 기준·방법론)로 연결해 "누가 책임지고 누가 작성했는지"를 기계가독으로 명시(E-E-A-T).
+    org = {"@type": "Organization", "name": SITE_NAME, "url": SITE_URL}
     blocks = [{
         "@context": "https://schema.org", "@type": "Article",
         "headline": spec.title, "description": spec.dek,
-        "author": {"@type": "Person", "name": spec.author},
+        "author": {"@type": "Organization", "name": spec.author, "url": SITE_URL + ABOUT_URL},
+        "publisher": org,
         "datePublished": spec.published_at, "dateModified": spec.updated_at or spec.published_at,
         "mainEntityOfPage": spec.canonical or "",
     }]
     if spec.breadcrumb:
-        items = [{"@type": "ListItem", "position": i + 1, "name": n,
-                  **({"item": u} if u else {})} for i, (n, u) in enumerate(spec.breadcrumb)]
-        blocks.append({"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": items})
+        blocks.append(_breadcrumb_jsonld_dict(spec.breadcrumb))
     return "".join('<script type="application/ld+json">' + json.dumps(b, ensure_ascii=False) + "</script>"
                    for b in blocks)
+
+
+def _related_cards(items) -> str:
+    """Related reading 섹션 HTML. items: [{url, title, cat}]. 빈 목록이면 빈 문자열."""
+    if not items:
+        return ""
+    cards = "".join(f'<a class="card" href="{esc(r["url"])}"><div class="cat">{esc(r.get("cat") or "Related")}</div>'
+                    f'<div class="ttl">{esc(r["title"])}</div></a>' for r in items)
+    return ('<section class="related"><div class="hd">Related reading</div>'
+            f'<div class="cards">{cards}</div></section>')
 
 
 def render(spec, draft: bool = False) -> str:
@@ -433,8 +457,9 @@ def render(spec, draft: bool = False) -> str:
 
     # 저자 박스
     body.append(f'<div class="authorbox"><span class="av lg">{esc(spec.author[:1].upper())}</span><div>'
-                f'<div class="nm">{esc(spec.author)}</div>'
-                f'<div class="bio">{esc(getattr(spec, "author_bio", "") or "Independent software comparisons from official docs and public data.")}</div>'
+                f'<div class="nm"><a href="{ABOUT_URL}">{esc(spec.author)}</a></div>'
+                f'<div class="bio">{esc(getattr(spec, "author_bio", "") or "Independent software comparisons from official docs and public data.")} '
+                f'<a href="{ABOUT_URL}">How we compare &amp; who we are &rarr;</a></div>'
                 f'<div class="upd">Updated {esc(spec.updated_at or spec.published_at)}</div></div></div>')
 
     if spec.sources:
@@ -443,10 +468,9 @@ def render(spec, draft: bool = False) -> str:
         body.append(f'<section class="sources" id="sources"><h2>Sources</h2><ol>{items}</ol></section>')
         add("Sources", "sources")
 
-    if getattr(spec, "related", None):
-        cards = "".join(f'<a class="card" href="{esc(r["url"])}"><div class="cat">Related</div>'
-                        f'<div class="ttl">{esc(r["title"])}</div></a>' for r in spec.related)
-        body.append(f'<section class="related"><div class="hd">Related reading</div><div class="cards">{cards}</div></section>')
+    rel_html = _related_cards(getattr(spec, "related", None) or [])
+    if rel_html:                                    # 생성 시점 값(빌드가 실제 페이지로 재작성 — refresh_internal_links)
+        body.append(rel_html)
 
     # 목차(데스크톱 사이드바 + 모바일 접이식)
     toc_links = "".join(f'<a href="#{sid}">{esc(label)}</a>' for (label, sid) in toc)
@@ -456,7 +480,7 @@ def render(spec, draft: bool = False) -> str:
 
     kicker = getattr(spec, "kicker", "") or _KICKER.get(spec.page_type, "Guide")
     metabar = (f'<div class="metabar"><span class="who"><span class="av sm">{esc(spec.author[:1].upper())}</span>'
-               f'<span><strong>{esc(spec.author)}</strong> · reviews</span></span>'
+               f'<span><a href="{ABOUT_URL}"><strong>{esc(spec.author)}</strong></a> · reviews</span></span>'
                f'<span class="sep">•</span><span>Published {esc(spec.published_at)}</span>'
                f'<span class="sep">•</span><span>Updated <time>{esc(spec.updated_at or spec.published_at)}</time></span>'
                f'<span class="sep">•</span><span>{esc(str(getattr(spec, "reading_time", 6)))} min read</span></div>')
@@ -506,6 +530,59 @@ def refresh_chrome(doc: str) -> str:
     doc = re.sub(r'<header class="site">.*?</header>', lambda m: _header(), doc, count=1, flags=re.S)
     doc = re.sub(r'<footer class="site">.*?</footer>', lambda m: _footer(), doc, count=1, flags=re.S)
     doc = re.sub(r"<script>var tb=.*?</script>", lambda m: _SCRIPTS, doc, count=1, flags=re.S)
+    return doc
+
+
+def _refresh_article_jsonld(doc: str) -> str:
+    """빌드 시 Article JSON-LD 보강 — author 를 Organization+/about/ URL 로, publisher(Organization) 추가.
+    기존 큐 문서(생성 시점 베이크)에도 소급. JSON 파싱으로 안전하게(파싱 실패 시 원문 유지)·멱등."""
+    def repl(m):
+        raw = m.group(1)
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return m.group(0)
+        if not isinstance(data, dict) or data.get("@type") != "Article":
+            return m.group(0)
+        prev = data.get("author")
+        name = prev.get("name") if isinstance(prev, dict) else (prev if isinstance(prev, str) else SITE_NAME)
+        data["author"] = {"@type": "Organization", "name": name or SITE_NAME, "url": SITE_URL + ABOUT_URL}
+        data["publisher"] = {"@type": "Organization", "name": SITE_NAME, "url": SITE_URL}
+        return '<script type="application/ld+json">' + json.dumps(data, ensure_ascii=False) + "</script>"
+    return re.sub(r'<script type="application/ld\+json">(.*?)</script>', repl, doc, flags=re.S)
+
+
+def refresh_internal_links(doc: str, *, crumb_items=None, related_items=None) -> str:
+    """빌드 시 내부 링크·E-E-A-T 메타데이터 교정 — 생성 시점 베이크된 큐 문서에 소급 적용(멱등).
+
+    - 바이라인(메타바·저자박스) → /about/(누가 작성·책임지는지) 링크. E-E-A-T "책임 주체 명시".
+    - Article JSON-LD author(Organization)/publisher 보강(_refresh_article_jsonld).
+    - crumb_items: [(name, url)] → 가시 브레드크럼 + BreadcrumbList JSON-LD 동시 갱신
+      (기존 하드코딩 'Home › Compare(/compare/ = 404)' → 'Home › 실제 카테고리 허브 › 글').
+    - related_items: [{url, title, cat}] → Related reading 섹션을 실제 클러스터 이웃 글로 교체.
+    본문(article) 콘텐츠는 건드리지 않는다 — 게이트/검수 통과분 그대로.
+    """
+    # 바이라인 → /about/ 링크(이미 링크된 신규 문서엔 매칭 안 됨 → 멱등)
+    doc = re.sub(r'<span><strong>([^<]+)</strong> · reviews</span>',
+                 lambda m: f'<span><a href="{ABOUT_URL}"><strong>{m.group(1)}</strong></a> · reviews</span>',
+                 doc, count=1)
+    doc = re.sub(r'<div class="nm">([^<]+)</div>',
+                 lambda m: f'<div class="nm"><a href="{ABOUT_URL}">{m.group(1)}</a></div>', doc, count=1)
+    doc = _refresh_article_jsonld(doc)
+    if crumb_items:
+        crumb_html = _crumb(crumb_items)
+        doc = re.sub(r'<nav class="crumb"[^>]*>.*?</nav>', lambda m: crumb_html, doc, count=1, flags=re.S)
+        new_bc = ('<script type="application/ld+json">'
+                  + json.dumps(_breadcrumb_jsonld_dict(crumb_items), ensure_ascii=False) + "</script>")
+        doc = re.sub(r'<script type="application/ld\+json">.*?</script>',
+                     lambda m: new_bc if '"BreadcrumbList"' in m.group(0) else m.group(0),
+                     doc, flags=re.S)
+    if related_items is not None:
+        rel_html = _related_cards(related_items)
+        if re.search(r'<section class="related".*?</section>', doc, flags=re.S):
+            doc = re.sub(r'<section class="related".*?</section>', lambda m: rel_html, doc, count=1, flags=re.S)
+        elif rel_html:
+            doc = doc.replace("</article>", rel_html + "</article>", 1)
     return doc
 
 

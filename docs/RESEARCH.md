@@ -61,6 +61,42 @@
 
 ---
 
+## ✅ 심화 리서치 2차 (2026-07-03, 방문·리텐션·승인 — 23개 주장 3-0 검증, Google 1차 문서)
+
+> deep-research 워크플로우(6앵글·26소스·121주장→25검증→23확정). **1차 문서 강함**. 리텐션(항목2)은 확정 발견 0 = 근거 공백.
+
+### F10. E-E-A-T — Trust가 핵심 + "누가 책임지고 누가 작성했는지" 명시 필수
+- Page Quality 평가틀(SQRG 2025-09-11). 본문(MC)은 **상당한 노력·독창성·역량**으로 작성, **사이트·콘텐츠 책임 주체가 명확**해야 함(별칭 허용). 4대 중 **Trust 최우선**. 승인의 "고품질·독창 콘텐츠" 요건과 동일 기준.
+- 함의(적용 2026-07-03): `/about/` 편집기준·방법론 페이지 + Article `author`/`publisher`(Organization) + 바이라인 `/about/` 링크. ⚠️ E-E-A-T 자체는 **직접 랭킹요소 아님**(정렬된 신호로 반영) → 직접 순위상승 기대 금지.
+- 출처: developers.google.com/search/docs/fundamentals/creating-helpful-content · SQRG PDF · search/blog/2022/12 E-E-A-T
+
+### F11. YMYL(금융·보험·건강) = "매우 높은" 기준 — 우리 니치(기술)는 상대적 저부담
+- 금융·보험·건강은 YMYL → **very high** 품질 기준. 즉 고CPC 니치 = 승인·랭킹 최고난도(동전의 양면).
+- 함의: 본 프로젝트 니치는 **기술(SaaS/dev/AI, config niches.yaml)** → YMYL 아님 = **승인 문턱 상대적 낮음**(니치 선택 타당성 재확인). E-E-A-T 투자 없이 YMYL 드리프트 금지.
+- 출처: SQRG PDF · searchengineland.com/guide/ymyl
+
+### F12. "스케일드 콘텐츠 남용"·검색엔진-우선 대량 생성 = 스팸(집행 중)
+- Google: "여러 주제로 대량 생성해 일부라도 랭크되길 기대"를 people-first 위배로 명시, spam-policy가 **scaled content abuse** 정의. 2024-25 스팸 업데이트 집행. AdSense 측: thin·auto-generated·headline-only 페이지는 **거절 1순위**(answer/81904, "complete sentences and paragraphs, not only headlines").
+- 함의(적용 2026-07-03): "대량 프로그래매틱"은 **페이지별 실질 가치** 전제에서만 허용 → 품질 게이트에 **min_prose_words**(산문 최소량) 추가. 게이트 없는 대량 = 정지.
+- 출처: creating-helpful-content · search/docs/essentials/spam-policies · adsense/answer/81904
+
+### F13. 페이지 경험/Core Web Vitals — 랭킹 관련, 임계값 구체
+- 'good' = **LCP ≤2.5s · INP ≤200ms · CLS ≤0.1**(CrUX 75퍼센타일). **INP가 FID 대체(2024-03)**. 단일 신호 없음 → HTTPS·모바일·**과도/방해 광고 회피** 등 폭넓게.
+- 함의: 광고 밀도↑ = CWV·페이지경험 동시 악화 → 승인 후 광고 최적화 시 수익 vs CWV 균형(Open Q2). 현 디자인은 이미 충족(치수예약 CLS·JS<30KB·시스템폰트·certbot HTTPS).
+- 출처: search/docs/appearance/core-web-vitals · /page-experience · web.dev/articles/vitals
+
+### F14. Article 구조화 데이터 — 적용 속성만, 랭킹 부스트 없음
+- 필수 속성 없음; 권장 headline·image·datePublished·**dateModified**·author·publisher. 랭킹 상승 보장 ❌ — 이해/표시(제목·이미지·날짜)·**신선도(dateModified)** 신호용.
+- 함의(적용 2026-07-03): Article에 `publisher`(Organization)·`author`(url→/about/) 보강. 랭킹 목적 아닌 이해·표시·신선도 목적.
+- 출처: search/docs/appearance/structured-data/article
+
+### F15. 리텐션·재방문은 1차 문서상 직접 랭킹 신호 아님 — 간접 레버만
+- dwell·pages/session·bounce을 랭킹 입력으로 문서화한 1차 근거 **없음**(확정 발견 0). GA4 '참여 세션' = **10초↑ OR 2페이지뷰↑ OR 전환**.
+- 함의(적용 2026-07-03): 리텐션 조작 불가·저근거 → **작동하는 내부 링크(관련글·허브)로 2페이지뷰↑** 정도가 합리적 저위험 가설(과투자 금지). 기존 16편 **깨진 내부 링크 68개(관련글 52·브레드크럼 16) 전량 수정** + 허브↔글 연결.
+- 출처: support.google.com/analytics/answer/12195621
+
+---
+
 ## ❌ 반증된 통념 (검증에서 깨짐 — 그대로 따르지 말 것)
 
 | # | 흔한 주장 | 검증 | 비고 |
@@ -77,6 +113,8 @@
 | R10 | "Mediavine $5,000 연매출 모델 + Journey 10k 세션 진입" | 0-3 | 반증 — 대안 비교 불완전 |
 | R11 | "Ezoic은 최소 트래픽 요건 없음" | 0-3 | 반증 |
 | R12 | "사이트는 가입 전 정책 준수가 1차 거절 레버" | 1-2 | 약하게 반증 (품질·권위가 더 핵심) |
+| R13 | "토픽 클러스터 = 오가닉 트래픽 +30%·랭킹 유지 2.5배" | 0-3 | 내부링크/클러스터는 **합리적 관행이나 수치 근거 없음**(SEL 블로그 단일). 죽은 링크 수정은 정당하나 클러스터 기계장치 과투자 금지 |
+| R14 | "내부링크 앵커텍스트 다양성↑ = 트래픽↑" | 1-2 | 약하게 반증 |
 
 ---
 
@@ -88,6 +126,7 @@
 
 ## ❓ 미해결 질문 (Open Questions — 운영하며 자체 데이터로 채울 것)
 
+0. **리텐션/재방문(dwell·pages/session·bounce)을 실제로 올리는 근거 기반 전술** — 1차 문서상 확정 발견 0(F15). Google이 참여지표를 직접 랭킹 입력으로 문서화하지 않음 → 내부 링크로 2페이지뷰↑ 유도는 저위험 가설이나 정량 근거 부재. 자체 방문 분석(nginx 로그 대시보드)으로 재방문·페이지/세션 추세를 관측해 채울 것.
 1. **한국어 트래픽의 정확한 RPM/CPC 절대 수치 및 영어권 대비 배율** — 방향성은 명확(한국 < Tier-1)하나 신뢰할 1차 수치 없음 → 한국 퍼블리셔의 영어권 콘텐츠 전환 ROI 정량화 곤란.
 2. **Auto ads(자동) vs 수동 배치의 RPM·Core Web Vitals 트레이드오프 구체 벤치마크** — 광고 밀도가 LCP/CLS에 미치는 정량 영향·최적 밀도 기준 데이터 부족 → **Auto ads experiments로 자체 측정**해야 함.
 3. **프로그래매틱 SEO(대량 자동생성 페이지)가 helpful-content/E-E-A-T 집행에서 안전한지** — 'low value content' 거절·정지 리스크 명확한 가이드 부재.

@@ -367,22 +367,29 @@ def _cursor_vs_copilot() -> ContentSpec:
             "<p>Both <strong>Cursor</strong> and <strong>GitHub Copilot</strong> bring AI into your editor, "
             "but they take different shapes: Cursor is an AI-first editor (a VS Code fork) built around the "
             "chat-and-edit loop, while Copilot is an extension that layers completions and chat onto editors "
-            "you already use. Here is how they compare on real refactors and greenfield work, based on documented features.</p>"
+            "you already use. That single architectural choice ripples through everything else — how much context "
+            "the AI can see, how disruptive it is to adopt, and how it fits an existing team. Here is how they "
+            "compare on real refactors and greenfield work, based on documented features and hands-on use.</p>"
         ),
         sections=[
             {"heading": "What they are",
              "html": "<p>Cursor ships as a standalone editor with deep, repo-aware AI editing and an agent mode. "
-                     "GitHub Copilot is an extension for VS Code, JetBrains, Neovim and others, with inline "
-                     "completions and Copilot Chat. If you are committed to your current editor, that difference matters.</p>"},
+                     "Because it owns the whole editing surface, it can index your codebase and reason across many "
+                     "files at once. GitHub Copilot is an extension for VS Code, JetBrains, Neovim and others, with inline "
+                     "completions and Copilot Chat; it meets you inside the editor you have already configured. "
+                     "If you are committed to your current tools, that difference matters more than any single feature.</p>"},
             {"heading": "Workflow & developer experience",
              "html": "<p>Cursor's strength is multi-file, context-aware edits and its agent loop — useful for larger "
-                     "changes. Copilot excels at fast, low-friction inline completions inside the tools teams already "
-                     "standardize on. In our refactor test, Cursor's repo context reduced manual file-hopping; in day-to-day "
-                     "typing, Copilot stayed out of the way.</p>"},
+                     "changes that touch several modules at once. Copilot excels at fast, low-friction inline completions inside the tools teams already "
+                     "standardize on, so there is nothing new to learn. In our refactor test, Cursor's repo context reduced manual file-hopping and "
+                     "kept related changes consistent; in day-to-day typing, Copilot stayed out of the way and suggested the next line before we reached for it. "
+                     "Which one feels faster depends on whether your work skews toward broad refactors or steady incremental edits.</p>"},
             {"heading": "Models & integrations",
-             "html": "<p>Both offer access to frontier models and chat. Copilot benefits from tight GitHub/PR integration; "
-                     "Cursor focuses the experience inside its editor. Check each vendor's current model list before deciding — "
-                     "model availability changes often.</p>"},
+             "html": "<p>Both offer access to frontier models and chat. Copilot benefits from tight GitHub/PR integration, so it can draw on "
+                     "pull-request context and fits naturally into GitHub-centric review flows; "
+                     "Cursor focuses the experience inside its editor and exposes model choices directly in the interface. "
+                     "Check each vendor's current model list before deciding — model availability and limits change often, "
+                     "and the specific models on offer can be the deciding factor for heavier tasks.</p>"},
             {"heading": "Who should pick which",
              "html": "<p>Pick <strong>Cursor</strong> if you want an AI-first editor and frequent multi-file edits. "
                      "Pick <strong>Copilot</strong> if you want to stay in your existing editor and value GitHub-native flow.</p>"},
