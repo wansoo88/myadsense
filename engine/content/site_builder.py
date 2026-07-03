@@ -4,6 +4,7 @@ dist/queue 의 게이트 통과 페이지 + 필수 페이지(Privacy 필수 F2·
 + sitemap.xml + robots.txt → dist/site/ (Caddy 서빙 대상). Pretty URL(/compare/<slug>/).
 """
 from __future__ import annotations
+import datetime
 import glob
 import html
 import os
@@ -36,6 +37,59 @@ def _gsc_verify_file(cfg) -> str | None:
         print(f"build: ⚠️ google_site_verification 형식 이상({v!r}) — 무시(google<영숫자>.html 이어야 함)")
         return None
     return v
+
+
+def _indexnow_key(cfg) -> str | None:
+    """IndexNow 색인 알림 키(공개용). 빌드가 SITE_DIR 에 /<key>.txt 를 생성(소유권 확인용).
+    형식 검증(경로조작 방지): 영숫자·하이픈 8~128자만."""
+    try:
+        v = (cfg["sites"]["sites"][0].get("indexnow_key") or "").strip()
+    except Exception:
+        return None
+    if not v:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,128}", v):
+        print(f"build: ⚠️ indexnow_key 형식 이상({v!r}) — 무시(영숫자/하이픈 8~128자)")
+        return None
+    return v
+
+
+def _rfc822(d: str) -> str | None:
+    """YYYY-MM-DD → RSS pubDate(RFC-822, 서버 KST +0900). 형식 불량이면 None."""
+    if not (d and re.fullmatch(r"\d{4}-\d{2}-\d{2}", d)):
+        return None
+    try:
+        return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a, %d %b %Y 00:00:00 +0900")
+    except Exception:
+        return None
+
+
+def _build_feed(pages: list, base: str, domain: str, limit: int = 30) -> str:
+    """RSS 2.0 피드 — 최신 콘텐츠(발행 순). 리더·애그리게이터 발견 통로(트래픽 생성 아님)."""
+    latest = pages[:limit]
+    build_date = _rfc822(max((p.get("updated") or "" for p in latest), default="")) \
+        or datetime.datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0900")
+    items = ""
+    for p in latest:
+        link = f"{base}{p['url']}"
+        pub = _rfc822(p.get("updated"))
+        desc = p.get("desc") or "An independent comparison of pricing, features, and fit."
+        items += ("  <item>\n"
+                  f"    <title>{esc(_short(p['title']))}</title>\n"
+                  f"    <link>{esc(link)}</link>\n"
+                  f'    <guid isPermaLink="true">{esc(link)}</guid>\n'
+                  + (f"    <pubDate>{pub}</pubDate>\n" if pub else "")
+                  + f"    <description>{esc(desc)}</description>\n"
+                  "  </item>\n")
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n<channel>\n'
+            f"  <title>{esc(renderer.SITE_NAME)} — latest comparisons &amp; guides</title>\n"
+            f"  <link>{esc(base)}/</link>\n"
+            f'  <atom:link href="{esc(base)}/feed.xml" rel="self" type="application/rss+xml"/>\n'
+            "  <description>Independent SaaS, developer, and AI tool comparisons and guides.</description>\n"
+            "  <language>en</language>\n"
+            f"  <lastBuildDate>{build_date}</lastBuildDate>\n"
+            f"{items}</channel>\n</rss>\n")
 
 
 def _contact_email(cfg) -> str:
@@ -292,8 +346,16 @@ def build(cfg) -> str:
     if gsc:
         _write(os.path.join(SITE_DIR, gsc), f"google-site-verification: {gsc}\n")
 
+    # 6) IndexNow 키 파일 (색인 알림 소유권 확인) — cron 이 web_root 를 비우므로 매 빌드 재생성
+    inkey = _indexnow_key(cfg)
+    if inkey:
+        _write(os.path.join(SITE_DIR, f"{inkey}.txt"), f"{inkey}\n")
+
+    # 7) RSS 피드 (발견 통로) + 홈 head 의 <link rel=alternate> 가 가리킴
+    _write(os.path.join(SITE_DIR, "feed.xml"), _build_feed(pages, base, domain))
+
     print(f"build: {len(pages)} 콘텐츠 + {len(cat_urls)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
-          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''} → {SITE_DIR}/")
+          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''}{' + IndexNow-key' if inkey else ''} + feed.xml → {SITE_DIR}/")
     print(f"build: 내부 링크 교정: Related {fixed_related}개 링크 + 브레드크럼 {fixed_crumb}개 페이지 "
           f"(실제 발행 페이지로 재작성)")
     return SITE_DIR

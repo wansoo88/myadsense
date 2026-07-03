@@ -25,3 +25,4 @@ engine/store/signals.json
 .DS_Store
 Thumbs.db
 engine/store/published.json
+engine/store/indexnow_state.json

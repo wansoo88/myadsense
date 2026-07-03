@@ -264,10 +264,12 @@ def _head(title, description, canonical="", og_type="article", extra=""):
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="{og_type}">
+<meta property="og:site_name" content="{SITE_NAME}">
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(description)}">
 {f'<meta property="og:url" content="{esc(canonical)}">' if canonical else ''}
 <meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="{SITE_NAME} — latest" href="{SITE_URL}/feed.xml">
 {THEME_INIT}
 <style>{CSS}</style>
 {extra}"""

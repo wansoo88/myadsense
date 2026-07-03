@@ -198,11 +198,28 @@ def stage_build(cfg):
 
 
 def stage_deploy(cfg):
-    """dist/site → 보유 서버(rsync). 기본 DRY-RUN, ADSENSE_DEPLOY=1 일 때만 실제 배포."""
+    """dist/site → 보유 서버(rsync). 기본 DRY-RUN, ADSENSE_DEPLOY=1 일 때만 실제 배포.
+
+    실배포 성공 시 IndexNow 로 변경 URL 을 Bing·Yandex 등에 통보(색인 알림, 트래픽 생성 아님)."""
     from content import site_builder
     import deploy as deployer
     site_builder.build(cfg)                       # 항상 최신 빌드 후 배포
-    return deployer.deploy(cfg, dry_run=os.environ.get("ADSENSE_DEPLOY") != "1")
+    result = deployer.deploy(cfg, dry_run=os.environ.get("ADSENSE_DEPLOY") != "1")
+    if result:                                    # dry-run 이 아니라 실제 배포된 경우만
+        try:
+            from optimize import indexnow
+            indexnow.run(cfg)
+        except Exception as e:
+            print(f"  indexnow skip: {e}")
+    return result
+
+
+def stage_indexnow(cfg):
+    """(수동) 현재 빌드의 변경 URL 을 IndexNow 에 제출. deploy 훅과 별개로 단독 실행용."""
+    from content import site_builder
+    from optimize import indexnow
+    site_builder.build(cfg)
+    return indexnow.run(cfg)
 
 
 def stage_report(cfg):
@@ -226,6 +243,7 @@ STAGES = {
     "ingest": stage_ingest, "research": stage_research, "generate": stage_generate,
     "monitor": stage_monitor, "publish": stage_publish, "build": stage_build,
     "deploy": stage_deploy, "report": stage_report, "analytics": stage_analytics,
+    "indexnow": stage_indexnow,
 }
 
 
