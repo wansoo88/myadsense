@@ -213,10 +213,19 @@ def stage_report(cfg):
     return reporter.build(cfg, db)
 
 
+def stage_analytics(cfg):
+    """자체 사이트 방문 분석 — nginx 로그 → 관리자 대시보드(data.json·index.html) 갱신.
+
+    나(쿠키 noana·지정 IP)·봇 제외. 읽기 전용(트래픽/클릭 생성과 무관, F3 리스크 0).
+    설정은 config/analytics.yaml 을 모듈이 직접 로드(서버에서 로그 경로·출력 위치를 관리)."""
+    from analytics import builder
+    return builder.run(cfg)
+
+
 STAGES = {
     "ingest": stage_ingest, "research": stage_research, "generate": stage_generate,
     "monitor": stage_monitor, "publish": stage_publish, "build": stage_build,
-    "deploy": stage_deploy, "report": stage_report,
+    "deploy": stage_deploy, "report": stage_report, "analytics": stage_analytics,
 }
 
 
