@@ -17,6 +17,9 @@ export PATH="/usr/local/bin:/usr/bin:$PATH"
 ts() { date '+%F %T'; }
 
 echo "[$(ts)] === daily 시작 ==="
+# ingest: GSC(검색성과·색인상태)·PageSpeed → DB. 읽기전용(F3). 비치명적 — 실패해도 생성/배포는 계속.
+echo "[$(ts)] ingest (GSC·PageSpeed → DB) 시작"
+"$PY" engine/orchestrator.py --stage ingest || echo "[$(ts)] ingest 경고(비치명적, 계속 진행)"
 echo "[$(ts)] generate (품질 게이트+검수) 시작"
 "$PY" engine/orchestrator.py --stage generate
 gen_rc=$?          # rc 는 바로 다음 줄에서 캡처 — echo 안 $(ts) 가 $? 를 덮어쓰기 전에.
