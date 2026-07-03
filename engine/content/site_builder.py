@@ -163,9 +163,10 @@ def _cat_label(page: dict) -> str:
     return cat[1] if cat else (page.get("kicker") or "Comparison")
 
 
-def _pick_related(page: dict, pages: list, limit: int = 4) -> list:
+def _pick_related(page: dict, pages: list, limit: int = 6) -> list:
     """실제 발행된 페이지 중 같은 클러스터·제목 겹침 기준 상위 N개를 Related 로 선정(자기 제외).
-    같은 클러스터 우선(+100), 제목 토큰 공유마다 가점. 동점은 최신·slug 순으로 결정적."""
+    같은 클러스터 우선(+100), 제목 토큰 공유마다 가점. 동점은 최신·slug 순으로 결정적.
+    빌드마다 실제 발행 집합 기준으로 재계산 → 새 롱테일 발행 시 기존 글에 자동 상호 링크(404 없음)."""
     my_tok = _tokens(page["title"])
     my_cluster = page.get("cluster")
     scored = []
@@ -284,11 +285,12 @@ def build(cfg) -> str:
     pages.sort(key=lambda p: p.get("updated") or "", reverse=True)
 
     # 1.5) 내부 링크 교정 pass — 실제 페이지 집합(pages) 기준으로 Related·브레드크럼 재작성 후 기록
+    related_n = int(((cfg.get("content") or {}).get("internal_links") or {}).get("related_count", 6))
     by_slug = {p["slug"]: p for p in pages}
     fixed_related = fixed_crumb = 0
     for slug, doc in built:
         page = by_slug[slug]
-        related = _pick_related(page, pages)
+        related = _pick_related(page, pages, limit=related_n)
         crumb = _crumb_items(page)
         doc = renderer.refresh_internal_links(doc, crumb_items=crumb, related_items=related)
         fixed_related += len(related)
