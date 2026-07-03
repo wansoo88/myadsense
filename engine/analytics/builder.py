@@ -235,6 +235,7 @@ def run(cfg_all=None) -> str:
         "browsers": browsers,
         "recent": recent,
         "bots": bot_top,
+        "batch": cfg.get("batch_jobs") or {},   # 운영 배치(cron) 주기 — 대시보드 '데이터 수집 주기' 패널
     }
 
     os.makedirs(out_dir, exist_ok=True)

@@ -59,6 +59,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 .foot{color:var(--mut);font-size:11.5px;margin-top:34px;line-height:1.7}
 .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:5px;background:#20242e;color:var(--mut);margin-left:6px}
 details{margin-top:8px}summary{cursor:pointer;color:var(--mut);font-size:12.5px}
+code{background:#20242e;padding:1px 6px;border-radius:5px;font-size:11.5px;color:#cbd5e1;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 </style></head><body><div class="wrap">
 <h1>stack. 방문 분석 <span class="tag" id="dom"></span></h1>
 <p class="sub" id="sub">불러오는 중…</p>
@@ -76,6 +77,9 @@ details{margin-top:8px}summary{cursor:pointer;color:var(--mut);font-size:12.5px}
 </div>
 
 <div class="kpis" id="kpis"></div>
+
+<h2>데이터 수집 주기 <span class="hint" id="batchHint"></span></h2>
+<div class="card scroll"><table id="batch"></table></div>
 
 <h2>방문 추세 <span class="hint" id="trendHint"></span></h2>
 <div class="card">
@@ -200,6 +204,14 @@ function devices(el, dev){
   barRows(el, items, "label", "count");
 }
 
+function batch(el, b){
+  const jobs=(b&&b.jobs)||[];
+  if(!jobs.length){el.innerHTML='<tr><td class="empty">배치 정보 없음</td></tr>';return;}
+  el.innerHTML='<thead><tr><th>배치</th><th>주기</th><th>cron</th><th>내용</th></tr></thead><tbody>'+
+    jobs.map(j=>`<tr><td>${esc(j.name)}</td><td><span class="st ok">${esc(j.schedule)}</span></td>`+
+      `<td><code>${esc(j.cron)}</code></td><td class="path">${esc(j.detail)}</td></tr>`).join("")+'</tbody>';
+}
+
 function recent(el, rows){
   if(!rows||!rows.length){el.innerHTML='<tr><td class="empty">아직 사람 방문 기록이 없습니다. (봇·내 방문 제외)</td></tr>';return;}
   el.innerHTML='<thead><tr><th>시간</th><th>페이지</th><th>상태</th><th>기기</th><th>브라우저</th><th>유입</th><th>IP</th></tr></thead><tbody>'+
@@ -224,6 +236,8 @@ function render(){
     ["",s.bots_7d,"봇 차단(7일)"],
     ["",s.self_excluded,"내 방문 제외"],
   ].map(([c,v,l])=>`<div class="kpi ${c}"><b>${fmt(v)}</b><span>${l}</span></div>`).join("");
+  batch($("#batch"),DATA.batch);
+  $("#batchHint").textContent=((DATA.batch&&DATA.batch.note)||"")+" · 마지막 수집 "+esc(DATA.generated_at||"—");
   lineChart($("#trend"),RANGE);
   $("#trendHint").textContent="최근 "+RANGE+"일";
   barRows($("#pages"),(DATA.top_pages||[]).slice(0,12),"label","pv");
