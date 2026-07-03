@@ -54,6 +54,7 @@ td.path{white-space:normal;max-width:340px;word-break:break-all}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
 .st{padding:1px 7px;border-radius:5px;font-size:11px;font-weight:600}
 .st.ok{background:rgba(74,222,128,.14);color:#8ff0b5}.st.rd{background:rgba(255,120,120,.14);color:#ffb3b3}
+.st.wn{background:rgba(245,185,66,.16);color:#f0d79a}.st.mut{background:#20242e;color:var(--mut)}
 .scroll{overflow-x:auto}
 .empty{color:var(--mut);font-size:13px;padding:10px 2px}
 .foot{color:var(--mut);font-size:11.5px;margin-top:34px;line-height:1.7}
@@ -207,9 +208,17 @@ function devices(el, dev){
 function batch(el, b){
   const jobs=(b&&b.jobs)||[];
   if(!jobs.length){el.innerHTML='<tr><td class="empty">배치 정보 없음</td></tr>';return;}
-  el.innerHTML='<thead><tr><th>배치</th><th>주기</th><th>cron</th><th>내용</th></tr></thead><tbody>'+
-    jobs.map(j=>`<tr><td>${esc(j.name)}</td><td><span class="st ok">${esc(j.schedule)}</span></td>`+
-      `<td><code>${esc(j.cron)}</code></td><td class="path">${esc(j.detail)}</td></tr>`).join("")+'</tbody>';
+  const bd=(j)=>{
+    const map={ok:["ok","✓ 성공"],fail:["rd","✗ 실패"],unknown:["mut","— 정보없음"]};
+    const m=map[j.state]||map.unknown;
+    let s=`<span class="st ${m[0]}">${m[1]}</span>`;
+    if(j.stale) s+=' <span class="st wn" title="예상 주기보다 오래 미실행">⚠ 지연</span>';
+    return s;
+  };
+  el.innerHTML='<thead><tr><th>배치</th><th>주기</th><th>최근 상태</th><th>마지막 실행</th><th>cron · 내용</th></tr></thead><tbody>'+
+    jobs.map(j=>`<tr><td>${esc(j.name)}</td><td>${esc(j.schedule)}</td>`+
+      `<td>${bd(j)}</td><td>${esc(j.last_run||"—")}</td>`+
+      `<td class="path"><code>${esc(j.cron)}</code> ${esc(j.detail)}</td></tr>`).join("")+'</tbody>';
 }
 
 function recent(el, rows){
@@ -237,7 +246,10 @@ function render(){
     ["",s.self_excluded,"내 방문 제외"],
   ].map(([c,v,l])=>`<div class="kpi ${c}"><b>${fmt(v)}</b><span>${l}</span></div>`).join("");
   batch($("#batch"),DATA.batch);
-  $("#batchHint").textContent=((DATA.batch&&DATA.batch.note)||"")+" · 마지막 수집 "+esc(DATA.generated_at||"—");
+  const bjobs=(DATA.batch&&DATA.batch.jobs)||[];
+  const nf=bjobs.filter(j=>j.state==="fail").length, ns=bjobs.filter(j=>j.stale).length;
+  const health=nf?("⚠ "+nf+"건 실패"):ns?("⚠ "+ns+"건 지연"):(bjobs.length?"모두 정상":"");
+  $("#batchHint").textContent=((DATA.batch&&DATA.batch.note)||"")+(health?" · "+health:"");
   lineChart($("#trend"),RANGE);
   $("#trendHint").textContent="최근 "+RANGE+"일";
   barRows($("#pages"),(DATA.top_pages||[]).slice(0,12),"label","pv");

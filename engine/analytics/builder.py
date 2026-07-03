@@ -133,6 +133,78 @@ def _trend(conn, days: int, today: date):
     return out
 
 
+_TS_RE = re.compile(r"(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(:\d{2})?")
+
+
+def _read_tail(path: str, nbytes: int = 8192) -> str:
+    with open(path, "rb") as f:
+        f.seek(0, 2)
+        sz = f.tell()
+        f.seek(max(0, sz - nbytes))
+        return f.read().decode("utf-8", "replace")
+
+
+def _job_status(job: dict, now: datetime) -> dict:
+    """잡 로그 tail 로 마지막 실행 시각 + 성공/실패/지연 판정(비침투 — 크론/스크립트 수정 없음)."""
+    out = {"state": "unknown", "last_run": None, "stale": False}
+    log = job.get("log")
+    if not log or not os.path.exists(log):
+        return out
+    try:
+        tail = _read_tail(log)
+    except Exception:
+        return out
+    lines = [ln for ln in tail.splitlines() if ln.strip()]
+    if not lines:
+        return out
+    # 마지막 실행 시각: 로그의 마지막 타임스탬프, 없으면 파일 mtime
+    ts = None
+    for ln in reversed(lines):
+        m = _TS_RE.search(ln)
+        if m:
+            ts = f"{m.group(1)} {m.group(2)}{m.group(3) or ':00'}"
+            break
+    if ts is None:
+        ts = datetime.fromtimestamp(os.path.getmtime(log)).strftime("%Y-%m-%d %H:%M:%S")
+    out["last_run"] = ts
+    # 마지막 실행 구간 분리(멀티라인 잡은 start_marker 이후, 단일라인 잡은 최근 12줄)
+    start = job.get("start_marker")
+    if start and any(start in ln for ln in lines):
+        idx = max(i for i, ln in enumerate(lines) if start in ln)
+        seg = lines[idx:]
+    else:
+        seg = lines[-12:]
+    segtext = "\n".join(seg)
+    fail_marker = job.get("fail_marker")
+    ok_marker = job.get("ok_marker", "")
+    if ("Traceback (most recent call last)" in segtext) or (fail_marker and fail_marker in segtext):
+        out["state"] = "fail"
+    elif (not ok_marker) or any(ok_marker in ln for ln in seg):
+        out["state"] = "ok"
+    else:
+        out["state"] = "unknown"
+    # 지연: 예상 주기(max_stale_min)보다 오래 미실행이면 경고(크론 중단 감지)
+    try:
+        lr = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        mx = int(job.get("max_stale_min", 0) or 0)
+        if mx and (now - lr).total_seconds() > mx * 60:
+            out["stale"] = True
+    except Exception:
+        pass
+    return out
+
+
+def _batch_payload(cfg: dict, now: datetime) -> dict:
+    """운영 배치 주기 + 최근 성공/실패 → 대시보드 payload(로그/마커 등 내부 필드는 클라이언트로 안 보냄)."""
+    bj = cfg.get("batch_jobs") or {}
+    jobs = []
+    for j in (bj.get("jobs") or []):
+        st = _job_status(j, now)
+        jobs.append({"name": j.get("name"), "schedule": j.get("schedule"),
+                     "cron": j.get("cron"), "detail": j.get("detail"), **st})
+    return {"note": bj.get("note", ""), "jobs": jobs}
+
+
 def _top_pages(conn, limit=40):
     rows = conn.execute(
         "SELECT path, SUM(pv) pv, SUM(uniq) vd, MAX(date) last "
@@ -235,7 +307,7 @@ def run(cfg_all=None) -> str:
         "browsers": browsers,
         "recent": recent,
         "bots": bot_top,
-        "batch": cfg.get("batch_jobs") or {},   # 운영 배치(cron) 주기 — 대시보드 '데이터 수집 주기' 패널
+        "batch": _batch_payload(cfg, now),   # 운영 배치 주기 + 최근 성공/실패/지연 — '데이터 수집 주기' 패널
     }
 
     os.makedirs(out_dir, exist_ok=True)

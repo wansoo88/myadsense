@@ -32,8 +32,11 @@ site:
   domain: stack.utilverse.info
   timezone_note: "로그 타임스탬프는 서버 로컬(KST, +09:00) 기준"
 
-# 운영 배치(서버 cron) — 관리자 대시보드 '데이터 수집 주기' 패널에 표기(정보성).
+# 운영 배치(서버 cron) — 관리자 대시보드 '데이터 수집 주기' 패널에 표기(정보성 + 최근 성공/실패).
 # ⚠️ 실서버 crontab 과 일치시켜 관리. cron 변경 시 이 값도 함께 수정.
+# 상태 판정: 각 잡의 로그 tail 을 읽어 마지막 실행 시각 + 성공/실패/지연 표시.
+#   - ok_marker: 성공 시 로그에 남는 문자열 / fail_marker: 실패 문자열(+ 'Traceback' 은 공통 실패)
+#   - start_marker: (멀티라인 잡) 마지막 실행 구간 분리 / max_stale_min: 이 시간 넘게 미실행이면 '지연' 경고
 batch_jobs:
   note: "이 방문 분석 대시보드는 15분마다 서버가 자동 수집·갱신합니다."
   jobs:
@@ -41,11 +44,22 @@ batch_jobs:
       schedule: "15분마다"
       cron: "*/15 * * * *"
       detail: "nginx 접속 로그 → 페이지·유입·기기·추세 집계(나·봇 제외). scripts/analytics.sh"
+      log: /var/log/adsense_analytics.log
+      ok_marker: "analytics:"
+      max_stale_min: 40
     - name: "이상 감지 · 킬스위치"
       schedule: "매시간"
       cron: "0 * * * *"
       detail: "정책·색인·Core Web Vitals·RPM 이상 감지 → 이상 시 발행 자동 중단. orchestrator --stage monitor"
+      log: /var/log/adsense_monitor.log
+      ok_marker: "monitor:"
+      max_stale_min: 130
     - name: "일일 파이프라인"
       schedule: "매일 09:00 KST"
       cron: "0 9 * * *"
       detail: "데이터 수집(GSC 검색성과·색인상태·PageSpeed) → 초안 생성·품질 게이트·검수 → 빌드·배포. scripts/daily.sh"
+      log: /var/log/adsense_pipeline.log
+      start_marker: "=== daily 시작 ==="
+      ok_marker: "=== daily 종료 ==="
+      fail_marker: "실패 감지"
+      max_stale_min: 1560
