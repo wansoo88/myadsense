@@ -67,10 +67,16 @@ def stage_research(cfg):
     from store import db
     db.init()
     backlog = keyword_research.run(cfg["topics"], cfg["niches"], db)
+    # 콜드스타트 우선순위: topics.sequencing.next_batch_priority 에 명시한 '이길 수 있는' 키워드를
+    # 점수와 무관하게 앞으로 끌어올린다(신생 사이트가 경쟁 센 헤드텀보다 롱테일을 먼저 쓰도록).
+    prio = ((cfg["topics"].get("sequencing") or {}).get("next_batch_priority") or [])
+    if prio:
+        rank = {k: i for i, k in enumerate(prio)}
+        backlog.sort(key=lambda e: (rank.get(e["keyword"], len(prio)), -e.get("score", 0)))
     os.makedirs("dist/research", exist_ok=True)
     with open("dist/research/backlog.json", "w", encoding="utf-8") as f:
         json.dump(backlog, f, ensure_ascii=False, indent=2)
-    print(f"research: {len(backlog)} 시드 스코어 → dist/research/backlog.json")
+    print(f"research: {len(backlog)} 시드 스코어 (우선 {len(prio)}개 선순위) → dist/research/backlog.json")
     for e in backlog[:5]:
         print(f"  {e['score']:.3f} [{e['cluster']}/{e['intent']}] {e['keyword']}")
     return backlog

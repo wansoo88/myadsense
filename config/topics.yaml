@@ -2,6 +2,10 @@
 # keyword_research / generator 가 소비. 의도 우선순위: comparison ≥ transactional > informational (F7).
 # 각 페이지는 quality_gate 통과 필수 — programmatic 패턴마다 unique_data(가격표·기능매트릭스·실측·핸즈온) 강제.
 # ⚠️ 시드는 출발점. 실제 검색량·경쟁도는 Search Console/키워드 데이터로 검증 후 확장(절대 수치 맹신 금지).
+#
+# 🎯 "이길 수 있는 롱테일"(2026-07-03, 콜드스타트 전략): 신생·저권위 사이트는 헤드 비교어("cursor vs copilot")를
+#    단기 랭크 불가 → (a) 신규/니치 엔티티(대형사이트 미포화) + (b) 페르소나·제약 한정(for python devs / for solo)
+#    + (c) 구체 how-to(빠른 랭크→허브로 내부링크) 로 진입. 경쟁도는 GSC 데이터로 검증할 가설(절대 수치 아님).
 
 clusters:
   # ── P1: AI 코딩/개발 도구 (트렌딩·고의도·E-E-A-T 적합) ──
@@ -23,6 +27,12 @@ clusters:
       - "github copilot alternatives"     # transactional
       - "is github copilot worth it"      # transactional
       - "best ai code review tools"
+      # 🎯 이길 수 있는 롱테일 (신규/니치 엔티티·페르소나 한정)
+      - "aider vs cursor"                 # comparison — Aider(CLI AI) 신규·심층비교 희소
+      - "cline vs continue"               # comparison — 오픈소스 VS Code AI 확장, 초저경쟁
+      - "zed vs cursor"                   # comparison — Zed 트렌딩·비교 콘텐츠 희소
+      - "best ai coding assistant for python developers"  # transactional — 페르소나 한정
+      - "is cursor worth it for solo developers"          # transactional — 페르소나 worth-it
 
   # ── P1: VPS·클라우드 호스팅·셀프호스팅 (서버 운영 경험 = 최강 E-E-A-T) ──
   - id: hosting-selfhost
@@ -43,6 +53,12 @@ clusters:
       - "how to self-host ghost blog"
       - "best self-hosted alternatives to notion"
       - "self-hosted analytics vs google analytics"
+      # 🎯 이길 수 있는 롱테일 (구체 how-to·저포화 엔티티·기존 글과 내부링크)
+      - "how to self-host supabase"       # how-to — supabase-vs-firebase 글과 교차 내부링크
+      - "how to self-host n8n"            # how-to — 트렌딩 자동화 툴, 영어권 심층가이드 희소
+      - "best self-hosted alternatives to airtable"  # transactional — Baserow/NocoDB 등
+      - "hetzner vs contabo"              # comparison — 저가 EU 호스트, 영어권 커버 희소
+      - "best vps for self-hosting"       # transactional — use-case 한정
 
   # ── P2: 개발/SaaS 도구 비교 (대량 볼륨) ──
   - id: dev-saas-compare
@@ -61,6 +77,11 @@ clusters:
       - "vercel vs netlify"
       - "supabase vs firebase"
       - "best api testing tools"
+      # 🎯 이길 수 있는 롱테일 (신규 PaaS/DB·오픈소스 — 기존 허브 보강)
+      - "bruno vs postman"                # comparison — Bruno(OSS) 트렌딩, postman/insomnia 허브 보강
+      - "railway vs render"               # comparison — 신규 PaaS, vercel/netlify 클러스터 보강
+      - "fly.io vs railway"               # comparison — 신규 PaaS, 저포화
+      - "planetscale vs neon"             # comparison — 서버리스 DB, supabase/firebase 클러스터 보강
 
   # ── P2: AI 생산성 도구 (비코딩) ──
   - id: ai-productivity
@@ -77,6 +98,9 @@ clusters:
       - "jasper vs copy ai"
       - "best ai writing tools 2026"
       - "notion ai alternatives"
+      # 🎯 이길 수 있는 롱테일 (허브 보강·페르소나 한정)
+      - "otter ai vs fireflies"           # comparison — AI 미팅노트 허브("best ai meeting note takers") 보강
+      - "best ai note taking apps for students"  # transactional — 페르소나 한정
 
   # ── P3: VPN·보안 (초고CPC, 인접·선택적 — 포화·경쟁 큼) ──
   - id: vpn-security
@@ -92,8 +116,21 @@ clusters:
       - "bitwarden vs 1password"
       - "best password managers 2026"
       - "nordvpn vs expressvpn"
+      # 🎯 이길 수 있는 롱테일 (포화 니치라 신규/셀프호스트 각도로만)
+      - "vaultwarden vs bitwarden"        # comparison — 셀프호스트 니치, hosting 클러스터 교차링크
+      - "proton pass vs bitwarden"        # comparison — Proton Pass 신규, expressvpn류보다 저포화
 
 # 발행 순서 가이드 (PLAN.md 단계와 연결)
 sequencing:
   cornerstone_first: true          # 승인 전: hub + P1 핵심 비교글 8~15편을 깊게(품질 우선)
   programmatic_after_approval: true # 승인 후: P1→P2→P3 순으로 패턴 대량 생성(게이트·점진 롤아웃)
+  # 콜드스타트 우선순위(다음 발행 순): 신규/니치 엔티티 + 기존 허브 보강 우선(내부링크로 상호 랭크 견인)
+  next_batch_priority:
+    - "bruno vs postman"            # 1) 트렌딩 OSS + postman 허브 보강
+    - "aider vs cursor"             # 2) 고의도·저경쟁, AI코딩 허브 보강
+    - "cline vs continue"           # 3) 초저경쟁 OSS
+    - "railway vs render"           # 4) 신규 PaaS, 배포 클러스터 보강
+    - "planetscale vs neon"         # 5) 서버리스 DB, supabase 클러스터 보강
+    - "how to self-host supabase"   # 6) how-to → supabase 글과 교차 내부링크
+    - "zed vs cursor"               # 7)
+    - "is cursor worth it for solo developers"  # 8) 페르소나 transactional
