@@ -72,4 +72,10 @@ def review(spec, content_cfg: dict) -> dict:
     data.setdefault("severity", "unknown")
     data.setdefault("issues", [])
     data.setdefault("ai_tells", [])
+    # 엄격 스타일 게이트(사용자 방침 2026-07-05): AI 티(ai_tells)가 하나라도 있으면 medium 이라도 반려
+    # → 재생성 유도. 평행구문 등 블록리스트 밖 AI 티까지 차단(LLM 이 ai_tells 로 잡음).
+    if data.get("ai_tells"):
+        data["passed"] = False
+        if data.get("severity") in (None, "none", "low", "unknown"):
+            data["severity"] = "medium"
     return data
