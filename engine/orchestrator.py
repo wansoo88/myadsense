@@ -109,6 +109,18 @@ def stage_generate(cfg):
     pub_path = "engine/store/published.json"
     published = set(json.load(open(pub_path, encoding="utf-8"))) if os.path.exists(pub_path) else set()
     daily = (cfg["guardrails"].get("rollout", {}) or {}).get("daily_generate", 4)
+    # 하루 1편 멱등 가드 — 수동 발행 ↔ 20:00 로컬 배치 중복/경합 방지. 오늘 이미 발행 성공했으면 스킵.
+    # 먼저 도는 쪽이 그날을 '선점'하고 나중 쪽은 자동 스킵(published.json·배포 경합 없음). review_on 일 때만.
+    import datetime as _dt
+    marker_path = "engine/store/last_publish_date.txt"
+    today_str = _dt.date.today().isoformat()
+    if review_on and os.path.exists(marker_path):
+        try:
+            if open(marker_path, encoding="utf-8").read().strip() == today_str:
+                print(f"generate: 오늘({today_str}) 이미 발행됨 → 중복 방지 스킵 (수동↔20:00 배치 가드)")
+                return 0
+        except Exception:
+            pass
     if review_on:
         seeds = [s for s in seeds if s[0] not in published]
     max_attempts = 1 + int((cfg["content"].get("on_reject", {}) or {}).get("max_regeneration_attempts", 0))
@@ -158,6 +170,11 @@ def stage_generate(cfg):
     if review_on:                                        # 발행 키워드 영속화(다음 날 중복 방지)
         os.makedirs("engine/store", exist_ok=True)
         json.dump(sorted(published), open(pub_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        if passed:                                       # 오늘 발행 성공 마커 — 멱등 가드용(수동↔20:00 배치)
+            try:
+                open(marker_path, "w", encoding="utf-8").write(today_str)
+            except Exception:
+                pass
     print(f"generate({'검수ON·일일' if review_on else 'fixture'}): {passed} 신규 / {rejected} 탈락 → dist/queue (누적 발행 {len(published)})")
     return passed
 
