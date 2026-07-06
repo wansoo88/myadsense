@@ -76,6 +76,101 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+# --- GSC 색인 현황 (ingest DB = metrics.db) --------------------------------
+GSC_DB = "engine/store/metrics.db"
+
+# 색인 파이프라인 버킷: 구글 verdict/coverageState → 사람이 읽는 단계
+_BUCKET_META = [
+    ("indexed",    "색인 완료",        "ok"),
+    ("crawled",    "크롤됨·색인 보류",  "wn"),
+    ("discovered", "발견·미크롤",      "mut"),
+    ("duplicate",  "중복·정규화",      "mut"),
+    ("unknown",    "미발견",           "mut"),
+    ("other",      "기타",             "mut"),
+]
+
+
+def _url_path(url: str) -> str:
+    return re.sub(r"^https?://[^/]+", "", url or "") or "/"
+
+
+def _cov_bucket(verdict: str, coverage: str) -> str:
+    if (verdict or "").upper() == "PASS":
+        return "indexed"
+    c = (coverage or "").lower()
+    if "unknown" in c:
+        return "unknown"
+    if "crawled" in c and "not indexed" in c:
+        return "crawled"
+    if "discovered" in c:
+        return "discovered"
+    if "duplicate" in c or "alternate" in c or "canonical" in c:
+        return "duplicate"
+    return "other"
+
+
+def _gsc_payload():
+    """ingest DB(metrics.db)의 색인 상태·검색 성과 → 대시보드 payload. DB/테이블/데이터 없으면 None."""
+    if not os.path.exists(GSC_DB):
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{GSC_DB}?mode=ro", uri=True)
+    except Exception:
+        return None
+    try:
+        if not conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                            "AND name='index_status'").fetchone():
+            return None
+        dates = [d for (d,) in conn.execute(
+            "SELECT DISTINCT date FROM index_status ORDER BY date")]
+        if not dates:
+            return None
+        latest, first = dates[-1], dates[0]
+
+        def snap(day):
+            return conn.execute(
+                "SELECT url,verdict,coverage_state,last_crawl FROM index_status "
+                "WHERE date=? ORDER BY url", (day,)).fetchall()
+
+        def counts(rows):
+            out = {}
+            for _u, verdict, cov, _lc in rows:
+                b = _cov_bucket(verdict, cov)
+                out[b] = out.get(b, 0) + 1
+            return out
+
+        latest_rows, first_rows = snap(latest), snap(first)
+        cl, cf = counts(latest_rows), counts(first_rows)
+        buckets = [{"key": k, "label": lbl, "cls": cls,
+                    "count": cl.get(k, 0), "prev": cf.get(k, 0)}
+                   for k, lbl, cls in _BUCKET_META if cl.get(k, 0) or cf.get(k, 0)]
+        pages = [{"label": _page_label(_url_path(u)), "bucket": _cov_bucket(v, cov),
+                  "coverage": cov or "—", "last_crawl": (lc or "")[:10] or "—"}
+                 for u, v, cov, lc in latest_rows]
+        # 검색 성과: 최신 수집일의 query 차원 합계
+        mdate = (conn.execute("SELECT MAX(date) FROM metrics "
+                              "WHERE source='search_console'").fetchone() or [None])[0]
+        clicks = impr = 0
+        if mdate:
+            clicks = (conn.execute(
+                "SELECT COALESCE(SUM(value),0) FROM metrics WHERE source='search_console' "
+                "AND dimension='query' AND metric='clicks' AND date=?", (mdate,)).fetchone() or [0])[0]
+            impr = (conn.execute(
+                "SELECT COALESCE(SUM(value),0) FROM metrics WHERE source='search_console' "
+                "AND dimension='query' AND metric='impressions' AND date=?", (mdate,)).fetchone() or [0])[0]
+        return {
+            "first_date": first, "latest_date": latest, "total": len(latest_rows),
+            "indexed": cl.get("indexed", 0), "crawled": cl.get("crawled", 0),
+            "unknown": cl.get("unknown", 0), "buckets": buckets, "pages": pages,
+            "search": {"clicks": int(clicks), "impressions": int(impr),
+                       "has_data": (clicks or impr) > 0},
+        }
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
 # --- 집계 ------------------------------------------------------------------
 def _rollups(hits):
     """현재 로그에 있는 방문에서 (site_daily, path_daily) 롤업 계산."""
@@ -309,6 +404,7 @@ def run(cfg_all=None) -> str:
         "recent": recent,
         "bots": bot_top,
         "batch": _batch_payload(cfg, now),   # 운영 배치 주기 + 최근 성공/실패/지연 — '데이터 수집 주기' 패널
+        "gsc": _gsc_payload(),               # GSC 색인 현황(색인 파이프라인 단계·페이지별 상태·검색 성과)
     }
 
     os.makedirs(out_dir, exist_ok=True)

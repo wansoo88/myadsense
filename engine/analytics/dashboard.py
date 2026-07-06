@@ -82,6 +82,9 @@ code{background:#20242e;padding:1px 6px;border-radius:5px;font-size:11.5px;color
 <h2>데이터 수집 주기 <span class="hint" id="batchHint"></span></h2>
 <div class="card scroll"><table id="batch"></table></div>
 
+<h2>GSC 색인 현황 <span class="hint" id="gscHint"></span></h2>
+<div id="gscWrap"></div>
+
 <h2>방문 추세 <span class="hint" id="trendHint"></span></h2>
 <div class="card">
   <div class="legend">
@@ -230,6 +233,36 @@ function recent(el, rows){
     '</tbody>';
 }
 
+function gsc(g){
+  const wrap=$("#gscWrap");
+  if(!g){ $("#gscHint").textContent=""; wrap.innerHTML='<div class="card"><div class="empty">GSC 색인 데이터 없음 — ingest 수집 대기 중</div></div>'; return; }
+  $("#gscHint").textContent=`${esc(g.first_date)} → ${esc(g.latest_date)} · 사이트맵 ${fmt(g.total)} URL`;
+  const kpis=[
+    ["accent",g.indexed,"색인 완료(PASS)"],
+    ["",g.crawled,"크롤됨·색인 보류"],
+    ["",g.unknown,"미발견"],
+    ["",g.total,"사이트맵 URL"],
+  ].map(([c,v,l])=>`<div class="kpi ${c}"><b>${fmt(v)}</b><span>${l}</span></div>`).join("");
+  const max=Math.max(1,...g.buckets.map(b=>b.count));
+  const fillcol={indexed:"var(--uq)",crawled:"var(--bot)"};
+  const bars=g.buckets.map(b=>{
+    const w=(100*b.count/max).toFixed(1), d=b.count-b.prev;
+    const delta=d>0?` <span style="color:var(--uq)">▲${d}</span>`:d<0?` <span style="color:#ffb3b3">▼${-d}</span>`:"";
+    return `<div class="row"><div class="lbl"><span class="st ${b.cls}">${esc(b.label)}</span></div>`+
+      `<div class="num">${fmt(b.count)}${delta}</div>`+
+      `<div class="track"><div class="fill" style="width:${w}%;background:${fillcol[b.key]||'var(--mut)'}"></div></div></div>`;
+  }).join("");
+  const bl={indexed:["ok","색인"],crawled:["wn","보류"],discovered:["mut","발견"],duplicate:["mut","중복"],unknown:["mut","미발견"],other:["mut","기타"]};
+  const rows=(g.pages||[]).map(p=>{const m=bl[p.bucket]||bl.other;
+    return `<tr><td class="path">${esc(p.label)}</td><td><span class="st ${m[0]}">${m[1]}</span></td><td>${esc(p.coverage)}</td><td>${esc(p.last_crawl)}</td></tr>`;}).join("");
+  const srch=(g.search&&g.search.has_data)
+    ? `검색 노출 ${fmt(g.search.impressions)} · 클릭 ${fmt(g.search.clicks)}`
+    : "검색 노출·클릭 0 — 아직 색인 전(정상)";
+  wrap.innerHTML=`<div class="kpis" style="margin-bottom:12px">${kpis}</div>`+
+    `<div class="card"><div class="legend"><span>색인 파이프라인 단계별 URL 수 (${esc(g.first_date)} 대비 증감) · ${srch}</span></div><div class="rows">${bars}</div></div>`+
+    `<div class="card scroll" style="margin-top:12px"><table><thead><tr><th>페이지</th><th>상태</th><th>coverageState</th><th>마지막 크롤</th></tr></thead><tbody>${rows||'<tr><td class="empty">데이터 없음</td></tr>'}</tbody></table></div>`;
+}
+
 function render(){
   const s=DATA.summary;
   $("#dom").textContent=DATA.domain||"";
@@ -246,6 +279,7 @@ function render(){
     ["",s.self_excluded,"내 방문 제외"],
   ].map(([c,v,l])=>`<div class="kpi ${c}"><b>${fmt(v)}</b><span>${l}</span></div>`).join("");
   batch($("#batch"),DATA.batch);
+  gsc(DATA.gsc);
   const bjobs=(DATA.batch&&DATA.batch.jobs)||[];
   const nf=bjobs.filter(j=>j.state==="fail").length, ns=bjobs.filter(j=>j.stale).length;
   const health=nf?("⚠ "+nf+"건 실패"):ns?("⚠ "+ns+"건 지연"):(bjobs.length?"모두 정상":"");
