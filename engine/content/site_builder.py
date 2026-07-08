@@ -284,10 +284,20 @@ def _og_svg(domain: str) -> str:
 def build(cfg) -> str:
     domain = _domain(cfg)
     base = f"https://{domain}"
-    # 기존 산출물 정리
+    # 기존 산출물 정리 — Windows 파일 잠금(AV·열린 핸들 등) 일시적 대비 재시도 후 최후 ignore_errors.
+    # (배포 크래시 방지: 잠금으로 rmtree 실패 시 그날 배포 전체가 rc=1 로 죽던 문제 — 2026-07 재발 방지)
     if os.path.isdir(SITE_DIR):
         import shutil
-        shutil.rmtree(SITE_DIR)
+        import time
+        for _i in range(5):
+            try:
+                shutil.rmtree(SITE_DIR)
+                break
+            except PermissionError as e:
+                print(f"build: dist/site 정리 재시도({_i + 1}/5) — {e}")
+                time.sleep(0.6)
+        else:
+            shutil.rmtree(SITE_DIR, ignore_errors=True)   # 최후: 가능한 만큼 제거(빌드가 덮어씀)
     os.makedirs(SITE_DIR, exist_ok=True)
 
     # 1) 콘텐츠 페이지 (dist/queue → /compare/<slug>/)
