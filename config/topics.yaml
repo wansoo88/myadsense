@@ -124,13 +124,20 @@ clusters:
 sequencing:
   cornerstone_first: true          # 승인 전: hub + P1 핵심 비교글 8~15편을 깊게(품질 우선)
   programmatic_after_approval: true # 승인 후: P1→P2→P3 순으로 패턴 대량 생성(게이트·점진 롤아웃)
-  # 콜드스타트 우선순위(다음 발행 순): 신규/니치 엔티티 + 기존 허브 보강 우선(내부링크로 상호 랭크 견인)
+  # ⚠️ 재큐레이션(2026-07-08): 강화된 사실대조 검수는 '검증 가능(공식 문서 풍부)' 토픽만 통과시킨다.
+  # 니치·신생 툴(cline·zed 등)은 반복 반려되어 20:00 배치가 매일 0편이 되던 문제 → 여기엔 **잘 문서화된
+  # 미발행 비교/리스트/가이드**만 우선순위로 둔다. 발행되면 published.json 으로 자동 제외 → 다음 것으로.
+  # (검증 어려운 니치는 스코어로 백로그 하위에 남되 상위 10 밖으로 밀려 배치가 시도하지 않음)
   next_batch_priority:
-    - "bruno vs postman"            # 1) 트렌딩 OSS + postman 허브 보강
-    - "aider vs cursor"             # 2) 고의도·저경쟁, AI코딩 허브 보강
-    - "cline vs continue"           # 3) 초저경쟁 OSS
-    - "railway vs render"           # 4) 신규 PaaS, 배포 클러스터 보강
-    - "planetscale vs neon"         # 5) 서버리스 DB, supabase 클러스터 보강
-    - "how to self-host supabase"   # 6) how-to → supabase 글과 교차 내부링크
-    - "zed vs cursor"               # 7)
-    - "is cursor worth it for solo developers"  # 8) 페르소나 transactional
+    - "planetscale vs neon"          # 서버리스 DB — 공식 pricing/docs 풍부
+    - "nordvpn vs expressvpn"        # 대형 VPN — 문서 풍부
+    - "best password managers 2026"  # 리스트(vpn) — 잘 문서화
+    - "how to self-host nextcloud"   # 가이드 — 공식 docs 풍부
+    - "fly.io vs railway"            # PaaS — railway 클러스터 보강
+    - "otter ai vs fireflies"        # AI 미팅노트 — 문서 풍부
+    - "best cheap vps 2026"          # 리스트(hosting)
+    - "proton pass vs bitwarden"     # bitwarden 글과 교차링크
+    - "best ai meeting note takers"  # 리스트(ai-productivity)
+    - "best api testing tools"       # 리스트(dev-saas) — postman/insomnia 보강
+    - "best ai writing tools 2026"   # 리스트
+    - "notion ai alternatives"       # notion 클러스터 보강
