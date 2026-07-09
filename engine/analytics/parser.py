@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import glob
 import gzip
+import ipaddress
 import json
 import re
 from dataclasses import dataclass
@@ -28,6 +29,9 @@ BOT_RE = re.compile(
     r"facebookexternalhit|whatsapp|telegrambot|discordbot|preview|"
     r"python-requests|python-urllib|curl|wget|go-http|okhttp|libwww|scrapy|httpx|aiohttp|"
     r"headless|phantom|selenium|puppeteer|playwright|"
+    # 구글/서드파티 점검·미리보기 도구(브라우저형 UA 라 놓치기 쉬움) — GSC 실측=Google-InspectionTool
+    r"inspectiontool|apis-google|feedfetcher|google-read-aloud|google favicon|"
+    r"lighthouse|chrome-lighthouse|gtmetrix|pagespeed|"
     r"monitor|uptime|pingdom|statuscake|site24x7|newrelic|datadog|"
     r"semrush|ahrefs|mj12|dotbot|petalbot|dataforseo|serpstat|blexbot|"
     r"censys|zgrab|masscan|nmap|nuclei|expanse|paloalto|shodan|internetmeasurement",
@@ -37,6 +41,82 @@ PROBE_RE = re.compile(
     r"(?:^|/)(?:\.env|\.git|wp-|xmlrpc|phpmyadmin|\.php|\.aws|\.ssh|"
     r"vendor/|config\.|backup|shell|eval-stdin|actuator|/\.well-known/security)",
     re.I)
+
+# 데이터센터/클라우드 IP 대역 — 콘텐츠 사이트에서 이 대역의 접속은 (브라우저형 UA 라도)
+# 사실상 스크래퍼·봇·점검도구. 실제 독자는 주거/모바일 ISP 라 여기 거의 안 걸린다.
+# 설정(analytics.yaml exclude.datacenter_cidrs)으로 추가 대역을 덧붙일 수 있다.
+_DC_CIDRS = [
+    # AWS
+    "3.0.0.0/8", "13.32.0.0/12", "15.177.0.0/16", "18.32.0.0/11", "18.64.0.0/10",
+    "35.71.0.0/16", "44.192.0.0/10", "52.0.0.0/8", "54.64.0.0/11", "54.144.0.0/12",
+    "54.160.0.0/11", "54.224.0.0/11", "99.77.0.0/16", "100.24.0.0/13",
+    # GCP
+    "34.0.0.0/8", "35.184.0.0/13", "35.192.0.0/14", "35.196.0.0/15", "35.198.0.0/16",
+    "35.200.0.0/13", "104.154.0.0/15", "104.196.0.0/14", "130.211.0.0/16", "146.148.0.0/17",
+    # Azure
+    "13.64.0.0/11", "20.0.0.0/8", "40.64.0.0/10", "40.112.0.0/13", "52.224.0.0/11",
+    "104.40.0.0/13", "137.116.0.0/15", "168.61.0.0/16", "168.62.0.0/15",
+    # Hetzner
+    "5.9.0.0/16", "46.4.0.0/16", "49.12.0.0/15", "65.21.0.0/16", "65.108.0.0/15",
+    "78.46.0.0/15", "88.198.0.0/16", "88.99.0.0/16", "91.107.0.0/16", "94.130.0.0/16",
+    "95.216.0.0/15", "116.202.0.0/16", "128.140.0.0/17", "135.181.0.0/16", "136.243.0.0/16",
+    "138.201.0.0/16", "144.76.0.0/16", "148.251.0.0/16", "157.90.0.0/16", "159.69.0.0/16",
+    "162.55.0.0/16", "167.235.0.0/16", "168.119.0.0/16", "176.9.0.0/16", "178.63.0.0/16", "195.201.0.0/16",
+    # DigitalOcean
+    "45.55.0.0/16", "68.183.0.0/16", "104.131.0.0/16", "104.236.0.0/16", "134.209.0.0/16",
+    "137.184.0.0/16", "138.68.0.0/16", "139.59.0.0/16", "142.93.0.0/16", "143.110.0.0/16",
+    "143.198.0.0/16", "146.190.0.0/16", "157.230.0.0/16", "159.65.0.0/16", "159.89.0.0/16",
+    "161.35.0.0/16", "164.90.0.0/16", "164.92.0.0/16", "165.227.0.0/16", "167.71.0.0/16",
+    "167.99.0.0/16", "174.138.0.0/16", "178.62.0.0/16", "188.166.0.0/16", "206.189.0.0/16", "209.38.0.0/16",
+    # OVH
+    "51.68.0.0/14", "51.75.0.0/16", "51.77.0.0/16", "51.79.0.0/16", "51.83.0.0/16", "51.89.0.0/16",
+    "51.91.0.0/16", "54.36.0.0/14", "91.121.0.0/16", "92.222.0.0/16", "94.23.0.0/16", "137.74.0.0/16",
+    "141.94.0.0/16", "145.239.0.0/16", "147.135.0.0/16", "149.202.0.0/16", "151.80.0.0/16", "158.69.0.0/16",
+    "164.132.0.0/16", "167.114.0.0/16", "176.31.0.0/16", "178.32.0.0/15", "188.165.0.0/16", "192.99.0.0/16", "213.186.32.0/19",
+    # Linode/Akamai
+    "45.33.0.0/16", "45.56.0.0/16", "45.79.0.0/16", "50.116.0.0/16", "139.144.0.0/16", "139.162.0.0/16",
+    "172.104.0.0/15", "173.255.192.0/18", "176.58.96.0/19", "178.79.128.0/18", "198.58.96.0/19", "74.207.224.0/19",
+    # Oracle Cloud
+    "129.146.0.0/16", "129.153.0.0/16", "132.145.0.0/16", "138.1.0.0/16", "140.238.0.0/16", "141.144.0.0/16",
+    "143.47.0.0/16", "144.24.0.0/16", "146.56.0.0/16", "150.136.0.0/16", "150.230.0.0/16", "152.67.0.0/16",
+    "152.70.0.0/16", "158.101.0.0/16", "158.178.0.0/16", "168.138.0.0/16", "193.122.0.0/16", "193.123.0.0/16",
+    # Cloudflare
+    "103.21.244.0/22", "104.16.0.0/13", "108.162.192.0/18", "131.0.72.0/22", "141.101.64.0/18",
+    "162.158.0.0/15", "172.64.0.0/13", "173.245.48.0/20", "188.114.96.0/20", "190.93.240.0/20", "198.41.128.0/17",
+    # Scaleway/Online.net
+    "51.15.0.0/16", "51.158.0.0/16", "62.210.0.0/16", "163.172.0.0/16", "195.154.0.0/16", "212.47.224.0/19",
+    # 관측된 스캐너/호스팅 대역
+    "104.252.0.0/16", "204.76.203.0/24",
+]
+
+
+def _build_dc_index(extra_cidrs=None):
+    """CIDR 목록 → 첫 옥텟 버킷 인덱스(조회를 대역수/256 수준으로)."""
+    idx = {}
+    for c in list(_DC_CIDRS) + list(extra_cidrs or []):
+        try:
+            net = ipaddress.ip_network(c, strict=False)
+        except Exception:
+            continue
+        if net.version == 4:
+            idx.setdefault(int(net.network_address) >> 24, []).append(net)
+        else:
+            idx.setdefault(-1, []).append(net)
+    return idx
+
+
+_DC_INDEX = _build_dc_index()   # collect() 에서 설정의 추가 대역 포함해 재구성
+
+
+def _is_datacenter(ip: str) -> bool:
+    if not ip or ip == "-":
+        return False
+    try:
+        addr = ipaddress.ip_address(ip)
+    except Exception:
+        return False
+    bucket = _DC_INDEX.get(int(addr) >> 24, ()) if addr.version == 4 else _DC_INDEX.get(-1, ())
+    return any(addr in net for net in bucket)
 
 
 @dataclass
@@ -129,7 +209,8 @@ def _classify(path: str, method: str, status: int, ua: str, ip: str,
     # audience
     if cookie_val == "1" or ip in exclude_ips:
         audience = "self"
-    elif not ua or ua == "-" or BOT_RE.search(ua_l) or PROBE_RE.search(path):
+    elif (not ua or ua == "-" or BOT_RE.search(ua_l) or PROBE_RE.search(path)
+          or _is_datacenter(ip)):     # 데이터센터/클라우드 대역 = 사실상 봇·스크래퍼·점검도구
         audience = "bot"
     else:
         audience = "human"
@@ -237,6 +318,8 @@ def collect(cfg: dict) -> list:
     exclude_ips = set(excl.get("ips") or [])
     cookie_name = excl.get("cookie_name", "noana")
     domain = site.get("domain", "stack.utilverse.info")
+    global _DC_INDEX                              # 설정의 추가 데이터센터 대역 반영
+    _DC_INDEX = _build_dc_index(excl.get("datacenter_cidrs"))
 
     hits = []
     json_paths = sorted(glob.glob(logs.get("json_glob", "")))
