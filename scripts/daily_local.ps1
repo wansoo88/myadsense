@@ -6,6 +6,8 @@
 $ErrorActionPreference = 'Continue'
 $proj = 'D:\cashflow\pjt12-adsense'
 Set-Location $proj
+$env:PYTHONIOENCODING = 'utf-8'   # Windows cp949 콘솔에서 '—' 등 출력 시 generate 크래시 방지(2026-07-09)
+$env:PYTHONUTF8 = '1'
 
 $logDir = Join-Path $proj 'logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }

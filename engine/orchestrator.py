@@ -13,6 +13,14 @@ import glob
 import os
 import sys
 
+# stdout/stderr 를 UTF-8 로 강제 — Windows cp949 콘솔에서 '—'(—) 등 출력 시 UnicodeEncodeError 로
+# generate 전체가 죽던 문제 방지(20:00 배치는 PYTHONIOENCODING 미설정 → 매일 0편이었음, 2026-07-09).
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import yaml  # pip install pyyaml
 
 from monitor import killswitch
