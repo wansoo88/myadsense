@@ -287,7 +287,10 @@ def _post(payload: dict, api_key: str) -> tuple:
     data = json.dumps({"article": payload}).encode("utf-8")
     req = urllib.request.Request(API, data=data, method="POST", headers={
         "Content-Type": "application/json", "api-key": api_key,
-        "Accept": "application/vnd.forem.api-v1+json"})
+        "Accept": "application/vnd.forem.api-v1+json",
+        # dev.to 는 Cloudflare 뒤 — 기본 urllib UA 는 'Forbidden Bots'(403) 로 차단됨 → 정상 UA 필요
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         return resp.status, json.loads(resp.read().decode("utf-8"))
 
