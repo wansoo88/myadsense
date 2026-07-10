@@ -128,16 +128,23 @@ sequencing:
   # 니치·신생 툴(cline·zed 등)은 반복 반려되어 20:00 배치가 매일 0편이 되던 문제 → 여기엔 **잘 문서화된
   # 미발행 비교/리스트/가이드**만 우선순위로 둔다. 발행되면 published.json 으로 자동 제외 → 다음 것으로.
   # (검증 어려운 니치는 스코어로 백로그 하위에 남되 상위 10 밖으로 밀려 배치가 시도하지 않음)
+  # 재정렬(2026-07-10, 성장플랜): '잘 문서화(강화 검수 통과 가능)' + '기존 발행 17글로 내부링크
+  # (신글이 저경쟁이라 먼저 색인·랭크 → 링크주스로 헤드 비교글의 crawled→indexed 전환 촉진)' 순.
+  # 내부링크는 site_builder 가 빌드시 실제 발행 페이지로 자동 연결(refresh_internal_links).
   next_batch_priority:
-    - "planetscale vs neon"          # 서버리스 DB — 공식 pricing/docs 풍부
-    - "nordvpn vs expressvpn"        # 대형 VPN — 문서 풍부
-    - "best password managers 2026"  # 리스트(vpn) — 잘 문서화
-    - "how to self-host nextcloud"   # 가이드 — 공식 docs 풍부
-    - "fly.io vs railway"            # PaaS — railway 클러스터 보강
-    - "otter ai vs fireflies"        # AI 미팅노트 — 문서 풍부
-    - "best cheap vps 2026"          # 리스트(hosting)
-    - "proton pass vs bitwarden"     # bitwarden 글과 교차링크
-    - "best ai meeting note takers"  # 리스트(ai-productivity)
-    - "best api testing tools"       # 리스트(dev-saas) — postman/insomnia 보강
-    - "best ai writing tools 2026"   # 리스트
-    - "notion ai alternatives"       # notion 클러스터 보강
+    - "planetscale vs neon"          # 서버리스 DB → supabase/firebase 글 보강, 공식 docs 풍부
+    - "fly.io vs railway"            # PaaS → vercel/netlify 글 보강, docs 풍부
+    - "how to self-host supabase"    # how-to → supabase/firebase·ghost 가이드 교차링크, 공식 self-host docs
+    - "best cheap vps 2026"          # 호스팅 리스트 → hetzner/do 글 보강, docs 풍부
+    - "best api testing tools"       # → postman/insomnia 글 보강, 잘 문서화
+    - "best password managers 2026"  # VPN 클러스터 허브 시드 — 잘 문서화
+    - "railway vs render"            # PaaS → vercel/netlify 글 보강, 저포화
+    - "proton pass vs bitwarden"     # → best password managers 교차링크, docs 풍부
+    - "best ai coding assistant for python developers"  # 페르소나 → cursor/copilot/codeium 다수 내부링크
+    - "otter ai vs fireflies"        # AI 미팅노트 → ai-productivity 허브, docs 풍부
+    - "is cursor worth it for solo developers"          # worth-it 페르소나 → cursor 글 교차링크
+    - "bruno vs postman"             # → postman/insomnia 글 보강(Bruno OSS 트렌딩)
+    - "nordvpn vs expressvpn"        # 대형 VPN — 문서 풍부(백로그)
+    - "how to self-host nextcloud"   # 가이드 — 공식 docs(백로그)
+    - "best ai meeting note takers"  # 리스트(ai-productivity, 백로그)
+    - "notion ai alternatives"       # notion 클러스터 보강(백로그)
