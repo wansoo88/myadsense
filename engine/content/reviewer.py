@@ -56,9 +56,15 @@ def review(spec, content_cfg: dict) -> dict:
         }
     ground = (getattr(spec, "grounding_context", "") or "")[:5000]
     src_block = (
-        "\n\n=== SOURCE MATERIAL (official pages fetched at generation time) ===\n"
-        "The article MUST NOT contradict these on pricing tiers or features. Flag any contradiction "
-        "as a 'factual' issue with high severity.\n" + ground) if ground else ""
+        "\n\n=== SOURCE MATERIAL (official pages fetched at generation; NOTE: PARTIAL/truncated excerpt — "
+        "a real fact may exist on the page yet be outside this excerpt) ===\n"
+        "Fact-check against it, but calibrate severity carefully. Mark HIGH-severity (passed=false) ONLY for: "
+        "(a) a claim that CONTRADICTS the sources; (b) a direct quote or attribution to a vendor that does not "
+        "appear verbatim in the sources (fabricated quote); (c) a definitive NEGATIVE claim about a named "
+        "competitor ('X does not support Y', 'X lacks Z') not backed by the sources. "
+        "For other plausible specifics merely NOT FOUND in this excerpt (a price/plan/feature that could be "
+        "real but beyond the truncation), flag LOW severity only — do NOT fail the article for those alone.\n"
+        + ground) if ground else ""
     user = (
         "Review this article draft against the rubric and return ONLY JSON "
         '{"passed":bool,"severity":"none|low|medium|high","ai_tells":[str],'

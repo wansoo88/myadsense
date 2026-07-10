@@ -211,8 +211,13 @@ def _user_prompt(topic: str, language: str, feedback: str | None = None, groundi
     if grounding:
         base += ("\n\n=== SOURCE MATERIAL (fetched from official pages just now) ===\n"
                  "Use this for ACCURATE, CURRENT pricing tiers and features — prefer it over prior knowledge. "
-                 "Still express prices as tiers and tell readers to confirm on the vendor's site. "
-                 "Cite these source URLs in the 'sources' field.\n\n" + grounding[:12000])
+                 "CRITICAL — do not fabricate specifics: state a specific price, plan name, numeric limit, or "
+                 "feature/product name ONLY if it appears in the SOURCE MATERIAL below. Do NOT pull specific "
+                 "prices, feature names, or claims about what a competitor does/doesn't support from memory. "
+                 "If the sources don't cover something, describe it in general terms or leave it out — never "
+                 "invent a number or a proper feature name. Do NOT attribute a quote to a vendor unless it "
+                 "appears verbatim in the sources. Express prices as tiers and tell readers to confirm on the "
+                 "vendor's site. Cite these source URLs in the 'sources' field.\n\n" + grounding[:12000])
     if feedback:
         base += ("\n\nIMPORTANT: a previous draft for this exact topic was rejected in quality review. "
                   f"You MUST fix these specific problems in this rewrite — do not repeat them:\n{feedback}")
