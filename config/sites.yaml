@@ -27,6 +27,13 @@ apis:
     enabled: true
     model: claude-opus-4-8
 
+# 콘텐츠 신디케이션 — dev.to 공식 발행 API 로 canonical(원문=stack.) 교차게시(earned backlink·referral).
+# ⚠️ Reddit/HN 커뮤니티 자동 게시는 금지(F3). dev.to 는 '내 계정·내 글·canonical' 이라 ToS 허용·스팸 아님.
+syndication:
+  devto:
+    enabled: true          # 실제 발행엔 이것 + .env DEVTO_API_KEY + daily.sh 의 ADSENSE_SYNDICATE=1 셋 다 필요
+    per_run: 1             # 실행(=하루)당 최대 발행 수 — 속도 제한(대량 동시 게시=스팸성 회피)
+
 alerts:
   channel: telegram              # telegram | slack | email
   # 자격증명: .env (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 등)

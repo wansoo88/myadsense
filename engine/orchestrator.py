@@ -253,6 +253,17 @@ def stage_indexnow(cfg):
     return indexnow.run(cfg)
 
 
+def stage_syndicate(cfg):
+    """발행된 라이브 글을 dev.to 에 canonical 신디케이션(earned backlink·유입).
+
+    기본 DRY-RUN — 실제 발행은 ADSENSE_SYNDICATE=1 + .env 의 DEVTO_API_KEY. per_run 캡으로 속도 제한.
+    ⚠️ Reddit/HN 등 커뮤니티 자동 게시는 금지(F3) — 이건 '공식 발행 API + canonical'인 dev.to 한정."""
+    from content import site_builder
+    from optimize import devto
+    site_builder.build(cfg)                       # 최신 sitemap/site 기준으로 대상 산정
+    return devto.run(cfg)
+
+
 def stage_report(cfg):
     """로컬 HTML 리포트(RPM·CWV·검색·발행/큐·킬스위치). Artifact 아님(CLAUDE.md)."""
     from store import db
@@ -274,7 +285,7 @@ STAGES = {
     "ingest": stage_ingest, "research": stage_research, "generate": stage_generate,
     "monitor": stage_monitor, "publish": stage_publish, "build": stage_build,
     "deploy": stage_deploy, "report": stage_report, "analytics": stage_analytics,
-    "indexnow": stage_indexnow,
+    "indexnow": stage_indexnow, "syndicate": stage_syndicate,
 }
 
 

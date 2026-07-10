@@ -35,6 +35,12 @@ echo "[$(ts)] deploy (build → web_root 로컬 복사) 시작"
 ADSENSE_DEPLOY=1 ADSENSE_LOCAL_DEPLOY=1 "$PY" engine/orchestrator.py --stage deploy
 dep_rc=$?
 echo "[$(ts)] deploy 종료(rc=$dep_rc)"
+
+# syndicate: 라이브 글 1편을 dev.to 에 canonical 교차게시(earned backlink·유입). 비치명적.
+# .env DEVTO_API_KEY 없거나 config enabled=false 면 스스로 스킵. ⚠️ 커뮤니티 자동게시 아님(dev.to 한정).
+echo "[$(ts)] syndicate (dev.to canonical 교차게시) 시작"
+ADSENSE_SYNDICATE=1 "$PY" engine/orchestrator.py --stage syndicate || echo "[$(ts)] syndicate 경고(비치명적, 계속)"
+
 echo "[$(ts)] === daily 종료 ==="
 
 # 실패를 cron 에 전파(MAILTO·모니터가 감지하도록) — 마지막이 echo 면 항상 exit 0 이 되어 실패가 묻힌다.
