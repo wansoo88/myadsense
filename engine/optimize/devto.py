@@ -41,6 +41,10 @@ _TAGS_BY_CLUSTER = {
 }
 _DEFAULT_TAGS = ["webdev", "tools"]
 
+# dev.to 표는 CSS 색상(초록 틴트)이 안 먹음 → 체크/엑스/부분을 색 이모지로 강조(어디서나 색 렌더).
+# ✓(full)→✅ 초록 · ✗(none)→❌ 빨강 · △(partial/paid)→🟡 노랑
+_MARKS = {"✓": "✅", "✗": "❌", "△": "\U0001f7e1"}
+
 
 # ─────────────────────────── HTML → Markdown ───────────────────────────
 class _Md(HTMLParser):
@@ -320,6 +324,8 @@ def _build_payload(url: str, file_path: str):
     if not meta["title"] or not art:
         return None
     body = html_to_markdown(art, url)
+    for _k, _v in _MARKS.items():          # 표의 ✓/✗/△ → 색 이모지(✅/❌/🟡)로 강조
+        body = body.replace(_k, _v)
     if len(body) < 400:                    # 추출 실패/빈약 → 스킵(안전)
         return None
     footer = f"\n\n---\n\n*Originally published at [{url}]({url}).*"
@@ -365,7 +371,7 @@ def run(cfg) -> int:
             p = _build_payload(u, fp) if fp else None
             if p and _hash(p["body_markdown"]) != state[u].get("hash"):
                 changed.append((u, p))
-    changed = changed[:per_run]
+    changed = changed[:5]        # 업데이트는 스팸 아님(기존 글 교정) → 신규 캡보다 넉넉히
 
     if not new and not changed:
         print(f"  devto: 신규·변경 없음(이미 {len(state)}편 신디케이션) → 스킵")
