@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import html as _html
 import json
 import os
@@ -131,6 +132,12 @@ class _Md(HTMLParser):
         elif tag == "a":
             self.href_stack.append(self._abs(dict(attrs).get("href", "")))
             self._emit("[")
+        elif tag == "sup" or "note" in cls:
+            # feature matrix 각주(<sup class="note">) 가 라벨에 붙지 않게 구분자 삽입
+            tgt = self.cell if self.cell is not None else self.inline
+            cur = "".join(tgt).rstrip()
+            if cur and cur[-1] not in "—-:(":
+                self._emit(" — ")
 
     def handle_endtag(self, tag):
         if not self.in_article or tag in _VOID:
@@ -213,11 +220,13 @@ class _Md(HTMLParser):
         if not header:
             return
         ncol = len(header)
-        self.md.append("| " + " | ".join(header) + " |")
-        self.md.append("| " + " | ".join(["---"] * ncol) + " |")
+        # 표는 반드시 '한 블록'으로(행 사이 빈 줄 금지 — 빈 줄 있으면 마크다운 표로 인식 안 됨)
+        lines = ["| " + " | ".join(header) + " |",
+                 "| " + " | ".join(["---"] * ncol) + " |"]
         for r in body:
             cells = (r + [" "] * ncol)[:ncol]
-            self.md.append("| " + " | ".join(cells) + " |")
+            lines.append("| " + " | ".join(cells) + " |")
+        self.md.append("\n".join(lines))
 
 
 def html_to_markdown(article_html: str, base_url: str) -> str:
@@ -283,14 +292,22 @@ def _url_to_file(url: str, base: str):
     return cand if os.path.exists(cand) else None
 
 
-def _post(payload: dict, api_key: str) -> tuple:
-    data = json.dumps({"article": payload}).encode("utf-8")
-    req = urllib.request.Request(API, data=data, method="POST", headers={
+def _hash(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+
+def _headers(api_key: str) -> dict:
+    return {
         "Content-Type": "application/json", "api-key": api_key,
         "Accept": "application/vnd.forem.api-v1+json",
         # dev.to 는 Cloudflare 뒤 — 기본 urllib UA 는 'Forbidden Bots'(403) 로 차단됨 → 정상 UA 필요
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                      "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"})
+                      "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"}
+
+
+def _send(url: str, payload: dict, api_key: str, method: str) -> tuple:
+    data = json.dumps({"article": payload}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method, headers=_headers(api_key))
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         return resp.status, json.loads(resp.read().decode("utf-8"))
 
@@ -338,39 +355,68 @@ def run(cfg) -> int:
         return 0
 
     state = _load_state()
-    todo = [u for u in urls if u not in state][:per_run]
-    if not todo:
-        print(f"  devto: 신규 없음(이미 {len(state)}편 신디케이션) → 스킵")
+    # 신규(POST) 대상
+    new = [u for u in urls if u not in state][:per_run]
+    # 이미 올린 글 중 본문이 바뀐 것(PUT 업데이트) — 콘텐츠 수정·변환 개선을 dev.to 에도 반영(self-heal)
+    changed = []
+    for u in urls:
+        if u in state and state[u].get("id"):
+            fp = _url_to_file(u, base)
+            p = _build_payload(u, fp) if fp else None
+            if p and _hash(p["body_markdown"]) != state[u].get("hash"):
+                changed.append((u, p))
+    changed = changed[:per_run]
+
+    if not new and not changed:
+        print(f"  devto: 신규·변경 없음(이미 {len(state)}편 신디케이션) → 스킵")
         return 0
 
     n = 0
-    for url in todo:
+    # 1) 신규 발행(POST)
+    for url in new:
         fp = _url_to_file(url, base)
-        if not fp:
-            print(f"  devto: 파일 없음 {url} → 스킵")
-            continue
-        payload = _build_payload(url, fp)
+        payload = _build_payload(url, fp) if fp else None
         if not payload:
             print(f"  devto: 본문 추출 실패/빈약 {url} → 스킵")
             continue
         if not live:
-            print(f"  devto DRY-RUN: '{payload['title']}' tags={payload['tags']} "
-                  f"body={len(payload['body_markdown'])}자 canonical={url} (실제 발행: ADSENSE_SYNDICATE=1)")
+            print(f"  devto DRY-RUN[NEW]: '{payload['title']}' tags={payload['tags']} "
+                  f"body={len(payload['body_markdown'])}자 canonical={url}")
             continue
         try:
-            status, resp = _post(payload, api_key)
+            status, resp = _send(API, payload, api_key, "POST")
         except Exception as e:
             print(f"  devto: 발행 실패({e}) {url} — 상태 미갱신(다음 실행 재시도)")
             continue
         if status in (200, 201):
-            state[url] = {"id": resp.get("id"), "devto_url": resp.get("url"), "title": payload["title"]}
+            state[url] = {"id": resp.get("id"), "devto_url": resp.get("url"),
+                          "title": payload["title"], "hash": _hash(payload["body_markdown"])}
             _save_state(state)
             n += 1
             print(f"  devto: 발행 → {resp.get('url')} (canonical={url})")
         else:
             print(f"  devto: 예상외 응답 HTTP {status} {url}")
+    # 2) 기존 글 업데이트(PUT)
+    for url, payload in changed:
+        aid = state[url]["id"]
+        if not live:
+            print(f"  devto DRY-RUN[UPDATE]: '{payload['title']}' id={aid} (본문 변경 감지)")
+            continue
+        try:
+            status, resp = _send(f"{API}/{aid}", payload, api_key, "PUT")
+        except Exception as e:
+            print(f"  devto: 업데이트 실패({e}) {url} — 다음 실행 재시도")
+            continue
+        if status in (200, 201):
+            state[url]["hash"] = _hash(payload["body_markdown"])
+            state[url]["title"] = payload["title"]
+            _save_state(state)
+            n += 1
+            print(f"  devto: 업데이트 → {resp.get('url') or state[url].get('devto_url')} (본문 반영)")
+        else:
+            print(f"  devto: 업데이트 예상외 응답 HTTP {status} {url}")
     if not live:
-        print(f"  devto: DRY-RUN(실제 발행 안 함). 미신디케이션 총 {len(urls) - len(state)}편")
+        print(f"  devto: DRY-RUN(실제 발행 안 함). 신규 {len(new)} · 변경 {len(changed)} · 미신디케이션 총 {len(urls) - len(state)}편")
     return n
 
 
