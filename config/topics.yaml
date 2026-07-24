@@ -7,6 +7,24 @@
 #    단기 랭크 불가 → (a) 신규/니치 엔티티(대형사이트 미포화) + (b) 페르소나·제약 한정(for python devs / for solo)
 #    + (c) 구체 how-to(빠른 랭크→허브로 내부링크) 로 진입. 경쟁도는 GSC 데이터로 검증할 가설(절대 수치 아님).
 
+# 📌 제목 계약(title_policy, 2026-07-24) — 반려 4건 중 3건이 "제목은 순위를 약속하고 본문은 순위를 거부"였다
+#    (team/reports/2026-07-24-11-review.md ③ 공통결함 ①). 시드가 'best/cheapest/top N' 이어도 **제목은 시드의
+#    복사본이 아니다** — 이행하지 못할 최상급은 제목에서 뺀다(F12 misleading headline·thin content 회피).
+#    ⚠️ rev1 에서는 이 블록을 **코드가 읽지 않았다**(engine 전체 grep 0건 = 값을 바꿔도 동작 불변인 장식).
+#    rev2(2026-07-24)부터 실제로 읽는다 — engine/content/generator.py `title_policy()`:
+#      · superlative_requires 각 항목 → _title_contract_block() 의 프롬프트 요구사항 줄 + selfcheck 검사 활성화
+#      · otherwise → 이행 불가 시 지시(retitle)  · never(빈 값이면 해제) → 순위거부 본문 검사 활성화
+#    아래 키를 지우거나 비우면 프롬프트 문구와 [title-contract] 검사가 실제로 사라진다
+#    (실측: team/reports/2026-07-24-14-content.md rev2 P4 — 5건 → 3건, 프롬프트 4줄 → 3줄).
+title_policy:
+  superlative_requires:            # 'best/cheapest/top N/#1/ultimate' 제목을 쓰려면 셋 다 있어야 한다
+    - stated_selection_criteria    # "어떤 기준으로 골랐는가"를 본문에 명시 → 스캐너: _criteria_unit(실질 분량 요구)
+    - named_pick_per_use_case      # tldr/verdict 가 use case 별로 지목  → 스캐너: _named_pick(제품명 실제 등장)
+    - opinion_framing              # 객관적 사실이 아니라 '본 사이트의 판단'으로 표현 → 프롬프트 전용(스캐너 검사 없음:
+                                   #   토큰 검사를 붙이면 상투구 덧대기 게이밍만 유발하므로 의도적으로 두지 않음)
+  otherwise: retitle               # 못 채우면 최상급을 빼고 "How to choose …" / "… compared" 로 제목 변경
+  never: superlative_title_over_no_ranking_body   # "best" 제목 + "there is no single best" 본문 = 반려
+
 clusters:
   # ── P1: AI 코딩/개발 도구 (트렌딩·고의도·E-E-A-T 적합) ──
   - id: ai-coding-tools
@@ -31,6 +49,9 @@ clusters:
       - "aider vs cursor"                 # comparison — Aider(CLI AI) 신규·심층비교 희소
       - "cline vs continue"               # comparison — 오픈소스 VS Code AI 확장, 초저경쟁
       - "zed vs cursor"                   # comparison — Zed 트렌딩·비교 콘텐츠 희소
+      # 🔥 2026-07 핫 트렌딩 (에이전트 오케스트레이션 — 초저포화, 공식 docs 확인됨)
+      - "orca vs herdr"                   # comparison — 병렬 에이전트 IDE(orca) vs 터미널 agent 멀티플렉서(herdr)
+      - "herdr vs tmux"                   # comparison — agent-aware 멀티플렉서(herdr) vs 클래식 tmux
       - "best ai coding assistant for python developers"  # transactional — 페르소나 한정
       - "is cursor worth it for solo developers"          # transactional — 페르소나 worth-it
 
@@ -132,6 +153,8 @@ sequencing:
   # (신글이 저경쟁이라 먼저 색인·랭크 → 링크주스로 헤드 비교글의 crawled→indexed 전환 촉진)' 순.
   # 내부링크는 site_builder 가 빌드시 실제 발행 페이지로 자동 연결(refresh_internal_links).
   next_batch_priority:
+    - "orca vs herdr"                # 🔥 핫 트렌딩(2026-07) — 병렬 에이전트 IDE vs 터미널 멀티플렉서
+    - "herdr vs tmux"                # 🔥 핫 트렌딩(2026-07) — agent-aware 멀티플렉서 vs 클래식 tmux
     - "planetscale vs neon"          # 서버리스 DB → supabase/firebase 글 보강, 공식 docs 풍부
     - "fly.io vs railway"            # PaaS → vercel/netlify 글 보강, docs 풍부
     - "how to self-host supabase"    # how-to → supabase/firebase·ghost 가이드 교차링크, 공식 self-host docs
