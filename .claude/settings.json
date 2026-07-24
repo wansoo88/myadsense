@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/tell.py *)",
+      "PowerShell(python scripts/tell.py *)",
+      "Bash(python scripts/team_up.py *)",
+      "PowerShell(python scripts/team_up.py *)",
+      "Bash(herdr agent list *)",
+      "PowerShell(herdr agent list *)",
+      "Bash(herdr agent get *)",
+      "PowerShell(herdr agent get *)",
+      "Bash(herdr agent read *)",
+      "PowerShell(herdr agent read *)",
+      "Bash(herdr agent wait *)",
+      "PowerShell(herdr agent wait *)",
+      "Bash(herdr pane list *)",
+      "PowerShell(herdr pane list *)",
+      "Bash(herdr pane get *)",
+      "PowerShell(herdr pane get *)",
+      "Bash(herdr pane layout *)",
+      "PowerShell(herdr pane layout *)"
+    ]
+  }
+}
