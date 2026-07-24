@@ -90,6 +90,94 @@ def stage_research(cfg):
     return backlog
 
 
+# ── 반려 초안 보존 (사후 재검수·감사) ───────────────────────────────────────────────
+# 반려된 초안은 지금까지 어디에도 남지 않았다 — 판정 JSON 만 저장하고 통과분만 dist/queue 로 갔다.
+# 그래서 "반려가 글 탓인가 도구 탓인가"를 사후에 검증할 수 없었다(2026-07-24: 4건 원본 소실,
+# team/reports/2026-07-24-11-review.md ③). 판정 JSON(dist/review/<slug>.json)과 **같은 slug** 로
+# 짝을 맞춰 초안 spec 자체를 남긴다 → load_rejected_spec()/--rereview 로 같은 초안 재검수 가능.
+# 저장 대상은 ContentSpec 필드뿐이다(자격증명·.env·환경변수는 spec 에 존재하지 않는다).
+def _keep_rejected_spec(spec, *, stage: str, keyword: str, attempt: int, reasons) -> str:
+    """반려된 초안 spec → dist/review/<slug>.spec.json. 실패해도 파이프라인을 멈추지 않는다(부가 기능)."""
+    import dataclasses
+    import datetime as _dt
+    import json
+    try:
+        data = dataclasses.asdict(spec)          # ContentSpec 전 필드(재검수에 필요한 grounding_context 포함)
+        data["_reject"] = {"stage": stage, "keyword": keyword, "attempt": attempt,
+                           "at": _dt.datetime.now().isoformat(timespec="seconds"),
+                           "reasons": [str(x) for x in (reasons or [])]}
+        payload = json.dumps(data, ensure_ascii=False, indent=2, default=str)  # 문자열로 먼저 → 부분 파일 방지
+        os.makedirs("dist/review", exist_ok=True)
+        path = f"dist/review/{spec.slug}.spec.json"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(payload)
+        return path
+    except Exception as e:                       # 디스크·권한·직렬화 실패 등 — 보존 실패는 로그만 남기고 계속
+        print(f"  (초안 보존 실패 — 파이프라인은 계속) {type(e).__name__}: {e}")
+        return ""
+
+
+def load_rejected_spec(slug: str):
+    """보존된 반려 초안(dist/review/<slug>.spec.json) → ContentSpec 복원. 재검수 입력으로 그대로 쓴다."""
+    import dataclasses
+    import json
+    from content.generator import ContentSpec
+    with open(f"dist/review/{slug}.spec.json", encoding="utf-8") as f:
+        data = json.load(f)
+    names = {f.name for f in dataclasses.fields(ContentSpec)}
+    kw = {k: v for k, v in data.items() if k in names}                    # _reject 등 메타는 버림
+    kw["breadcrumb"] = [tuple(b) if isinstance(b, list) else b            # JSON 은 튜플을 잃는다 → 원형 복구
+                        for b in (kw.get("breadcrumb") or [])]            # (renderer 가 (name, url) 로 언팩)
+    return ContentSpec(**kw)
+
+
+def rereview(slug: str, cfg) -> dict:
+    """(감사 전용) 보존된 초안으로 검수를 다시 돌린다 → dist/review/<slug>.rereview.json.
+
+    발행 경로와 무관하다 — 통과해도 큐에 넣지 않는다(G1: 발행은 REVIEW pass + 사람 승인 + OPS 실행)."""
+    import json
+    from content import reviewer
+    if not os.path.exists(f"dist/review/{slug}.spec.json"):          # 보존 목록을 알려주고 종료(트레이스백 대신)
+        kept = [os.path.basename(p)[:-len(".spec.json")] for p in sorted(glob.glob("dist/review/*.spec.json"))]
+        raise SystemExit(f"보존된 초안 없음: dist/review/{slug}.spec.json / 보존된 slug: {', '.join(kept) or '(없음)'}")
+    rv = reviewer.review(load_rejected_spec(slug), cfg["content"])
+    with open(f"dist/review/{slug}.rereview.json", "w", encoding="utf-8") as f:
+        json.dump(rv, f, ensure_ascii=False, indent=2)
+    print(f"rereview {slug}: passed={rv.get('passed')} severity={rv.get('severity')} "
+          f"issues={len(rv.get('issues', []))} → dist/review/{slug}.rereview.json (발행 큐에는 넣지 않음)")
+    return rv
+
+
+def review_feedback(rv: dict, *, max_issues: int = 6, max_tells: int = 6, max_chars: int = 400) -> str:
+    """검수 판정(rv) → 재생성 프롬프트에 넣을 피드백 문자열. **ai_tells 원문을 반드시 포함한다.**
+
+    reviewer.review() 는 두 종류를 돌려준다:
+      - `issues[]`  : {type, detail, fix} — 무엇이 문제인지 **설명**
+      - `ai_tells[]`: 검수기가 "이 문장이 AI 티다"라고 **지목한 문장·구절 원문**
+        (예: '"for the price of a coffee or two each month" — stock cliché/filler')
+
+    예전 판(2026-07-25 이전)은 `"; ".join(fixes) or "; ".join(ai_tells)` 였다 — `or` 는 앞이
+    비었을 때만 뒤를 쓴다. 실측: dist/review 판정 55건 중 반려 26건, 그중 ai_tells 를 가진 22건이
+    **전부** issues 도 갖고 있었다 → ai_tells 가 재작성 프롬프트에 도달한 건 **0/22**.
+    즉 검수기가 지목한 문장을 재작성 모델은 한 번도 보지 못한 채 다시 썼다(ORDER 2026-07-25-20 ②).
+    → 이제 **둘 다** 넣는다. 지목 문장을 먼저(모델이 가장 확실히 고칠 수 있는 지시라서), 설명을 뒤에.
+
+    ⚠️ 재작성 '횟수'는 늘리지 않는다(비용) — 같은 1회 재작성에 정보를 더 주는 변경일 뿐이다.
+    """
+    def _clip(s) -> str:
+        s = " ".join(str(s or "").split())
+        return s[:max_chars] + ("…" if len(s) > max_chars else "")
+
+    parts = []
+    tells = [t for t in (_clip(x) for x in (rv.get("ai_tells") or [])) if t][:max_tells]
+    if tells:
+        parts.append("AI-TELL SENTENCES the reviewer flagged — rewrite each of these in a different, "
+                     "plainer voice (do not merely delete the words): " + " | ".join(tells))
+    for i in (rv.get("issues") or [])[:max_issues]:
+        parts.append(f"[{i.get('type')}] {_clip(i.get('detail'))} → {_clip(i.get('fix'))}")
+    return "; ".join(parts)
+
+
 def stage_generate(cfg):
     """초안 생성 → 품질 게이트 → (샘플 일부는 사람 승인 대기) → 발행 큐(dist/queue). 통과분만.
 
@@ -145,24 +233,33 @@ def stage_generate(cfg):
                 print(f"SKIP {kw}: 생성 실패 {e}"); break         # 시스템 오류는 피드백으로 못 고침 — 재시도 안 함
             r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
             if not r.passed:
-                print(f"GATE REJECT {kw} (시도 {attempt}/{max_attempts}): {r.reasons}")
+                kept = _keep_rejected_spec(spec, stage="quality_gate", keyword=kw,
+                                           attempt=attempt, reasons=r.reasons)
+                print(f"GATE REJECT {kw} (시도 {attempt}/{max_attempts}): {r.reasons}"
+                      + (f" (초안 보존 {kept})" if kept else ""))
                 feedback = "; ".join(r.reasons); continue
             if review_on:                                # 검수 게이트
                 from content import reviewer
                 try:
                     rv = reviewer.review(spec, cfg["content"])
                 except Exception as e:
+                    _keep_rejected_spec(spec, stage="review_error", keyword=kw,   # 검수기 오류로도 초안이 사라지지 않게
+                                        attempt=attempt, reasons=[f"{type(e).__name__}: {e}"])
                     print(f"REVIEW 실패→미발행 {kw}: {e}"); break  # 검수 자체 오류 — 재시도 무의미
                 os.makedirs("dist/review", exist_ok=True)
                 with open(f"dist/review/{spec.slug}.json", "w", encoding="utf-8") as f:
                     json.dump(rv, f, ensure_ascii=False, indent=2)
                 if not rv.get("passed"):
                     tps = [i.get("type") for i in rv.get("issues", [])][:5]
+                    kept = _keep_rejected_spec(spec, stage="review", keyword=kw, attempt=attempt,
+                                               reasons=[f"severity={rv.get('severity')}"] + [str(t) for t in tps])
                     print(f"REVIEW REJECT {kw} (시도 {attempt}/{max_attempts}): sev={rv.get('severity')} {tps} "
-                          f"(상세 dist/review/{spec.slug}.json)")
-                    fixes = [f"[{i.get('type')}] {i.get('detail', '')} → {i.get('fix', '')}"
-                             for i in rv.get("issues", [])[:6]]
-                    feedback = "; ".join(fixes) or "; ".join(rv.get("ai_tells", [])); continue
+                          f"(상세 dist/review/{spec.slug}.json"
+                          + (f", 초안 {kept}" if kept else "") + ")")
+                    feedback = review_feedback(rv)      # ai_tells 원문 + issues 설명 (review_feedback 주석)
+                    print(f"  재생성 피드백: ai_tells {len(rv.get('ai_tells') or [])}건 + "
+                          f"issues {len(rv.get('issues') or [])}건 → {len(feedback)}자 전달")
+                    continue
             # 게이트·검수 통과 — human_sample_gate 대상이면 발행 큐 대신 승인 대기로.
             if hsg.get("enabled") and human_gate.is_sampled(spec.slug, hsg.get("sample_pct", 0)):
                 human_gate.hold(spec.slug, page.html)
@@ -190,8 +287,10 @@ def stage_generate(cfg):
 def stage_monitor(cfg):
     """정책·색인·CWV·RPM 신호 수집 → 킬스위치 평가. 이상 시 발행 중단 + 알림."""
     from store import db
-    from monitor import health, alerts
+    from monitor import generation_watch, health, alerts
     db.init()
+    # 침묵 실패 경보: 신규 생성 0편이 임계일 이상 지속되면 알림(하루 1회). 발행 중단 아님 — 킬스위치와 별개.
+    generation_watch.check(cfg)
     metrics = health.collect(cfg, db)        # CWV·RPM은 DB, 그 외는 signals.json 오버라이드
     decision = killswitch.evaluate(metrics, cfg["guardrails"])
     if decision.halt:
@@ -299,7 +398,12 @@ def main(argv=None):
     p.add_argument("--stage", choices=list(STAGES))
     p.add_argument("--approve", metavar="SLUG", help="휴먼 샘플 게이트 대기 글 승인(dist/pending_approval → dist/queue)")
     p.add_argument("--list-pending", action="store_true", help="휴먼 샘플 게이트 대기 목록 출력")
+    p.add_argument("--rereview", metavar="SLUG",
+                   help="보존된 반려 초안 재검수(dist/review/<slug>.spec.json → <slug>.rereview.json, 발행 안 함)")
     args = p.parse_args(argv)
+    if args.rereview:
+        rereview(args.rereview, load_config())
+        return 0
     if args.list_pending:
         from content import human_gate
         for slug in human_gate.pending():
@@ -311,7 +415,7 @@ def main(argv=None):
         print(f"승인 완료 → {path} (다음 build/deploy부터 라이브)")
         return 0
     if not args.stage:
-        p.error("--stage 필요(또는 --approve/--list-pending)")
+        p.error("--stage 필요(또는 --approve/--list-pending/--rereview)")
     cfg = load_config()
     STAGES[args.stage](cfg)             # 반환값은 종료코드로 쓰지 않음(예외 시에만 비0)
     return 0
