@@ -45,6 +45,14 @@
 - **/adsense-optimize** — 광고 배치·Auto ads experiments·RPM 개선·상향 전환 판단
 - **/adsense-monitor** — 정책·품질 감시 + 킬스위치(이상 시 발행 자동 중단)
 
+## 에이전트 팀 (PM 중심 지휘 — 상세 @team/CHARTER.md)
+- **pane 5개**: **PM**(사람의 유일한 창구) · **CONTENT**(기획·생성) · **REVIEW**(검수·감사·**거부권**) · **OPS**(파이프라인·빌드·배포·서버) · **GROWTH**(유입·RPM·분석·신디케이션).
+- **권한 분리**: 만드는 자 ≠ 막는 자 ≠ 내보내는 자. 자기 글 자기 검수·자기 발행 금지(게이트 형해화 방지).
+- **흐름**: 사람 → PM → `team/orders/<ID>.md` 작성 → 하달 → 워커가 `team/reports/<ID>.md` 보고 → PM 검증 → `team/ledger.md` 기록 → 사람에게 1회 보고.
+- **메시지**: `python scripts/tell.py <role> "<내용>"` (⚠️ `herdr agent send` 단독은 Enter 미제출 → 상대가 못 봄).
+- **게이트**: 발행·배포 = REVIEW pass + 사람 승인 후 **OPS만** 실행 / 킬스위치 해제·승인 신청·전환 결정 = **사람**.
+- 역할 지시서 `team/roles/*.md` · 부팅·복구 `python scripts/team_up.py --boot`.
+
 ## 작업 규칙
 - 모든 권고는 **docs/RESEARCH.md의 검증된 발견(✅)에만** 근거. 반증된 통념(❌)을 재유포하지 말 것.
 - 절대 수치(RPM·CPC)가 필요하면 블로그 인용 대신 **사용자의 AdSense 리포트 데이터를 요청**해 검증.
