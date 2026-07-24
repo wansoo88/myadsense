@@ -3,6 +3,15 @@
 # ⚠️ 예약 클라우드 에이전트·버전관리 → git init 필요.
 
 jobs:
+  selftest:                    # 검수 게이트 회귀 테스트 (LLM 미호출·네트워크 없음·파일 쓰기 없음)
+    cron: "daily.sh step 0"    # 별도 cron 아님 — 일일 배치의 **첫 단계**로 매 실행 확인
+    runs: engine/content/reviewer_selftest.py
+    wired_in:                  # 실제 호출 지점(둘 다 동일 규약)
+      - scripts/daily.sh       # 서버 cron 일일 잡
+      - scripts/daily_local.ps1  # 로컬 20:00 배치(Windows 작업 스케줄러 pjt12-adsense-daily)
+    on_fail: advisory          # 기본: 배너 + 종료코드 전파(cron MAILTO). 발행·배포는 막지 않는다.
+    escalate: SELFTEST_BLOCK_GENERATE=1   # 격상 시 generate 만 스킵(배포는 계속). ⚠️ PM 승인 사항.
+
   ingest:                      # API 데이터 수집 → DB
     cron: "0 6 * * *"          # 매일 06:00
     runs: engine/orchestrator.py --stage ingest
