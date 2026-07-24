@@ -10,12 +10,13 @@ import html
 import json
 import os
 import re
+import struct
 
 from content import renderer
 
 SITE_DIR = "dist/site"
 QUEUE_DIR = "dist/queue"
-PRIVACY_LAST_UPDATED = "2026-06-30"   # Privacy Policy 본문 갱신일 — 정책 텍스트 변경 시 함께 수정
+PRIVACY_LAST_UPDATED = "2026-07-25"   # Privacy Policy 본문 갱신일 — 정책 텍스트 변경 시 함께 수정
 
 
 def _domain(cfg) -> str:
@@ -141,6 +142,12 @@ def _write(path: str, content: str):
         f.write(content)
 
 
+def _write_bytes(path: str, data: bytes):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+
+
 # 클러스터 id → (카테고리 허브 slug, 표시명) — 내부 링크·브레드크럼 교정에 사용
 _CLUSTER_CAT = {cid: (slug, name) for slug, name, _dek, cids in CATEGORIES for cid in cids}
 
@@ -198,22 +205,98 @@ def _crumb_items(page: dict) -> list:
     return items
 
 
-def _privacy_body(domain: str, email: str) -> str:
-    # AdSense 필수(F2): 데이터 수집·제3자 쿠키·벤더 링크·맞춤광고 옵트아웃·법 준수.
-    # ⚠️ 실서비스 전 법률 검토·연락 이메일 채우기.
+def _monetization_observed(cfg) -> dict:
+    """이 사이트가 **지금 실제로** 광고/제휴로 수익화돼 있는가 — 추측이 아니라 관측값.
+
+    판정 로직은 REVIEW 소유의 `reviewer.monetization_state()` 를 **호출만** 한다(재구현 금지 —
+    같은 사실을 두 곳에서 다르게 판단하면 그게 다음 버그다). 관측 대상:
+      ① 렌더 템플릿 소스(renderer.py·site_builder.py)의 광고 네트워크 코드
+      ② 직전 빌드 산출물 dist/site/**/*.html   ③ config/content.yaml `monetization.*` 선언
+      ④ 환경변수 `ADSENSE_MONETIZED=1`
+    ⚠️ **build() 가 dist/site 를 지우기 전에** 불러야 ②가 관측 대상에 들어간다.
+
+    관측 자체가 실패하면 **고지를 켜는 쪽**(= 광고 게재 중)으로 판정한다 — fail-closed. 광고가 도는데
+    고지가 빠지는 것(F2 위반 → 광고 중단·계정 리스크)이 그 반대보다 훨씬 비싸다. reviewer 의
+    "override 는 켜는 방향으로만" 원칙과 같은 방향이다. 실패로 보는 경우는 둘이다:
+      · 예외(import·스캔 실패)
+      · `known=False` — 스캔 대상 0파일 등으로 **관측이 성립하지 않은 경우**. 이때 `monetized=False` 는
+        "광고 없음"이 아니라 "확인 못 함"이므로 그대로 믿으면 0파일을 읽고 "광고 없다"고 쓰게 된다
+        (reviewer 가 ORDER 2026-07-25-18 ③ 에서 막은 것과 같은 fail-open).
+    """
+    try:
+        from content import reviewer
+        st = reviewer.monetization_state(content_cfg=(cfg.get("content") or {}))
+    except Exception as e:                       # import·스캔 실패 등 — 빌드를 멈추지 않고 안전측으로
+        print(f"build: ⚠️ 수익화 관측 실패({type(e).__name__}: {e}) — 안전측(광고 게재 중)으로 고지 작성")
+        return {"monetized": True, "ads": True, "affiliate": True, "known": False,
+                "evidence": [f"observation failed: {type(e).__name__}: {e}"], "scanned": "n/a"}
+    # known 키가 없는 구버전 reviewer 는 '관측 성립'이 기본 계약이었으므로 True 로 본다.
+    if not st.get("known", True):
+        print("build: ⚠️ 수익화 관측 불성립(known=False) — 안전측(광고 게재 중)으로 고지 작성 / "
+              + (st.get("warning") or "; ".join(st.get("evidence") or []))[:220])
+        return dict(st, monetized=True, ads=True, affiliate=True)
+    return st
+
+
+def _privacy_body(domain: str, email: str, mon: dict) -> str:
+    """AdSense 필수(F2): 데이터 수집·제3자 쿠키·벤더 링크·맞춤광고 옵트아웃·법 준수.
+
+    ⚠️ 고지는 **어떤 상태에서도 삭제하지 않는다**(F2 = 강제 필수). 관측 상태에 따라 바뀌는 것은
+    **시제뿐**이다 — 광고가 관측되면 현재형("We use Google AdSense to display ads"), 관측되지 않으면
+    "지금은 게재하지 않는다 + 게재하게 되면 이렇게 된다"는 조건형. 벤더 링크·옵트아웃 안내·권리·연락처는
+    양쪽 모두 그대로 남는다.
+
+    왜 고쳤나(실측 2026-07-25, ORDER 2026-07-25-17-ops ①): 렌더 템플릿 2개 + 빌드 산출물 전수에서
+    광고 코드 0건인데 이 페이지가 "We use Google AdSense to display ads" 를 현재형으로 단정했다
+    → 개인정보처리방침 자체가 사실과 다른 문서가 된다(승인 심사 리스크). 광고 코드가 들어오는 순간
+    관측이 잡아내 문장이 자동으로 현재형으로 돌아온다(사람이 잊어도 켜진다).
+    ⚠️ 실서비스 전 법률 검토·연락 이메일 채우기.
+    """
+    ads = bool(mon.get("ads"))
+    aff = bool(mon.get("affiliate"))
+    # ① 수집 항목 — '광고 쿠키'는 광고가 실제로 돌 때만 사실이다.
+    collect = ("<p>We collect standard log data (IP address, browser type, pages visited) and use cookies "
+               "and similar technologies to operate the site and serve advertising.</p>") if ads else (
+        "<p>We collect standard log data — IP address, browser type, and the pages you visit — which our web "
+        "server records for every request. In your browser the site itself stores only your light/dark theme "
+        "preference. It sets no advertising cookies of its own; the third-party advertising cookies described "
+        "below apply once advertising is running on this site.</p>")
+    # ② 광고·제3자 쿠키 — 고지 본문(벤더·옵트아웃)은 유지하고 시제만 바꾼다.
+    advertising = ("<p>We use Google AdSense to display ads. Third-party vendors, including Google, use cookies "
+                   "to serve ads based on your prior visits to this and other websites. Google's use of "
+                   "advertising cookies enables it and its partners to serve ads based on your visits.</p>") if ads else (
+        "<p>This site does not currently display advertising: there is no ad-network code in our page templates "
+        "or in the pages we publish, so no advertising cookies are set through this site today. This section "
+        "describes what applies once advertising is enabled, and the choices below are available to you either "
+        "way. The status stated here is re-checked automatically every time this site is built.</p>\n"
+        "<p>We intend to serve advertising through Google AdSense. Once ads are running, third-party vendors, "
+        "including Google, use cookies to serve ads based on your prior visits to this and other websites. "
+        "Google's use of advertising cookies enables it and its partners to serve ads based on your visits.</p>")
+    # ③ 광고·제휴 고지 — 광고/제휴를 독립적으로 서술(둘 중 하나만 켜져도 정확하게).
+    ad_line = ("This site is supported by advertising." if ads else
+               "This site does not currently carry advertising.")
+    aff_line = ("It may also contain affiliate links: if you click certain links and make a qualifying purchase, "
+                "we may earn a commission at no additional cost to you." if aff else
+                "The vendor links in our articles are plain informational citations — they are not affiliate "
+                "links and earn us no commission.")
+    verdict_line = ("Our comparisons and verdicts are based on documented product features and publicly available "
+                    "information; commissions do not influence our assessments." if (ads or aff) else
+                    "Our comparisons and verdicts are based on documented product features and publicly available "
+                    "information. If we add advertising or affiliate links, this disclosure is updated to say so, "
+                    "and neither would influence our assessments.")
     return f"""<p><em>Last updated: {PRIVACY_LAST_UPDATED}.</em></p>
 <p>This Privacy Policy explains how {esc(domain)} ("we") collects, uses, and shares information when you visit our site.</p>
 <h3>Information we collect</h3>
-<p>We collect standard log data (IP address, browser type, pages visited) and use cookies and similar technologies to operate the site and serve advertising.</p>
+{collect}
 <h3>Advertising &amp; third-party cookies</h3>
-<p>We use Google AdSense to display ads. Third-party vendors, including Google, use cookies to serve ads based on your prior visits to this and other websites. Google's use of advertising cookies enables it and its partners to serve ads based on your visits.</p>
+{advertising}
 <ul>
 <li>You may opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" rel="noopener" target="_blank">Google Ads Settings</a>.</li>
 <li>You may opt out of some third-party vendors' use of cookies for personalized advertising at <a href="https://www.aboutads.info/choices/" rel="noopener" target="_blank">aboutads.info/choices</a>.</li>
 <li>See <a href="https://policies.google.com/technologies/partner-sites" rel="noopener" target="_blank">how Google uses data</a> from sites that use its services.</li>
 </ul>
 <h3>Advertising &amp; affiliate disclosure</h3>
-<p>This site is supported by advertising and may contain affiliate links. If you click certain links and make a qualifying purchase, we may earn a commission at no additional cost to you. Our comparisons and verdicts are based on documented product features and publicly available information; commissions do not influence our assessments.</p>
+<p>{ad_line} {aff_line} {verdict_line}</p>
 <h3>Your rights</h3>
 <p>Depending on your location, you may have rights under laws such as the GDPR and CCPA, including access, correction, and deletion. We comply with applicable data-protection laws.</p>
 <h3>Contact</h3>
@@ -223,9 +306,21 @@ def _privacy_body(domain: str, email: str) -> str:
 esc = html.escape
 
 
-def _about_body(domain: str, email: str) -> str:
+def _about_body(domain: str, email: str, mon: dict) -> str:
     # E-E-A-T(F: SQRG "누가 책임지고 누가 작성했는지 명확히" + helpful-content who/how/why):
     # 사실만 기술 — 허위 저자·경험 주장 금지(reviewer 루브릭). 편집팀 별칭은 Google 상 허용.
+    # 자금 조달(아래 'how we are funded') 도 사실만 — 광고·제휴 여부는 _monetization_observed() 관측값.
+    ads, aff = bool(mon.get("ads")), bool(mon.get("affiliate"))
+    funding = ("<p>This site is supported by advertising and may include affiliate links. Commissions, when they "
+               "exist, do <strong>not</strong> influence our assessments — verdicts are based on documented "
+               "product features and publicly available information. See our "
+               '<a href="/privacy/">Privacy Policy</a> for the full advertising and affiliate disclosure.</p>'
+               ) if (ads or aff) else (
+        "<p>This site does not currently carry advertising, and the vendor links in our articles are plain "
+        "informational citations rather than affiliate links. We intend to fund the site with advertising; if "
+        "we add advertising or affiliate links, our <a href=\"/privacy/\">Privacy Policy</a> is updated to "
+        "disclose it. Either way, verdicts are based on documented product features and publicly available "
+        "information and are <strong>not</strong> influenced by how the site is funded.</p>")
     return f"""<p><strong>{esc(domain)}</strong> is an independent editorial project that publishes
 in-depth comparisons and buying guides for SaaS, developer, and AI tools. Our goal is a single, honest
 answer to "which of these tools should I choose, and why" — backed by documented features and public data,
@@ -250,10 +345,7 @@ clearly state who each option is best for — and who should skip it.</li>
 </ul>
 
 <h3>Editorial independence &amp; how we are funded</h3>
-<p>This site is supported by advertising and may include affiliate links. Commissions, when they exist,
-do <strong>not</strong> influence our assessments — verdicts are based on documented product features and
-publicly available information. See our <a href="/privacy/">Privacy Policy</a> for the full advertising
-and affiliate disclosure.</p>
+{funding}
 
 <h3>Corrections</h3>
 <p>We aim to be accurate and will fix mistakes promptly. If a figure looks wrong or a price is stale,
@@ -281,9 +373,89 @@ def _og_svg(domain: str) -> str:
         '</svg>\n')
 
 
+def _favicon_ico() -> bytes:
+    """브랜드 파비콘(/favicon.ico — 16·32px 2엔트리). og.svg 마크와 동일한 시각언어:
+    액센트 블루(#2f6df6, design.md) 라운드 사각형 + 흰 'S'.
+
+    외부 에셋·폰트·라이브러리 없이 픽셀을 직접 합성한다(자립적, 표준 라이브러리만).
+    4× 수퍼샘플링으로 모서리·글자에 안티에일리어싱을 준다. 형식은 ICO 안의 32bpp BGRA 비트맵.
+    ⚠️ web_root 수동 업로드는 다음 재빌드에서 지워진다 → 반드시 이 빌드 경로에서 생성한다.
+    """
+    ACCENT = (0x2F, 0x6D, 0xF6)      # design.md --accent (테크 블루)
+    SS = 4                            # 수퍼샘플링 배율
+
+    def _inside_rrect(x, y, r=0.22):  # 정규화 좌표(0~1) 라운드 사각형
+        cx = min(max(x, r), 1 - r)
+        cy = min(max(y, r), 1 - r)
+        dx, dy = x - cx, y - cy
+        return (dx * dx + dy * dy) <= r * r if (dx or dy) else True
+
+    # 'S' — 가로 3줄 + 좌상/우하 세로 절반(블록형 모노스페이스 S, 16px 에서도 형태 유지)
+    GX0, GX1, GY0, GY1, T = 0.28, 0.72, 0.17, 0.83, 0.11     # 글리프 박스·획 두께
+    GMID = (GY0 + GY1) / 2
+
+    def _inside_s(x, y):
+        if not (GX0 <= x <= GX1 and GY0 <= y <= GY1):
+            return False
+        if y <= GY0 + T or y >= GY1 - T:                      # 위·아래 가로획
+            return True
+        if GMID - T / 2 <= y <= GMID + T / 2:                 # 가운데 가로획
+            return True
+        if y < GMID and x <= GX0 + T:                         # 좌상 세로획
+            return True
+        if y > GMID and x >= GX1 - T:                         # 우하 세로획
+            return True
+        return False
+
+    def _bitmap(size: int) -> bytes:
+        rows = []
+        for py in range(size - 1, -1, -1):                    # BMP 는 bottom-up
+            row = bytearray()
+            for px in range(size):
+                n_rect = n_s = 0
+                for sy in range(SS):
+                    for sx in range(SS):
+                        x = (px + (sx + 0.5) / SS) / size
+                        y = (py + (sy + 0.5) / SS) / size
+                        if _inside_rrect(x, y):
+                            n_rect += 1
+                            if _inside_s(x, y):
+                                n_s += 1
+                total = SS * SS
+                alpha = round(255 * n_rect / total)
+                if n_rect:
+                    t = n_s / n_rect                          # 흰 글자 비율로 블루↔화이트 혼합
+                    b = round(ACCENT[2] + (255 - ACCENT[2]) * t)
+                    g = round(ACCENT[1] + (255 - ACCENT[1]) * t)
+                    r = round(ACCENT[0] + (255 - ACCENT[0]) * t)
+                else:
+                    b = g = r = 0
+                row += bytes((b, g, r, alpha))                # BGRA
+            rows.append(bytes(row))
+        xor = b"".join(rows)
+        mask_row = ((size + 31) // 32) * 4                    # AND 마스크(전부 0 = 불투명, 알파로 처리)
+        header = struct.pack("<IiiHHIIiiII", 40, size, size * 2, 1, 32, 0,
+                             len(xor), 0, 0, 0, 0)
+        return header + xor + b"\x00" * (mask_row * size)
+
+    sizes = (16, 32)
+    images = [_bitmap(s) for s in sizes]
+    offset = 6 + 16 * len(sizes)
+    out = struct.pack("<HHH", 0, 1, len(sizes))               # ICONDIR
+    for s, img in zip(sizes, images):
+        out += struct.pack("<BBBBHHII", s, s, 0, 0, 1, 32, len(img), offset)
+        offset += len(img)
+    return out + b"".join(images)
+
+
 def build(cfg) -> str:
     domain = _domain(cfg)
     base = f"https://{domain}"
+    # 수익화 관측(/privacy/·/about/ 문구가 여기에 연동된다) — ⚠️ dist/site 를 지우기 **전에** 해야
+    # 직전 빌드 산출물까지 스캔 대상에 들어간다(_monetization_observed docstring ②).
+    mon = _monetization_observed(cfg)
+    print(f"build: 수익화 관측 — ads={mon.get('ads')} affiliate={mon.get('affiliate')} "
+          f"(스캔: {mon.get('scanned')}) / 근거: " + "; ".join(mon.get("evidence") or [])[:220])
     # 기존 산출물 정리 — Windows 파일 잠금(AV·열린 핸들 등) 일시적 대비 재시도 후 최후 ignore_errors.
     # (배포 크래시 방지: 잠금으로 rmtree 실패 시 그날 배포 전체가 rc=1 로 죽던 문제 — 2026-07 재발 방지)
     if os.path.isdir(SITE_DIR):
@@ -332,8 +504,8 @@ def build(cfg) -> str:
     # 2) 필수/정적 페이지 (Privacy 필수 — F2)
     email = _contact_email(cfg)
     static_pages = {
-        "privacy": ("Privacy Policy", _privacy_body(domain, email)),
-        "about": ("About & editorial standards", _about_body(domain, email)),
+        "privacy": ("Privacy Policy", _privacy_body(domain, email, mon)),
+        "about": ("About & editorial standards", _about_body(domain, email, mon)),
         "contact": ("Contact", f'<p>Reach us at <a href="mailto:{esc(email)}">{esc(email)}</a>. '
                     f'Spot an error or an out-of-date price? Tell us and we will correct it.</p>'),
     }
@@ -402,9 +574,13 @@ def build(cfg) -> str:
     # 9) og:image 소셜 카드 — 브랜디드 정적 SVG (head 의 og:image/twitter:image 가 가리킴)
     _write(os.path.join(SITE_DIR, "og.svg"), _og_svg(domain))
 
+    # 10) /favicon.ico — 브라우저·Googlebot-Image 의 관례 경로(태그 없이도 요청됨).
+    #     매 빌드 재생성: cron 이 web_root 를 재빌드로 갈아끼우므로 수동 업로드는 살아남지 못한다.
+    _write_bytes(os.path.join(SITE_DIR, "favicon.ico"), _favicon_ico())
+
     print(f"build: {len(pages)} 콘텐츠 + {len(cat_urls)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
           f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''}{' + IndexNow-key' if inkey else ''} "
-          f"+ feed.xml + search({len(search_index)}) + og.svg → {SITE_DIR}/")
+          f"+ feed.xml + search({len(search_index)}) + og.svg + favicon.ico → {SITE_DIR}/")
     print(f"build: 내부 링크 교정: Related {fixed_related}개 링크 + 브레드크럼 {fixed_crumb}개 페이지 "
           f"(실제 발행 페이지로 재작성)")
     return SITE_DIR
