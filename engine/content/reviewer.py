@@ -57,6 +57,18 @@ _CELL_END = re.compile(r"</t[dh]\s*>", re.I)
 
 # 광고 네트워크 '코드'만 매칭한다. 자리표시자(.ad-slot / data-ad-slot, renderer.py:318 — 텍스트 "Advertisement"
 # 뿐이고 어떤 광고도 로드하지 않음)는 광고가 아니므로 의도적으로 제외한다.
+#
+# ⚠️ **이 정규식의 한계 — 스캔이 '광고 없음'을 증명하지 못한다** (ORDER 2026-07-25-21 ③)
+#   고정 패턴 목록이므로 다음은 **놓친다**:
+#     · GTM/태그 매니저 컨테이너(`googletagmanager.com/gtm.js`) 안에서 주입되는 광고 —
+#       HTML 소스에는 컨테이너 한 줄뿐이라 광고 태그가 보이지 않는다.
+#     · 서버사이드/엣지 삽입(nginx sub_filter·CDN worker) — 빌드 산출물을 읽는 이 스캔의 사각지대다.
+#     · 목록 밖 신규·소규모 네트워크, 난독화·동적 조립된 스크립트 URL.
+#   fail-closed(`_scan_site` templates=0 → known=False)는 **"스캔을 못 했다"만 막는다.**
+#   **"스캔했으나 패턴을 놓쳤다"는 못 막는다** — 그 경우 관측은 자신 있게 '미수익화'라고 답한다.
+#   → 그러므로 실제로 광고를 게재하는 순간의 1차 수단은 탐지가 아니라 **선언**이다:
+#       config/content.yaml `monetization.ads_live: true`  또는  환경변수 `ADSENSE_MONETIZED=1`
+#     (선언은 켜는 방향으로만 작동한다 — 끄는 선언은 없다.) 체크리스트: .claude/skills/adsense-audit/SKILL.md
 _AD_CODE_RE = re.compile(
     r"adsbygoogle|googlesyndication\.com|data-ad-client|ca-pub-\d{6}|amazon-adsystem\.com"
     r"|doubleclick\.net|adservice\.google\.|ezoic\.net|adthrive\.com|mediavine\.com|raptive\.com", re.I)
@@ -353,7 +365,13 @@ def _apply_disclosure_policy(data: dict, state: dict) -> dict:
        "고지가 유일한 반대 사유"인 초안은 관측된 적이 없다. 이득 0 · 리스크는 자동 발행. 폐기.
 
     남기는 것(사람이 읽는 표식):
-      · 지적을 **삭제하지 않는다** — `issues_not_applicable` 로 옮겨 사유와 함께 보존한다.
+      · 지적을 **옮기지 않는다 — 사본을 남긴다**(ORDER 2026-07-25-21 ①). `issues` 는 원본 그대로 두고
+        `issues_not_applicable` 에 사유를 붙인 사본을 추가한다.
+        왜 바꿨나(rev1 은 move 였다): 표식은 **어휘 추측**이라 감사에서 창작 26종 중 23종(88%)이
+        잘못 붙었다. move 면 (a) 표식된 지적이 `issues` 에서 빠져 재작성 피드백
+        (`orchestrator.review_feedback` 는 `issues` 만 읽는다)에 도달하지 못하고 — 모델이 그 결함을
+        모른 채 다시 쓴다 — (b) 사람이 읽는 보고서에서 실질 리스크가 '해당 없음' 칸에 놓인다.
+        copy 면 분류기가 틀려도 잃는 것이 없다(라벨만 군더더기로 붙는다).
       · 수익화가 관측되면(`monetized`) 아무것도 하지 않는다 — 고지 요구가 되살아난다.
       · 수익화 상태를 **모르면**(`known=False`) 역시 아무것도 하지 않는다(fail-closed, ORDER 18 ③).
 
@@ -369,25 +387,27 @@ def _apply_disclosure_policy(data: dict, state: dict) -> dict:
         data["notes"] = f"{data.get('notes', '')} [disclosure gate] no annotation — {w}".strip()
         return data
     issues = [i for i in (data.get("issues") or []) if isinstance(i, dict)]
-    moved = [i for i in issues if _is_disclosure_only(i)]
-    if not moved:
+    marked = [i for i in issues if _is_disclosure_only(i)]
+    if not marked:
         return data
-    kept = [i for i in (data.get("issues") or []) if i not in moved]
-    data["issues"] = kept
+    # `data["issues"]` 는 건드리지 않는다 — 표식은 사본이다(위 docstring 참조).
+    others = [i for i in (data.get("issues") or []) if i not in marked]   # 표식 밖 지적(로그·SOLE 판정용)
     data["issues_not_applicable"] = [
         dict(i, status="not_applicable",
-             reason="ANNOTATION ONLY — the verdict was NOT changed by this label. The ad/affiliate "
+             reason="ANNOTATION ONLY — the verdict was NOT changed by this label, and the objection "
+                    "REMAINS in `issues` (this is a copy, not a move). The ad/affiliate "
                     "DISCLOSURE part of this objection does not apply: no ads are served and the draft "
                     "has no affiliate links (verified at review time), so disclosing a commercial "
                     "relationship that does not exist would itself be a false statement. It revives "
                     "automatically as soon as ad code or affiliate links appear. ⚠️ Read the full text "
                     "below: if this objection also states any OTHER defect, that defect still stands — "
                     "this label is a lexical guess and is known to over-match mixed objections.")
-        for i in moved]
-    note = (f"[disclosure gate] {len(moved)} ad/affiliate-disclosure issue(s) annotated NOT APPLICABLE "
-            f"(monetization not observed: {'; '.join(state.get('evidence') or [])}). "
+        for i in marked]
+    note = (f"[disclosure gate] {len(marked)} ad/affiliate-disclosure issue(s) annotated NOT APPLICABLE "
+            f"(copy — all {len(data.get('issues') or [])} issue(s) remain in `issues`; "
+            f"monetization not observed: {'; '.join(state.get('evidence') or [])}). "
             f"Verdict untouched — passed={data.get('passed')!r}, severity={data.get('severity')!r}.")
-    if not kept and not data.get("ai_tells"):
+    if not others and not data.get("ai_tells"):
         note += (" SOLE-OBJECTION: the ad/affiliate disclosure gap was this draft's ONLY objection, "
                  "and the draft is still judged on the reviewer's own verdict (no override). "
                  "If this line shows up in practice, a human decides.")
@@ -436,6 +456,34 @@ def _dump_input(spec, text: str) -> None:
         pass
 
 
+# `passed` 로 인정하는 문자열은 **화이트리스트**다(블랙리스트 금지).
+# 블랙리스트("false"·"0"만 False)로 짜면 `"unknown"`·`"pending"` 같은 낯선 값이 True 로 새어
+# 발행된다 — 모르는 값은 통과가 아니라 반려여야 한다(fail-closed).
+_PASSED_TRUE = {"true", "yes", "y", "t", "1", "pass", "passed", "ok"}
+
+
+def _coerce_passed(v) -> bool:
+    """검수기(LLM)가 낸 `passed` 를 **fail-closed** 로 bool 정규화한다 (ORDER 2026-07-25-21 ②).
+
+    왜 필요한가 — JSON 스키마를 프롬프트로 지시해도 LLM 은 종종 문자열을 낸다. 예전 코드는
+    `data.setdefault("passed", False)` 뿐이라 값이 **있으면 그대로 뒀고**, 문자열 `"false"` 는
+    비어 있지 않으므로 `orchestrator.py` 의 `if not rv.get("passed")` 에서 **truthy 로 평가돼
+    반려가 통과로 뒤집혔다**. 게이트를 우회하는 실재 경로였다(이번 라운드에 생긴 버그는 아니다).
+
+    ⛔ 이 함수는 **엄격해지는 방향으로만** 동작한다 — 이미 True 인 bool 을 False 로 만들지 않고,
+       모르는 타입·모르는 문자열은 False(반려)로 떨어뜨린다. ORDER 19 의 불변식
+       ("어떤 입력에도 passed 가 True 로 바뀌지 않는다")과 같은 방향이다.
+    회귀: reviewer_selftest.py `[6]`.
+    """
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in _PASSED_TRUE
+    if isinstance(v, (int, float)):
+        return v == 1
+    return False                                 # None·list·dict·그 밖의 모든 것 → 반려
+
+
 def review(spec, content_cfg: dict) -> dict:
     """검수 → {passed, severity, ai_tells, issues:[{type,detail,fix}], notes}.
 
@@ -474,7 +522,7 @@ def review(spec, content_cfg: dict) -> dict:
     _dump_input(spec, user)                      # 감사용: 검수기가 실제로 본 텍스트 보존(재검수 가능하게)
     raw = generator.complete_text(_system(state), user, content_cfg, max_tokens=4000)
     data = generator._extract_json(raw)
-    data.setdefault("passed", False)
+    data["passed"] = _coerce_passed(data.get("passed"))     # 문자열 "false" 통과 경로 차단(ORDER 21 ②)
     data.setdefault("severity", "unknown")
     data.setdefault("issues", [])
     data.setdefault("ai_tells", [])

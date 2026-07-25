@@ -305,7 +305,8 @@ def test_holes() -> None:
             mislabelled.append(name)
     if mislabelled:
         warn(f"표식 오부착 {len(mislabelled)}/{len(HOLE_CASES)}종 — {', '.join(m[:24] for m in mislabelled)} "
-             "(판정 영향 없음. 부작용: 재작성 피드백 누락·보고서 분류 오기. 실코퍼스 발생 0건)")
+             "(판정 영향 없음. 남은 부작용은 **보고서 분류 오기뿐** — 재작성 피드백 누락은 "
+             "move→copy 로 해소됐다[7]. 실코퍼스 발생 0건)")
     else:
         check(True, "표식 오부착 0종")
 
@@ -352,8 +353,9 @@ def test_invariant() -> None:
     check(out["passed"] is False and out["severity"] == "high",
           "순수 고지 **단독** → passed/severity 불변 (구 기전의 flip 경로가 사라졌다)",
           (out["passed"], out["severity"]), (False, "high"))
-    check(len(out.get("issues_not_applicable") or []) == 1 and not out["issues"],
-          "그래도 표식은 달린다 — issues_not_applicable 로 보존", out.get("issues_not_applicable"), 1)
+    check(len(out.get("issues_not_applicable") or []) == 1 and len(out["issues"]) == 1,
+          "표식은 **사본**이다 — 지적이 issues 에서 사라지지 않는다(개수 보존, ORDER 21 ①)",
+          (len(out["issues"]), len(out.get("issues_not_applicable") or [])), (1, 1))
     check("SOLE-OBJECTION" in out.get("notes", ""),
           "'고지가 유일한 반대 사유' 는 notes 에 SOLE-OBJECTION 으로 관측 가능하게 기록",
           out.get("notes", "")[-120:], "contains SOLE-OBJECTION")
@@ -476,7 +478,7 @@ def test_replay(require: bool = False) -> None:
         else:
             warn(msg)
         return
-    n_iss = n_marked = n_verdict_changed = n_f2 = n_f3 = n_legacy = n_sole = 0
+    n_iss = n_marked = n_verdict_changed = n_f2 = n_f3 = n_legacy = n_sole = n_lost = 0
     n_docs = 0
     marked_files = set()
     for path in files:
@@ -497,6 +499,7 @@ def test_replay(require: bool = False) -> None:
             if (out.get("passed"), out.get("severity")) != before:
                 n_verdict_changed += 1
         out = R._apply_disclosure_policy(_clone(orig), OFF)
+        n_lost += len(orig.get("issues") or []) - len(out.get("issues") or [])   # copy 면 항상 0
         marked = out.get("issues_not_applicable") or []
         if marked:
             marked_files.add(path)
@@ -519,6 +522,105 @@ def test_replay(require: bool = False) -> None:
     check(n_f2 == 0, "리플레이: F2(Privacy Policy) 지적에 표식 0건", n_f2, 0)
     check(n_f3 == 0, "리플레이: F3(클릭 유도) 지적에 표식 0건", n_f3, 0)
     check(n_marked > 0, "리플레이: 순수 고지 오탐은 여전히 표식된다(보고서 구분 유지)", n_marked, ">0")
+    check(n_lost == 0,
+          f"리플레이: 표식 {n_marked}건이 붙어도 `issues` 에서 사라진 지적 0건(개수 보존, ORDER 21 ①)",
+          n_lost, 0)
+
+
+# ── 5. passed 정규화 — 문자열 판정이 발행 게이트를 뚫던 경로 (ORDER 2026-07-25-21 ②) ────────
+def _gate_blocks(rv: dict) -> bool:
+    """orchestrator.py 발행 게이트와 **같은 표현식**(`if not rv.get("passed")`).
+    표현식이 소스에서 바뀌면 [5](a) 가 먼저 깨져 이 복제본이 낡았음을 알린다."""
+    return not rv.get("passed")
+
+
+def test_passed_coercion() -> None:
+    print("\n[5] passed 정규화 — 문자열 \"false\" 가 발행 게이트를 뚫지 못한다")
+    try:
+        with open(os.path.join(_ROOT, "engine", "orchestrator.py"), encoding="utf-8") as fh:
+            src = fh.read()
+        check('if not rv.get("passed")' in src,
+              '전제: orchestrator 발행 게이트가 `if not rv.get("passed")` 그대로다', "-", "found")
+    except OSError as e:
+        warn(f"orchestrator.py 를 읽지 못해 게이트 표현식 동기화를 확인하지 못했다: {e}")
+
+    # 왜 위험했나 — 파이썬에서 문자열 "false" 는 truthy 다. 수정 전에는 이 값이 그대로 통과했다.
+    check(bool("false") is True and _gate_blocks({"passed": "false"}) is False,
+          '수정 전 실동작: passed="false" 는 truthy → 게이트가 **막지 못했다**',
+          _gate_blocks({"passed": "false"}), False)
+
+    true_cases = [True, "true", "True", " yes ", "1", 1, 1.0, "ok", "PASS"]
+    false_cases = [False, "false", "False", "0", 0, "", "   ", None, "unknown", "pending",
+                   "n/a", "maybe", [], {}, ["true"], {"passed": True}, 2, -1, 0.5, object()]
+    bad_true = [v for v in true_cases if R._coerce_passed(v) is not True]
+    bad_false = [v for v in false_cases if R._coerce_passed(v) is not False]
+    check(not bad_true, f"통과로 인정하는 값 {len(true_cases)}종이 전부 True", bad_true, [])
+    check(not bad_false,
+          f"그 밖의 {len(false_cases)}종(모르는 문자열·타입 포함)은 전부 False(fail-closed)",
+          bad_false, [])
+    check(all(_gate_blocks({"passed": R._coerce_passed(v)}) for v in false_cases),
+          "정규화 후 그 값들은 orchestrator 게이트에서 **전부 막힌다**", "-", "all blocked")
+
+
+# ── 6. end-to-end — review() 가 내보내는 판정은 항상 bool 이다 ──────────────────────────────
+def _dummy_spec():
+    import types
+    return types.SimpleNamespace(
+        slug="selftest-draft", title="Selftest draft", dek="dek", author="Selftest",
+        published_at="2026-07-25", updated_at="", tldr_html="<p>tldr</p>",
+        intro_html="<p>intro</p>", sections=[{"heading": "H", "html": "<p>body</p>"}],
+        verdict_html="<p>verdict</p>", faq=[],
+        sources=[{"title": "src", "url": "https://example.com/"}], grounding_context="")
+
+
+def _review_with_raw(raw: str) -> dict:
+    """검수기(LLM) 응답만 갈아끼워 review() 전 경로를 태운다 — 네트워크·파일 쓰기 없음."""
+    orig_complete, orig_dump = R.generator.complete_text, R._dump_input
+    try:
+        R.generator.complete_text = lambda *a, **k: raw
+        R._dump_input = lambda *a, **k: None
+        return R.review(_dummy_spec(), {})
+    finally:
+        R.generator.complete_text, R._dump_input = orig_complete, orig_dump
+
+
+def test_review_gate_end_to_end() -> None:
+    print("\n[6] end-to-end — 검수기가 문자열 판정을 내도 review() 는 bool 로 내보낸다")
+    iss = '[{"type":"legal","detail":"The draft invents a vendor quote.","fix":"remove it"}]'
+    rv = _review_with_raw('{"passed":"false","severity":"high","ai_tells":[],"issues":%s,"notes":""}' % iss)
+    check(rv["passed"] is False, 'passed="false" → 반환값은 bool False', rv["passed"], False)
+    check(_gate_blocks(rv), "orchestrator 게이트가 이 판정을 **막는다**(발행 안 됨)", "-", "blocked")
+
+    rv2 = _review_with_raw('{"passed":"true","severity":"none","ai_tells":[],"issues":[],"notes":""}')
+    check(rv2["passed"] is True and not _gate_blocks(rv2),
+          'passed="true" 는 정상 통과 — 엄격해지기만 할 뿐 통과를 막지 않는다', rv2["passed"], True)
+
+    rv3 = _review_with_raw('{"severity":"low","ai_tells":[],"issues":[],"notes":""}')
+    check(rv3["passed"] is False, "passed 키 자체가 없으면 반려(기존 setdefault 동작 유지)",
+          rv3["passed"], False)
+
+
+# ── 7. 표식된 지적이 재작성 피드백에 도달하는가 (copy 전환의 실익) ──────────────────────────
+def test_feedback_reach() -> None:
+    print("\n[7] 표식이 붙어도 재작성 피드백에 도달한다 — move→copy 의 실익")
+    try:
+        import orchestrator as O                      # engine/ 은 이미 sys.path 에 있다(42행)
+    except Exception as e:                            # yaml 미설치 등
+        warn(f"orchestrator import 실패 — 피드백 도달 검증을 수행하지 못했다: {e}")
+        return
+    pure = next(c[1] for c in CLASSIFY_CASES if c[0].startswith("pure: the exact false positive"))
+    out = _apply([pure], OFF)
+    fb = O.review_feedback(out)
+    check(len(out["issues"]) == 1, "표식 후에도 issues 개수 보존", len(out["issues"]), 1)
+    check(pure["detail"][:40].lower() in fb.lower(),
+          "표식된 지적의 원문이 재작성 프롬프트에 실려 나간다(move 였다면 0자였다)",
+          fb[:120], pure["detail"][:40])
+    # 대조: 예전 move 동작을 재현하면 같은 지적이 피드백에서 사라진다
+    legacy = _clone(out)
+    legacy["issues"] = [i for i in legacy["issues"] if not R._is_disclosure_only(i)]
+    check(pure["detail"][:40].lower() not in O.review_feedback(legacy).lower(),
+          "대조군(move 재현)에서는 도달하지 못한다 — 이 변경이 메우는 구멍",
+          O.review_feedback(legacy)[:80], "(빈 피드백)")
 
 
 def main(argv: list[str]) -> int:
@@ -530,6 +632,9 @@ def main(argv: list[str]) -> int:
     test_invariant_under_collapse()
     test_monetization_failclosed()
     test_replay(require="--require-replay" in argv)
+    test_passed_coercion()
+    test_review_gate_end_to_end()
+    test_feedback_reach()
     print(f"\n결과: {'ALL PASS' if not _fails else str(len(_fails)) + ' FAILED'}"
           f"{f' · WARN {len(_warns)}' if _warns else ''}")
     for f in _fails:

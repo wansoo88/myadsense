@@ -55,15 +55,28 @@ python -c "import sys,json; sys.path.insert(0,'engine'); from content import rev
 - [ ] 1) **글 페이지에 고지가 실제로 렌더되는가.** 현재 광고·제휴 고지 문구는 `/privacy/`·`/about/` 에만 있고
       **글 템플릿에는 없다**(`site_builder.py:222-223`, `:260-263` — 2026-07-24 실측). 광고를 켜면 기사 본문 상단/하단에
       고지 1줄이 보이도록 렌더러를 수정해야 한다. ⚠️ `renderer.py`·`site_builder.py` 는 **OPS 소유** → REVIEW 는 요구만 하고 직접 고치지 않는다.
-- [ ] 2) 위 명령으로 `monetized: true` 확인. 자동 관측이 잡지 못하면(외부 태그 매니저 등) `config/content.yaml` 에
-      `monetization: {ads_live: true}` 를 명시.
+- [ ] 2) **먼저 선언하고, 그 다음 관측을 확인한다(순서 중요).** `config/content.yaml` 에
+      `monetization: {ads_live: true}` 를 넣거나 `ADSENSE_MONETIZED=1` 을 설정한 **뒤** 위 명령으로 `monetized: true` 를 확인.
+      ⚠️ **자동 탐지를 1차 수단으로 삼지 말 것** — 아래 "탐지의 한계" 참조. 선언이 1차, 탐지는 백스톱이다.
 - [ ] 3) 고지 문구가 **사실과 일치**하는가. 제휴 링크가 없으면 "제휴 링크로 수수료를 받는다"고 쓰지 말 것(반대 방향의 허위 고지).
 - [ ] 4) 승인 신청 전 `/privacy/` 의 광고 관련 서술이 **현재 상태와 일치**하는지 점검(F2 항목과 별개 — 정확성 문제).
 - [ ] 5) 광고 켠 뒤 **첫 검수 1건**의 `dist/review/<slug>.json` 에서 `"monetization": {"monetized": true}` 와
       고지 항목 부활을 눈으로 확인.
 
-> 요약: **이 항목은 삭제된 적이 없다. 조건이 붙었을 뿐이고, 조건은 자동으로 감지된다.** 사람이 잊어도 광고 코드가
-> 들어오면 켜지지만, 위 1)번(글 페이지 고지 렌더)은 사람·OPS 가 해야 하므로 이 체크리스트에 남긴다.
+**⚠️ 탐지의 한계 — 스캔은 "광고 없음"을 증명하지 못한다 (ORDER 2026-07-25-21 ③)**
+
+`reviewer._AD_CODE_RE` 는 **고정 패턴 목록**(adsbygoogle·googlesyndication·doubleclick·ezoic·mediavine 등)이다. 따라서:
+- **GTM/태그 매니저 컨테이너**로 주입되는 광고 — HTML 에는 컨테이너 한 줄뿐이라 **안 잡힌다**.
+- **서버사이드·엣지 삽입**(nginx `sub_filter`, CDN worker) — 빌드 산출물을 읽는 스캔의 사각지대.
+- 목록 밖 **신규·소규모 네트워크**, 난독화·동적 조립된 스크립트 URL.
+
+fail-closed 설계(`templates=0` → `known=false`)가 막는 것은 **"스캔을 못 했다"뿐**이다.
+**"스캔했는데 패턴을 놓쳤다"는 못 막는다** — 그 경우 관측은 자신 있게 `monetized:false` 라고 답하고,
+고지 요구는 꺼진 채로 남는다. 그러므로:
+
+> 요약: **이 항목은 삭제된 적이 없다. 조건이 붙었을 뿐이다.** 조건을 켜는 **1차 수단은 사람의 선언**
+> (`monetization.ads_live: true` / `ADSENSE_MONETIZED=1`)이고, 자동 탐지는 **선언을 잊었을 때를 위한 백스톱**이다.
+> 위 1)번(글 페이지 고지 렌더)도 사람·OPS 몫이다. "광고를 켜면 알아서 켜진다"에 기대지 말 것.
 
 ### 4. 거절 사유 매핑 (거절 후)
 거절 메시지를 위 1~3 항목에 매핑 → 가장 흔한 실제 사유:

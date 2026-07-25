@@ -348,23 +348,39 @@ def _claude_cli_text(user: str, system: str, model: str, *, timeout: int = 900) 
     return proc.stdout
 
 
+# 실패 사유 로그의 항목별 상한 — 합쳐서 자르면 앞엣것이 뒤엣것을 밀어낸다(아래 docstring 참조).
+_ERR_RESULT_CHARS = 800          # result(진짜 사유): 스택·다중 문장도 읽히게 넉넉히
+_ERR_STDERR_CHARS = 200          # stderr(상용 경고): 존재만 알면 되므로 짧게
+
+
 def _cli_error_detail(proc) -> str:
     """claude CLI 실패 사유 1줄 — CLI 는 오류를 **stdout JSON 의 result** 에 넣고 stderr 는 비운다.
     stderr 만 찍던 탓에 로그에 사유가 공백으로 남아 서버 0편이 21일간 묻혔다(2026-07-24-03-ops 이슈 2).
     예) {"is_error":true,"result":"Not logged in · Please run /login"} → 'Not logged in · Please run /login'
+
+    ⚠️ 순서가 곧 가독성이다 (ORDER 2026-07-25-22 ①). 예전 판은 **stderr 를 먼저** 붙이고 합친 뒤
+    `[:300]` 으로 잘랐다 → CLI 가 stderr 에 뿜는 상용 경고(워크스페이스 신뢰 배너 314자 등)만으로
+    상한을 다 먹고 **진짜 사유가 통째로 잘려나갔다**(실측: 잘린 문자열에 'Not logged in' 미포함).
+    예약 배치 로그의 "실패했는데 사유가 공백"이 여기서 나왔다.
+    → 이제 **result(진짜 사유)를 먼저·넉넉히**, stderr 는 뒤에서 짧게 자른다. 상한은 각각 따로 건다.
     """
+    def _line(s: str) -> str:                        # 로그 1줄 유지(개행·중복 공백 접기)
+        return " ".join(str(s or "").split())
+
     parts = []
-    if (proc.stderr or "").strip():
-        parts.append(proc.stderr.strip())
     out = (proc.stdout or "").strip()
     if out:
         try:
             env = json.loads(out)
-            detail = env.get("result") or env.get("error") or "" if isinstance(env, dict) else ""
+            detail = (env.get("result") or env.get("error") or "") if isinstance(env, dict) else ""
         except json.JSONDecodeError:
             detail = ""
-        parts.append(str(detail).strip() or out)      # 파싱 실패·빈 result 면 원문 폴백
-    return " | ".join(parts)[:300] or "(stderr·stdout 모두 비어 있음)"
+        body = _line(detail) or _line(out)           # 파싱 실패·빈 result 면 원문 폴백
+        parts.append(body[:_ERR_RESULT_CHARS] + ("…" if len(body) > _ERR_RESULT_CHARS else ""))
+    err = _line(proc.stderr)
+    if err:                                          # 상용 경고는 뒤로 — 사유를 밀어내지 못하게
+        parts.append("stderr: " + err[:_ERR_STDERR_CHARS] + ("…" if len(err) > _ERR_STDERR_CHARS else ""))
+    return " | ".join(parts) or "(stderr·stdout 모두 비어 있음)"
 
 
 # adsense-review 스킬 블록리스트(SKILL.md) — 생성·검수 양쪽에서 같은 목록을 씀(예방 + 탐지).
