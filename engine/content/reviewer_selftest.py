@@ -34,6 +34,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 
@@ -305,8 +306,8 @@ def test_holes() -> None:
             mislabelled.append(name)
     if mislabelled:
         warn(f"표식 오부착 {len(mislabelled)}/{len(HOLE_CASES)}종 — {', '.join(m[:24] for m in mislabelled)} "
-             "(판정 영향 없음. 남은 부작용은 **보고서 분류 오기뿐** — 재작성 피드백 누락은 "
-             "move→copy 로 해소됐다[7]. 실코퍼스 발생 0건)")
+             "(판정 영향 없음. 남은 부작용은 **보고서 분류 오기뿐** — 재작성 피드백 누락은 move→copy 로[7], "
+             "맥락 없는 전달·슬롯 경쟁은 ORDER 39 로[9] 해소됐다. 실코퍼스 발생 0건)")
     else:
         check(True, "표식 오부착 0종")
 
@@ -623,6 +624,290 @@ def test_feedback_reach() -> None:
           O.review_feedback(legacy)[:80], "(빈 피드백)")
 
 
+# ── 9. 표식 지적의 재작성 피드백 전달 — 맥락 동반 + 슬롯 비경쟁 (ORDER 2026-07-25-39 ①②) ──────
+def test_feedback_annotation() -> None:
+    """R4: '고지를 추가하라'가 **맥락 없이** 재작성 모델에 도달하면 안 된다(허위 고지 재생산 경로).
+    R3: 표식 지적이 `max_issues` 슬롯을 먹어 `legal`·`factual` 지적을 밀어내면 안 된다.
+    ⛔ 해법이 '표식 지적 제외'가 아님도 함께 못 박는다 — 제외하면 move 시절 결함이 재발한다."""
+    print("\n[9] 표식 지적 — 맥락과 함께 전달 · 슬롯 비경쟁 (ORDER 39)")
+    try:
+        import orchestrator as O
+    except Exception as e:
+        warn(f"orchestrator import 실패 — 피드백 맥락 검증을 수행하지 못했다: {e}")
+        return
+    pure = next(c[1] for c in CLASSIFY_CASES if c[0].startswith("pure: the exact false positive"))
+
+    # (a) R4 — 표식 지적은 도달하되 맥락 헤더가 **그 앞에** 붙는다
+    out = _apply([pure], OFF)
+    fb = O.review_feedback(out)
+    check(pure["detail"][:40].lower() in fb.lower(),
+          "표식 지적은 여전히 피드백에 **도달한다**(제외가 아니다 — [7] 과 같은 성질)", fb[:80], "reaches")
+    check("ANNOTATED NOT-APPLICABLE" in fb and "do NOT add a disclosure" in fb,
+          "표식 지적에 **맥락 헤더**가 동반된다(없는 고지를 추가하지 말 것)", fb[:120], "header present")
+    # ⚠️ index() 가 아니라 find() — 헤더가 없는(=회귀) 상태에서 테스트가 **예외로 죽지 않고 FAIL 로** 떨어져야 한다.
+    hdr_at, iss_at = fb.find("ANNOTATED NOT-APPLICABLE"), fb.lower().find(pure["detail"][:40].lower())
+    check(hdr_at != -1 and iss_at != -1 and hdr_at < iss_at,
+          "맥락 헤더가 지적 **앞**에 온다(모델이 지시를 먼저 읽는다)", (hdr_at, iss_at), "header first")
+    check("fix ONLY that other defect" in fb or "ONLY that other defect" in fb,
+          "혼합 지적일 때 '다른 결함만 고쳐라'가 함께 간다(오부착 88% 대비)", "-", "mixed-case guidance")
+
+    # (b) 표식이 없으면 헤더도 없다(불필요한 프롬프트 오염 방지)
+    plain_only = {"type": "factual", "detail": "The GPU price contradicts the source.", "fix": "Correct it."}
+    fb2 = O.review_feedback(_apply([plain_only], OFF))
+    check("ANNOTATED NOT-APPLICABLE" not in fb2, "표식 없는 판정에는 헤더가 붙지 않는다", fb2[:80], "no header")
+
+    # (c) R3 — 표식 지적이 실질 지적의 슬롯을 뺏지 않는다 (합성: 실질 7건 + 표식 1건)
+    many = [{"type": "legal" if n == 6 else "factual",
+             "detail": f"REAL-{n}: definitive negative claim about a named competitor.", "fix": "soften"}
+            for n in range(7)]
+    mixed = many[:3] + [pure] + many[3:]                     # 표식이 앞쪽(index 3)에 끼어든 배치
+    outm = _apply(mixed, OFF)
+    fbm = O.review_feedback(outm)
+    missing = [n for n in range(6) if f"REAL-{n}:" not in fbm]
+    check(not missing, "실질 지적 6건이 표식에 밀리지 않고 전부 실린다", missing, [])
+    check("REAL-6:" not in fbm,
+          "7번째 실질 지적은 기존 max_issues(6) 상한대로 잘린다 — 표식과 무관한 기존 동작",
+          "REAL-6 in feedback", False)
+    check(pure["detail"][:40].lower() in fbm.lower(),
+          "그러면서도 표식 지적은 **별도 슬롯**으로 함께 간다(제외 아님)", "-", "annotated slot")
+
+    # (d) 실코퍼스 before/after — 수정 전 `copy` 동작에서 밀려났던 지적이 되살아나는가
+    files = [f for f in sorted(glob.glob(_CORPUS)) if not f.endswith(".spec.json")]
+    if not files:
+        warn("코퍼스가 없어 R3 해소의 실데이터 수치를 내지 못했다")
+        return
+    n_docs = old_lost = new_lost = 0
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(d, dict) or "issues" not in d:
+            continue
+        out = R._apply_disclosure_policy(_clone(d), OFF)
+        marked = out.get("issues_not_applicable") or []
+        if not marked:
+            continue
+        n_docs += 1
+        keys = {O._issue_key(i) for i in marked}
+        issues = [i for i in (out.get("issues") or []) if isinstance(i, dict)]
+        plain = [i for i in issues if O._issue_key(i) not in keys]
+        shown_old = issues[:6]                                # 수정 전: 표식 포함 원순서 상위 6
+        shown_new = plain[:6]                                 # 수정 후: 실질 지적이 먼저
+        old_lost += sum(1 for i in plain[:6] if i not in shown_old)
+        fb_new = O.review_feedback(out)
+        new_lost += sum(1 for i in shown_new if str(i.get("detail"))[:40].lower() not in fb_new.lower())
+    print(f"        표식 문서 {n_docs}건 — 수정 전 슬롯 경쟁으로 탈락한 실질 지적 {old_lost}건 → 수정 후 {new_lost}건")
+    check(old_lost > 0, f"수정 전 결함이 코퍼스에서 재현된다(탈락 {old_lost}건)", old_lost, ">0")
+    check(new_lost == 0, "수정 후 실질 지적 탈락 0건(R3 해소)", new_lost, 0)
+
+
+# ── 8. 모순 판정 차단 — passed=true + severity=high (ORDER 2026-07-25-37 ①) ─────────────────
+def test_verdict_conflict() -> None:
+    """양방향으로 친다: 모순 판정은 **막히고**, 정상 통과는 **막히지 않는다**.
+
+    ⚠️ 이 검사는 ORDER 19 가 폐기한 기전과 방향이 반대다 — 구조화 필드(`severity`) 값 비교로
+    True→False(엄격)만 한다. 통과를 넓히는 코드는 여기에도, 프로덕션에도 없다([2]가 계속 증명).
+    """
+    print("\n[8] 모순 판정 차단 — passed=true + severity='high' 는 신뢰할 수 없다")
+
+    # (a) 단위: 필드 값 비교 진리표
+    for sev, want in (("high", True), ("HIGH", True), (" High ", True),
+                      ("none", False), ("low", False), ("medium", False), ("unknown", False),
+                      (None, False), (["high"], False), ("higher", False)):
+        got = bool(R._verdict_conflict({"passed": True, "severity": sev}))
+        check(got is want, f"단위: passed=True · severity={sev!r} → 모순={want}", got, want)
+    check(not R._verdict_conflict({"passed": False, "severity": "high"}),
+          "단위: 이미 반려(passed=False)면 모순 아님(중복 처리 없음)", "-", "no conflict")
+
+    # (b) end-to-end: 발행 게이트까지
+    def raw(p, sev, iss='[]'):
+        return '{"passed":%s,"severity":"%s","ai_tells":[],"issues":%s,"notes":""}' % (p, sev, iss)
+
+    legal = '[{"type":"legal","detail":"false first-person testing claim","fix":"remove"}]'
+    for label, p, sev, iss in (("bool true + high", "true", "high", legal),
+                               ('문자열 "ok" + high', '"ok"', "high", legal),
+                               ("대문자 HIGH", "true", "HIGH", legal)):
+        rv = _review_with_raw(raw(p, sev, iss))
+        check(rv["passed"] is False and _gate_blocks(rv),
+              f"모순 판정({label}) → 반려 · 게이트 차단", rv["passed"], False)
+        check(rv.get("severity") == sev,
+              f"모순 판정({label}) → severity 는 검수기 원본 그대로 보존", rv.get("severity"), sev)
+        check("verdict conflict" in (rv.get("notes") or ""),
+              f"모순 판정({label}) → 사유가 notes 에 기록(관측 가능)", (rv.get("notes") or "")[:60], "verdict conflict")
+
+    # (c) 반대 방향 — 정상 통과를 막지 않는다(과잉 차단 = 매일 0편 사고)
+    for sev in ("none", "low"):
+        rv = _review_with_raw(raw("true", sev))
+        check(rv["passed"] is True and not _gate_blocks(rv),
+              f"정상 통과(passed=true · severity={sev!r})는 그대로 통과", rv["passed"], True)
+    rv = _review_with_raw(raw("true", "medium", legal))
+    check(rv["passed"] is True,
+          "medium 은 **막지 않는다** — 임계 변경은 정책 결정(PM·사람 몫, ORDER 37 ④). 임의 강화 방지 회귀",
+          rv["passed"], True)
+
+    # (d) 새 로직이 `_apply_disclosure_policy` 안으로 새어 들어가지 않았는지(ORDER 19 경계 유지)
+    src = open(os.path.join(_HERE, "reviewer.py"), encoding="utf-8").read()
+    body = src[src.index("def _apply_disclosure_policy"):]
+    body = body[:body.index("\ndef ", 1)] if "\ndef " in body[1:] else body
+    check("_verdict_conflict" not in body,
+          "모순 검사는 고지 후처리 밖에 있다(_apply_disclosure_policy 는 여전히 판정을 안 만진다)",
+          "_verdict_conflict in body", False)
+
+    # (e) 실코퍼스 영향 — 이 규칙으로 통과→반려가 되는 과거 판정 건수(발행 카덴스 영향 관측)
+    files = [f for f in sorted(glob.glob(_CORPUS)) if not f.endswith(".spec.json")]
+    n_docs = n_pass = n_flip = 0
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(d, dict) or "issues" not in d:
+            continue
+        n_docs += 1
+        if not d.get("passed"):
+            continue
+        n_pass += 1
+        if R._verdict_conflict(d):
+            n_flip += 1
+            warn(f"코퍼스에서 모순 판정 발견 — {os.path.basename(path)} "
+                 f"(passed={d.get('passed')!r}, severity={d.get('severity')!r})")
+    if n_docs:
+        print(f"        코퍼스 {n_docs}문서 · 통과 {n_pass}건 → 이 규칙으로 반려 전환 {n_flip}건")
+        check(True, f"영향 측정 완료(통과 {n_pass}건 중 {n_flip}건 전환) — 발행 카덴스 영향 관측치")
+    else:
+        warn("코퍼스가 없어 이 규칙의 발행 영향 수치를 내지 못했다")
+
+
+# ── 10. 발행 분기 3갈래 — high=반려 / medium=보류 / none·low=발행 (ORDER 2026-07-25-40) ────────
+def test_hold_medium() -> None:
+    """⛔ medium 은 **반려가 아니라 보류**다 — `passed` 는 그대로 두고 발행 시점만 미룬다."""
+    print("\n[10] 발행 분기 — high=반려 · medium=사람 보류 · none/low=즉시 발행 (ORDER 40)")
+    try:
+        import orchestrator as O
+    except Exception as e:
+        warn(f"orchestrator import 실패 — 보류 분기 검증을 수행하지 못했다: {e}")
+        return
+    from content import human_gate as HG
+
+    HSG_ON = {"enabled": True, "sample_pct": 10}
+    HSG_OFF = {"enabled": False, "sample_pct": 0}
+    plain = next(s for s in (f"selftest-slug-{n}" for n in range(500)) if not HG.is_sampled(s, 10))
+    sampled = next(s for s in (f"selftest-slug-{n}" for n in range(500)) if HG.is_sampled(s, 10))
+
+    def rv(sev, n_iss=2, passed=True):
+        return {"passed": passed, "severity": sev, "ai_tells": [],
+                "issues": [{"type": "factual", "detail": f"objection {i}", "fix": "fix it"} for i in range(n_iss)],
+                "notes": ""}
+
+    # (a) medium → 보류 (표본 여부와 무관)
+    why = O._hold_reasons(rv("medium"), plain, HSG_ON)
+    check(bool(why) and any("medium" in w for w in why),
+          "severity=medium 통과분은 표본이 아니어도 **보류**된다", why, "['severity=medium…']")
+    check(bool(O._hold_reasons(rv("medium"), plain, HSG_OFF)),
+          "human_sample_gate 가 꺼져 있어도 medium 보류는 작동한다", "-", "held")
+
+    # (b) none/low → 즉시 발행 (과잉 보류로 발행량이 죽으면 안 된다)
+    for sev in ("none", "low"):
+        check(not O._hold_reasons(rv(sev), plain, HSG_ON),
+              f"severity={sev!r} 통과분은 보류 없이 발행 큐로", O._hold_reasons(rv(sev), plain, HSG_ON), [])
+
+    # (c) 기존 표본 게이트는 그대로 살아 있다
+    check(any("표본" in w for w in O._hold_reasons(rv("low"), sampled, HSG_ON)),
+          "표본으로 뽑힌 슬러그는 기존대로 보류(기능 보존)", "-", "sample hold")
+    both = O._hold_reasons(rv("medium"), sampled, HSG_ON)
+    check(len(both) == 2, "medium + 표본이면 사유가 둘 다 기록된다", both, "2 reasons")
+
+    # (d) high → 애초에 발행 분기에 도달하지 못한다(37 의 정합성 게이트가 반려)
+    r_high = _review_with_raw('{"passed":true,"severity":"high","ai_tells":[],'
+                              '"issues":[{"type":"legal","detail":"x","fix":"y"}],"notes":""}')
+    check(r_high["passed"] is False and _gate_blocks(r_high),
+          "severity=high 는 보류가 아니라 **반려** — 발행 분기 이전에서 막힌다", r_high["passed"], False)
+
+    # (e) 보류는 판정을 바꾸지 않는다(반려로 오해되면 안 된다)
+    v = rv("medium")
+    O._hold_reasons(v, plain, HSG_ON)
+    check(v["passed"] is True and v["severity"] == "medium",
+          "보류 판단은 판정을 **읽기만** 한다(passed·severity 불변)", (v["passed"], v["severity"]), (True, "medium"))
+
+    # (f) 사람이 읽는 사유 본문 — 지적 원문 + 처리 명령이 들어 있는가
+    notice = O._hold_notice("my-slug", "cheap vps", rv("medium", 3), ["severity=medium(미해소 지적 3건)"])
+    for want in ("보류 사유", "objection 0", "--approve my-slug", "human_gate.reject('my-slug')",
+                 "dist/review/my-slug.json"):
+        check(want in notice, f"사유 본문에 {want!r} 포함", notice[:60], want)
+    check("통과" in notice and "반려 아님" in notice,
+          "사유 본문이 '반려가 아니라 보류'임을 명시한다", "-", "not a rejection")
+
+    # (g) 사이드카 파일 — hold/reason/approve/reject 왕복 (임시 디렉터리, 리포 dist 는 건드리지 않는다)
+    tmp = tempfile.mkdtemp(prefix="human_gate_selftest_")
+    p0, q0, r0 = HG.PENDING_DIR, HG.QUEUE_DIR, HG.REJECTED_DIR
+    try:
+        HG.PENDING_DIR = os.path.join(tmp, "pending")
+        HG.QUEUE_DIR = os.path.join(tmp, "queue")
+        HG.REJECTED_DIR = os.path.join(tmp, "review")
+        notice_s1 = O._hold_notice("s1", "cheap vps", rv("medium", 2), ["severity=medium(미해소 지적 2건)"])
+        HG.hold("s1", "<html>doc</html>", reason=notice_s1)
+        check(HG.reason("s1").startswith("보류 사유"), "hold(reason=…) 가 사유 사이드카를 남긴다",
+              HG.reason("s1")[:30], "보류 사유…")
+        check(HG.pending() == ["s1"], "사유 파일이 pending 목록을 오염시키지 않는다(*.html 만 집계)",
+              HG.pending(), ["s1"])
+        rep = HG.pending_report()
+        check(len(rep) == 1 and "--approve s1" in rep[0],
+              "--list-pending 출력에 사유·명령이 함께 나온다(slug 만 나오지 않는다)", rep[0][:40], "with reason")
+        HG.approve("s1")
+        check(os.path.exists(os.path.join(HG.QUEUE_DIR, "s1.html")) and not HG.reason("s1"),
+              "승인 → 큐로 이동 · 사유 사이드카는 따라가지 않는다", "-", "moved & cleaned")
+        HG.hold("s2", "<html>doc2</html>", reason=notice)
+        dst = HG.reject("s2")
+        check(os.path.exists(dst) and not os.path.exists(os.path.join(HG.PENDING_DIR, "s2.html")),
+              "거부 → 발행하지 않고 dist/review 로 보존", os.path.basename(dst), "s2.human-rejected.html")
+        check(not os.path.exists(os.path.join(HG.QUEUE_DIR, "s2.html")),
+              "거부된 글은 큐에 **들어가지 않는다**", "-", "not queued")
+    finally:
+        HG.PENDING_DIR, HG.QUEUE_DIR, HG.REJECTED_DIR = p0, q0, r0
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # (i) 알림은 **부가 기능** — 알림 경로가 죽어도 발행 파이프라인이 멈추면 안 된다(ORDER 40 ③)
+    try:
+        from monitor import alerts as A
+        orig_send = A.send
+        try:
+            A.send = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("selftest: 알림 채널 장애"))
+            O._notify_hold("s1", "kw", rv("medium"), ["severity=medium"])   # 예외가 새어 나오면 실패
+            check(True, "알림 실패가 보류·발행 경로를 깨지 않는다(예외 삼킴)")
+        finally:
+            A.send = orig_send
+    except ImportError as e:
+        warn(f"monitor.alerts import 실패 — 알림 격리 검증을 수행하지 못했다: {e}")
+    except Exception as e:
+        check(False, "알림 실패가 보류·발행 경로를 깨지 않는다(예외 삼킴)", f"{type(e).__name__}: {e}", "swallowed")
+
+    # (h) 실코퍼스 빈도 — 매일 보류만 쌓이면 사람이 감당 못 해 게이트가 형해화된다(ORDER 40 ④)
+    files = [f for f in sorted(glob.glob(_CORPUS)) if not f.endswith(".spec.json")]
+    n_pass = n_med = 0
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(d, dict) or "issues" not in d or not d.get("passed"):
+            continue
+        n_pass += 1
+        if str(d.get("severity", "")).strip().lower() == "medium":
+            n_med += 1
+    if n_pass:
+        pct = n_med * 100.0 / n_pass
+        print(f"        코퍼스 통과 {n_pass}건 중 medium {n_med}건 = {pct:.1f}% "
+              f"→ daily_generate=1 기준 약 {100 / pct:.1f}일에 1건 보류")
+        check(pct < 50, f"보류 빈도 {pct:.1f}% — 통과분의 절반을 넘으면 사람이 감당 못 한다(형해화 경보)",
+              f"{pct:.1f}%", "<50%")
+    else:
+        warn("코퍼스가 없어 보류 빈도를 측정하지 못했다")
+
+
 def main(argv: list[str]) -> int:
     print("reviewer_selftest — 고지 처리 회귀 테스트 (LLM 미호출) · 불변식: 판정 불변")
     test_classify()
@@ -635,6 +920,9 @@ def main(argv: list[str]) -> int:
     test_passed_coercion()
     test_review_gate_end_to_end()
     test_feedback_reach()
+    test_verdict_conflict()
+    test_feedback_annotation()
+    test_hold_medium()
     print(f"\n결과: {'ALL PASS' if not _fails else str(len(_fails)) + ' FAILED'}"
           f"{f' · WARN {len(_warns)}' if _warns else ''}")
     for f in _fails:

@@ -148,6 +148,34 @@ def rereview(slug: str, cfg) -> dict:
     return rv
 
 
+# ── 표식(not_applicable) 지적을 재작성 모델에 넘길 때 반드시 함께 가는 맥락 (ORDER 2026-07-25-39 ①) ──
+# 왜: `_apply_disclosure_policy` 가 move→copy 로 바뀌면서(커밋 7492102) 표식된 고지 지적이 `issues` 에
+#   남아 재작성 프롬프트로 **그대로** 흘러갔다. 그 지적의 fix 는 대개 "Add a disclosure line…" 이라,
+#   광고도 제휴도 없는 이 사이트에서 그대로 따르면 **없는 상업관계를 선언하는 허위 진술**이 만들어진다.
+#   실제로 라이브 2편이 그런 문장을 달고 있었다(원인 시기는 조건부화 이전이지만, copy 전환이 재발 경로를 열었다).
+# ⛔ 해법은 '표식 지적을 빼는 것'이 **아니다** — 표식은 어휘 추측이라 88%가 오부착이고, 빼면 그 안의
+#   진짜 결함(허위 1인칭·경쟁사 부정 단정 등)까지 사라진다(= move 시절 결함의 재발).
+# → 지적은 **그대로 보내되 맥락을 붙인다.** 아래 헤더가 표식 지적 묶음 **바로 앞**에 놓인다.
+_NA_FEEDBACK_HEADER = (
+    "ANNOTATED NOT-APPLICABLE by the review harness — read this before the objection(s) that follow: "
+    "the ad/affiliate/sponsorship DISCLOSURE part of them does NOT apply. This site serves no advertising "
+    "and this draft carries no affiliate or referral links, so do NOT add a disclosure, affiliate, "
+    "sponsorship or 'we may earn a commission' line, and ignore any instruction below telling you to add "
+    "one — writing such a line would itself be a false statement. This label is a lexical guess and is "
+    "known to over-match: if an objection below ALSO states any OTHER defect, fix ONLY that other defect")
+
+# 표식 지적에 배정하는 **별도 슬롯**(ORDER 39 ②). max_issues 를 놓고 경쟁시키지 않는다 —
+# 실측(36-review R3): 지적 12건 문서에서 표식 1건이 슬롯을 먹어 `legal` 지적(경쟁사 부정 단정)이 밀려났다.
+_MAX_ANNOTATED_ISSUES = 2
+
+
+def _issue_key(i: dict) -> tuple:
+    """지적 동일성 키 — `issues_not_applicable` 의 **사본**을 원본과 맞추기 위한 것.
+    사본은 `dict(원본, status=…, reason=…)` 이므로 세 필드가 같으면 같은 지적이다.
+    (여기서 어휘 재분류를 하지 않는다 — 분류는 reviewer 소관이고 orchestrator 는 그 결과만 읽는다.)"""
+    return (str(i.get("type")), str(i.get("detail")), str(i.get("fix")))
+
+
 def review_feedback(rv: dict, *, max_issues: int = 6, max_tells: int = 6, max_chars: int = 400) -> str:
     """검수 판정(rv) → 재생성 프롬프트에 넣을 피드백 문자열. **ai_tells 원문을 반드시 포함한다.**
 
@@ -163,23 +191,106 @@ def review_feedback(rv: dict, *, max_issues: int = 6, max_tells: int = 6, max_ch
     → 이제 **둘 다** 넣는다. 지목 문장을 먼저(모델이 가장 확실히 고칠 수 있는 지시라서), 설명을 뒤에.
 
     ⚠️ 재작성 '횟수'는 늘리지 않는다(비용) — 같은 1회 재작성에 정보를 더 주는 변경일 뿐이다.
+
+    표식(`issues_not_applicable`) 처리 (ORDER 2026-07-25-39, 위 `_NA_FEEDBACK_HEADER` 주석):
+      · 표식된 지적도 **보낸다**(빼면 그 안의 진짜 결함까지 사라진다) — 단 **맥락 헤더와 함께**.
+      · 표식된 지적은 **별도 슬롯**(`_MAX_ANNOTATED_ISSUES`)을 쓴다 → 표식 없는 지적의 자리를 뺏지 않는다.
     """
     def _clip(s) -> str:
         s = " ".join(str(s or "").split())
         return s[:max_chars] + ("…" if len(s) > max_chars else "")
+
+    def _line(i: dict, tag: str = "") -> str:
+        return f"[{tag}{i.get('type')}] {_clip(i.get('detail'))} → {_clip(i.get('fix'))}"
 
     parts = []
     tells = [t for t in (_clip(x) for x in (rv.get("ai_tells") or [])) if t][:max_tells]
     if tells:
         parts.append("AI-TELL SENTENCES the reviewer flagged — rewrite each of these in a different, "
                      "plainer voice (do not merely delete the words): " + " | ".join(tells))
-    for i in (rv.get("issues") or [])[:max_issues]:
-        parts.append(f"[{i.get('type')}] {_clip(i.get('detail'))} → {_clip(i.get('fix'))}")
+    issues = [i for i in (rv.get("issues") or []) if isinstance(i, dict)]   # 비정형 항목은 건너뛴다(크래시 방지)
+    annotated_keys = {_issue_key(i) for i in (rv.get("issues_not_applicable") or [])
+                      if isinstance(i, dict)}
+    plain = [i for i in issues if _issue_key(i) not in annotated_keys]
+    annotated = [i for i in issues if _issue_key(i) in annotated_keys]
+    parts += [_line(i) for i in plain[:max_issues]]                        # 실질 지적이 슬롯을 먼저 가져간다
+    if annotated:
+        parts.append(_NA_FEEDBACK_HEADER + ": "
+                     + " | ".join(_line(i, "not_applicable · ")
+                                  for i in annotated[:_MAX_ANNOTATED_ISSUES]))
     return "; ".join(parts)
 
 
+# ── 사람 승인 보류(human_gate) 판단 — 발행 분기 전용 (ORDER 2026-07-25-40) ────────────────────
+# 무엇: `severity == "medium"` 으로 **통과한** 글은 큐로 바로 보내지 않고 사람 승인 대기로 **보류**한다.
+# ⛔ 반려가 아니다 — `passed` 는 검수기 원본 그대로다. **발행 시점만 미룬다**(사람이 승인하면 그대로 나간다).
+# 왜 medium 인가(37-review ④, 사람 결정 = 권고 A): 문제의 본질이 "medium 임계가 느슨하다"가 아니라
+#   **검수기의 severity 부여가 흔들린다**는 것이었다(프롬프트상 high 여야 할 날조 인용을 medium 으로 낮춘 실측).
+#   흔들리는 자동 판정을 또 다른 자동 규칙으로 덮으면 오탐이 하나 더 생긴다 → 그 자리에 **사람**을 놓는다.
+# 실측 빈도(코퍼스 실측): 통과 30건 중 medium 7건 = **23.3%** → daily_generate=1 기준 **약 4.3일에 1건** 보류.
+#   (이 수치는 reviewer_selftest.py `[10](h)` 가 매 실행 재측정한다 — 50% 를 넘으면 사람이 감당 못 해
+#    게이트가 형해화되므로 그때는 정책을 다시 봐야 한다.)
+_HOLD_SEVERITY = "medium"
+
+
+def _hold_reasons(rv, slug: str, hsg: dict) -> list[str]:
+    """보류 사유 목록(비어 있으면 즉시 발행 큐). 판정을 **읽기만** 한다."""
+    from content import human_gate
+    reasons = []
+    sev = str((rv or {}).get("severity", "")).strip().lower()
+    if sev == _HOLD_SEVERITY:
+        n = len([i for i in ((rv or {}).get("issues") or []) if isinstance(i, dict)])
+        reasons.append(f"severity=medium(미해소 지적 {n}건)")
+    if hsg.get("enabled") and human_gate.is_sampled(slug, hsg.get("sample_pct", 0)):
+        reasons.append(f"품질 캘리브레이션 표본({hsg.get('sample_pct')}%)")
+    return reasons
+
+
+def _hold_notice(slug: str, keyword: str, rv, reasons: list[str]) -> str:
+    """사람이 승인 화면·파일에서 **바로 읽는** 보류 사유 본문(ORDER 40 ②)."""
+    lines = [f"보류 사유: {' + '.join(reasons)}",
+             f"키워드: {keyword} · slug: {slug}",
+             f"검수 판정: passed={(rv or {}).get('passed')!r} severity={(rv or {}).get('severity')!r} "
+             f"(상세: dist/review/{slug}.json)",
+             "",
+             "⚠️ 이 글은 검수를 **통과**했다(반려 아님). 검수기가 스스로 medium 을 붙였다는 뜻은",
+             "   '내보내도 되지만 지적이 남아 있다'이고, 그 판단이 흔들린 사례가 실측돼 사람이 한 번 본다.",
+             "아래 지적이 실제로 남아 있는지 본문에서 확인하라:"]
+    for n, i in enumerate([x for x in ((rv or {}).get("issues") or []) if isinstance(x, dict)][:8]):
+        detail = " ".join(str(i.get("detail") or "").split())[:400]
+        fix = " ".join(str(i.get("fix") or "").split())[:200]
+        lines.append(f"  [{n + 1}] ({i.get('type')}) {detail}")
+        if fix:
+            lines.append(f"       → 제안: {fix}")
+    tells = [" ".join(str(t).split())[:200] for t in ((rv or {}).get("ai_tells") or [])][:6]
+    if tells:
+        lines.append("  AI 티로 지목된 문장: " + " | ".join(tells))
+    lines += ["",
+              f"승인(발행): python engine/orchestrator.py --approve {slug}",
+              f"거부(미발행·보존): python -c \"import sys;sys.path.insert(0,'engine');"
+              f"from content import human_gate;print(human_gate.reject('{slug}'))\"",
+              "미리보기: dist/pending_approval/%s.html 을 브라우저로 열어라" % slug]
+    return "\n".join(lines)
+
+
+def _notify_hold(slug: str, keyword: str, rv, reasons: list[str]) -> None:
+    """보류 발생 알림(ORDER 40 ③). ⚠️ 부가 기능 — 어떤 실패도 파이프라인을 멈추지 않는다.
+    `alerts.send` 만 호출한다(daily.sh 는 건드리지 않는다 — 34-ops 와 충돌 방지)."""
+    try:
+        from monitor import alerts
+        n = len([i for i in ((rv or {}).get("issues") or []) if isinstance(i, dict)])
+        alerts.send(
+            f"[stack. 승인 대기] {keyword}\n"
+            f"사유: {' + '.join(reasons)} · 미해소 지적 {n}건\n"
+            f"검수는 통과했으나 발행을 보류했다(반려 아님). 사람이 확인해야 나간다.\n"
+            f"사유 전문: dist/pending_approval/{slug}.reason.txt\n"
+            f"승인: python engine/orchestrator.py --approve {slug}")
+    except Exception as e:                      # 알림 경로 장애가 발행 파이프라인을 깨면 안 된다
+        print(f"  (보류 알림 실패 — 파이프라인은 계속) {type(e).__name__}: {e}")
+
+
 def stage_generate(cfg):
-    """초안 생성 → 품질 게이트 → (샘플 일부는 사람 승인 대기) → 발행 큐(dist/queue). 통과분만.
+    """초안 생성 → 품질 게이트 → (샘플·medium 은 사람 승인 대기) → 발행 큐(dist/queue). 통과분만.
 
     ANTHROPIC_API_KEY 있으면 Claude(claude-opus-4-8) 실생성, 없으면 fixture(오프라인 드래프트).
     거절(게이트/검수) 시 사유를 피드백으로 재생성 — 최대 content.yaml on_reject.max_regeneration_attempts 회.
@@ -225,7 +336,7 @@ def stage_generate(cfg):
     for kw, cid in seeds:
         if review_on and passed >= daily:                # 하루 신규 상한 도달
             break
-        feedback, accepted = None, False
+        feedback, accepted, rv = None, False, None   # rv: 검수 판정(fixture 모드에선 None — 보류 판단이 읽는다)
         for attempt in range(1, max_attempts + 1):
             try:
                 spec, page = generator.generate(kw, cfg["content"], cluster=cid, feedback=feedback)
@@ -260,11 +371,15 @@ def stage_generate(cfg):
                     print(f"  재생성 피드백: ai_tells {len(rv.get('ai_tells') or [])}건 + "
                           f"issues {len(rv.get('issues') or [])}건 → {len(feedback)}자 전달")
                     continue
-            # 게이트·검수 통과 — human_sample_gate 대상이면 발행 큐 대신 승인 대기로.
-            if hsg.get("enabled") and human_gate.is_sampled(spec.slug, hsg.get("sample_pct", 0)):
-                human_gate.hold(spec.slug, page.html)
-                print(f"HUMAN GATE 대기(샘플 {hsg.get('sample_pct')}%): {kw} → dist/pending_approval/{spec.slug}.html "
-                      f"(승인: python engine/orchestrator.py --approve {spec.slug})")
+            # 게이트·검수 통과 — 보류 사유(표본 / severity=medium)가 있으면 발행 큐 대신 승인 대기로.
+            hold_why = _hold_reasons(rv, spec.slug, hsg)
+            if hold_why:
+                human_gate.hold(spec.slug, page.html,
+                                reason=_hold_notice(spec.slug, kw, rv, hold_why))
+                print(f"HUMAN GATE 보류: {kw} → dist/pending_approval/{spec.slug}.html "
+                      f"[{' + '.join(hold_why)}] (사유: {spec.slug}.reason.txt · "
+                      f"승인: python engine/orchestrator.py --approve {spec.slug})")
+                _notify_hold(spec.slug, kw, rv, hold_why)
             else:
                 with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
                     f.write(page.html)
@@ -406,8 +521,9 @@ def main(argv=None):
         return 0
     if args.list_pending:
         from content import human_gate
-        for slug in human_gate.pending():
-            print(slug)
+        # 보류 사유까지 함께 출력한다 — slug 만으로는 승인/거부를 판단할 수 없다(ORDER 2026-07-25-40 ②).
+        for block in human_gate.pending_report():
+            print(block)
         return 0
     if args.approve:
         from content import human_gate

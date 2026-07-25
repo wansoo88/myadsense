@@ -484,6 +484,43 @@ def _coerce_passed(v) -> bool:
     return False                                 # None·list·dict·그 밖의 모든 것 → 반려
 
 
+# ── 모순 판정 차단 (ORDER 2026-07-25-37 ①) ────────────────────────────────────────────────
+# 무엇: 검수기가 `severity="high"` 를 붙여 놓고 `passed=true` 를 내면, 그 판정은 **자기모순**이다.
+#   프롬프트가 "passed=false if any high-severity legal/factual/policy issue" 라고 명시하는데
+#   모델이 그 지시를 어긴 경우다. 모순된 판정은 신뢰할 수 없으므로 안전한 쪽(반려)으로 떨어뜨린다.
+#   실측(36-review): `{"passed":true,"severity":"high","issues":[허위 1인칭 legal]}` 과
+#   `{"passed":"ok","severity":"high"}` 가 발행 게이트를 그대로 통과했다.
+#
+# ⛔ ORDER 2026-07-25-19 가 폐기한 기전과 **방향이 반대다** — 이 구분이 이 코드의 존재 근거다:
+#   · 19 가 폐기한 것: **자유 텍스트(지적 문장)를 정규식으로 분류**해 `passed` 를 **False→True**(완화)로
+#     뒤집던 기전. 자연어 해석에 기대므로 세 라운드 내내 새 표현에 뚫렸고, 뚫리면 손해가
+#     "법적 리스크 글의 자동 발행"이었다.
+#   · 여기서 하는 것: **검수기 자신이 낸 구조화 필드(`severity`) 값 비교**로 **True→False**(엄격)만 한다.
+#     텍스트를 한 글자도 해석하지 않고, 통과 범위를 **넓히지 않는다**. 실패해도 손해가 반려뿐이다.
+#   → 즉 19 의 금지("정규식 텍스트 분류로 통과를 넓히지 말 것")를 위반하지 않는다.
+#
+# ⚠️ 하지 않은 것 (ORDER 37 ②·④):
+#   · "high **지적**이 있으면" 조건은 **구현하지 않았다.** 현행 스키마의 `issues[]` 는 {type,detail,fix} 뿐이고
+#     개별 severity 필드가 없다(실코퍼스 236지적 중 보유 0건). `detail` 의 "HIGH:" 접두를 읽는 것은
+#     자유 텍스트 해석 = 19 가 금지한 그 기전이므로 하지 않는다.
+#   · `medium` 은 막지 않는다. 현행 프롬프트가 의도적으로 "high 만 반려"로 설계돼 있고, medium 차단은
+#     발행량과 맞바꾸는 **정책 결정**이라 PM·사람 몫이다(권고만 — team/reports/2026-07-25-37-review.md).
+#   · 열거값 밖의 severity(`"critical"` 등)도 막지 않는다. 넓히면 과잉 차단(=매일 0편) 위험이 생기고,
+#     그 판단 역시 임계 변경이라 사람 몫이다. 실코퍼스 severity 값은 none/low/medium/high 4종뿐이었다.
+def _is_high_severity(v) -> bool:
+    """`severity` **필드 값** 비교만 한다(대소문자·공백만 정규화). 텍스트 해석 없음."""
+    return isinstance(v, str) and v.strip().lower() == "high"
+
+
+def _verdict_conflict(data: dict) -> str:
+    """통과 판정과 severity 가 모순이면 사유 문자열, 아니면 빈 문자열. **읽기만** 한다."""
+    if data.get("passed") and _is_high_severity(data.get("severity")):
+        return ("verdict conflict — the reviewer returned passed=true together with severity='high'. "
+                "Its own rubric requires passed=false for any high-severity issue, so this verdict "
+                "contradicts itself and is not trustworthy; failing closed (rejected).")
+    return ""
+
+
 def review(spec, content_cfg: dict) -> dict:
     """검수 → {passed, severity, ai_tells, issues:[{type,detail,fix}], notes}.
 
@@ -528,6 +565,12 @@ def review(spec, content_cfg: dict) -> dict:
     data.setdefault("ai_tells", [])
     # 미수익화 시 고지 지적에 not_applicable **표식**만 단다(삭제 아님·판정 불변, ORDER 2026-07-25-19).
     data = _apply_disclosure_policy(data, state)
+    # 모순 판정 차단(ORDER 2026-07-25-37 ①) — 구조화 필드끼리의 모순 검사, 엄격 방향 전용(위 주석 참조).
+    # `severity` 는 검수기 원본 그대로 둔다(판정만 반려로). 사유는 notes 에 남겨 dist/review/*.json 에서 관측 가능하게.
+    conflict = _verdict_conflict(data)
+    if conflict:
+        data["passed"] = False
+        data["notes"] = f"{data.get('notes', '')} [verdict gate] {conflict}".strip()
     # 엄격 스타일 게이트(사용자 방침 2026-07-05): AI 티(ai_tells)가 하나라도 있으면 medium 이라도 반려
     # → 재생성 유도. 평행구문 등 블록리스트 밖 AI 티까지 차단(LLM 이 ai_tells 로 잡음).
     if data.get("ai_tells"):
