@@ -94,6 +94,18 @@ def legacy_is_disclosure_only(issue: dict) -> bool:
     return bool(_LEGACY_DISCLOSURE_PHRASE.search(t)) and not R._OTHER_RISK.search(t)
 
 
+def _legacy_copy_feedback(rv: dict, *, max_issues: int = 6, max_chars: int = 400) -> str:
+    """ORDER 39 **수정 전**의 `review_feedback` 재현(참조 구현 — 프로덕션 경로 무관).
+
+    표식 지적을 맥락 없이 **원순서 그대로** 싣고 상위 `max_issues` 건에서 자른다
+    → 표식이 앞쪽에 있으면 뒤쪽 실질 지적이 밀려난다(= R3 결함). [9](d) 가 이 동작과 대조한다."""
+    def _clip(s) -> str:
+        s = " ".join(str(s or "").split())
+        return s[:max_chars] + ("…" if len(s) > max_chars else "")
+    return "; ".join(f"[{i.get('type')}] {_clip(i.get('detail'))} → {_clip(i.get('fix'))}"
+                     for i in (rv.get("issues") or [])[:max_issues])
+
+
 # ── 1. 표식 분류기 케이스 ────────────────────────────────────────────────────────────────
 # (name, issue, 표식을 달아도 되는가) — ⚠️ 이건 **라벨** 기대치다. 판정과 무관하다.
 CLASSIFY_CASES = [
@@ -522,7 +534,14 @@ def test_replay(require: bool = False) -> None:
           f"리플레이: 코퍼스 {n_docs}문서 × 3상태 판정 변경 0건(불변식)", n_verdict_changed, 0)
     check(n_f2 == 0, "리플레이: F2(Privacy Policy) 지적에 표식 0건", n_f2, 0)
     check(n_f3 == 0, "리플레이: F3(클릭 유도) 지적에 표식 0건", n_f3, 0)
-    check(n_marked > 0, "리플레이: 순수 고지 오탐은 여전히 표식된다(보고서 구분 유지)", n_marked, ">0")
+    # ⚠️ "코퍼스에 순수 고지 오탐이 **존재하느냐**"는 **환경 사실**이지 코드 동작이 아니다 → 0건이면 warn(skip).
+    #    (반대로 위 F2/F3 표식은 0이어야 **정상 동작**이므로 FAIL 을 유지한다 — 환경이 아니라 분류기 결함 신호다.)
+    #    2026-07-25 실사고: 코퍼스 내용에 건 단언이 서버에서만 FAIL → daily.sh 가 매일 rc=1 로 오경보했다.
+    if n_marked:
+        check(True, f"리플레이: 순수 고지 오탐은 여전히 표식된다({n_marked}건 — 보고서 구분 유지)")
+    else:
+        warn(f"이 환경의 코퍼스({n_docs}문서)에는 순수 고지 오탐이 없어 표식 동작을 실데이터로 관측하지 못했다 "
+             "(표식 동작 자체는 [1]·[2] 픽스처가 증명한다)")
     check(n_lost == 0,
           f"리플레이: 표식 {n_marked}건이 붙어도 `issues` 에서 사라진 지적 0건(개수 보존, ORDER 21 ①)",
           n_lost, 0)
@@ -671,10 +690,23 @@ def test_feedback_annotation() -> None:
     check(pure["detail"][:40].lower() in fbm.lower(),
           "그러면서도 표식 지적은 **별도 슬롯**으로 함께 간다(제외 아님)", "-", "annotated slot")
 
-    # (d) 실코퍼스 before/after — 수정 전 `copy` 동작에서 밀려났던 지적이 되살아나는가
+    # (d) **픽스처**로 수정 전 결함을 재현·해소 증명 — 환경(코퍼스 내용)에 의존하지 않는다.
+    #     ⚠️ 이 증명을 실코퍼스에 걸면 안 된다(2026-07-25 실사고): 로컬 dist/review 에는 재현 케이스가 2건
+    #     있지만 **서버 코퍼스에는 0건**이라 서버에서만 FAIL 했다 → daily.sh 가 매일 rc=1 로 오경보.
+    #     코퍼스는 아래 (e)에서 **보조 관측**으로만 쓰고, 케이스가 없으면 warn(skip)이지 FAIL 이 아니다([4] 패턴).
+    fb_before = _legacy_copy_feedback(outm)                  # 수정 전(copy·원순서 상위 6) 동작 재현
+    check("REAL-5:" not in fb_before,
+          "픽스처: **수정 전에는** 표식이 슬롯을 먹어 실질 지적(REAL-5)이 피드백에서 탈락했다(결함 재현)",
+          "REAL-5 in legacy feedback", False)
+    check("REAL-5:" in fbm,
+          "픽스처: **수정 후에는** 그 지적이 되살아난다(R3 해소)", "REAL-5 missing", True)
+    check(pure["detail"][:40].lower() in fb_before.lower() and pure["detail"][:40].lower() in fbm.lower(),
+          "픽스처: 표식 지적 자체는 수정 전후 모두 전달된다(제외로 푼 것이 아니다)", "-", "both reach")
+
+    # (e) 실코퍼스 before/after — **보조 관측**(환경 의존 → 재현 케이스 0건이면 skip)
     files = [f for f in sorted(glob.glob(_CORPUS)) if not f.endswith(".spec.json")]
     if not files:
-        warn("코퍼스가 없어 R3 해소의 실데이터 수치를 내지 못했다")
+        warn("코퍼스가 없어 R3 해소의 실데이터 수치를 내지 못했다(픽스처 증명은 위 (d)에서 완료)")
         return
     n_docs = old_lost = new_lost = 0
     for path in files:
@@ -699,8 +731,12 @@ def test_feedback_annotation() -> None:
         fb_new = O.review_feedback(out)
         new_lost += sum(1 for i in shown_new if str(i.get("detail"))[:40].lower() not in fb_new.lower())
     print(f"        표식 문서 {n_docs}건 — 수정 전 슬롯 경쟁으로 탈락한 실질 지적 {old_lost}건 → 수정 후 {new_lost}건")
-    check(old_lost > 0, f"수정 전 결함이 코퍼스에서 재현된다(탈락 {old_lost}건)", old_lost, ">0")
-    check(new_lost == 0, "수정 후 실질 지적 탈락 0건(R3 해소)", new_lost, 0)
+    if not old_lost:                     # ⚠️ 코퍼스에 재현 케이스가 없는 것은 **환경 차이**지 회귀가 아니다
+        warn(f"이 환경의 코퍼스({n_docs}문서)에는 R3 재현 케이스가 없다 — 결함 재현·해소는 (d) 픽스처로 증명함")
+    else:
+        check(True, f"수정 전 결함이 이 환경의 코퍼스에서도 재현된다(탈락 {old_lost}건)")
+    check(new_lost == 0, "수정 후 실질 지적 탈락 0건(코퍼스 관측 — 환경 무관하게 항상 0이어야 한다)",
+          new_lost, 0)
 
 
 # ── 8. 모순 판정 차단 — passed=true + severity=high (ORDER 2026-07-25-37 ①) ─────────────────
@@ -900,12 +936,18 @@ def test_hold_medium() -> None:
             n_med += 1
     if n_pass:
         pct = n_med * 100.0 / n_pass
+        every = f"약 {100 / pct:.1f}일에 1건" if pct else "발생 없음"
         print(f"        코퍼스 통과 {n_pass}건 중 medium {n_med}건 = {pct:.1f}% "
-              f"→ daily_generate=1 기준 약 {100 / pct:.1f}일에 1건 보류")
-        check(pct < 50, f"보류 빈도 {pct:.1f}% — 통과분의 절반을 넘으면 사람이 감당 못 한다(형해화 경보)",
-              f"{pct:.1f}%", "<50%")
+              f"→ daily_generate=1 기준 {every} 보류")
+        # ⚠️ 빈도는 **코퍼스 내용에 따라 달라지는 관측치**다 — 임계 초과는 정책 재검토 신호이지 회귀가 아니다.
+        #    FAIL 로 만들면 서버·클론처럼 코퍼스가 다른 환경에서 매일 오경보가 난다(2026-07-25 실사고).
+        if pct >= 50:
+            warn(f"보류 빈도 {pct:.1f}% — 통과분의 절반 초과. 사람이 감당 못 하면 게이트가 형해화된다 "
+                 "→ 정책 재검토 필요(PM·사람 판단)")
+        else:
+            check(True, f"보류 빈도 관측 {pct:.1f}% (통과 {n_pass}건 중 medium {n_med}건)")
     else:
-        warn("코퍼스가 없어 보류 빈도를 측정하지 못했다")
+        warn("코퍼스에 통과 판정이 없어 보류 빈도를 측정하지 못했다")
 
 
 def main(argv: list[str]) -> int:
