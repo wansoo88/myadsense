@@ -28,6 +28,76 @@ def slugify(s: str) -> str:
 _KICKER = {"comparison": "Comparison", "listicle": "Best of",
            "guide": "Guide", "alternatives": "Alternatives"}
 
+# ── 글 유형별 섹션 라벨·배치 (2026-07-25-26-content) ──────────────────────────────────
+# 진단: 발행 28편 전체가 동일 골격으로 렌더된다 —
+#   At a glance → Head to head → Feature matrix → Pricing → Pros&cons → body → Verdict → FAQ.
+# 섹션 종류·순서·헤딩 문자열·콜아웃 라벨이 100% 동일 → Google 이 '템플릿·thin'으로 보고 색인 보류(F12).
+# 대책: page_type 에 따라 (1) 섹션 순서 (2) 헤딩/콜아웃 라벨 (3) 유형 고유 내비게이션을 실제로 달리한다.
+#   비교글  = 결정 먼저(표·판정) → 딥다이브
+#   가이드  = 절차 먼저(단계 본문) → 비용/트레이드오프는 뒤 → "Bottom line"
+#   리스트글 = 픽 점프목록 + 픽 교차비교(표) 먼저 → 항목 본문 → "Our pick"
+# 겉치레(색·여백)가 아니라 **정보 배치**의 차이다. 기존 스키마·바이라인·내부링크·CWV 는 보존.
+_TYPE_LABELS = {
+    "comparison": {
+        "summary": "At a glance", "summary_lbl": "In short",
+        "headtohead": "Head to head",
+        "headtohead_sub": "Key differences side by side; the stronger option is tinted green.",
+        "matrix": "Feature matrix", "pricing": "Pricing",
+        "pricing_sub": "Confirm current pricing on each vendor's site.",
+        "proscons": "Pros & cons", "verdict": "Verdict", "verdict_lbl": "Verdict",
+    },
+    "guide": {
+        "summary": "The short version", "summary_lbl": "Before you start",
+        "headtohead": "How the options compare",
+        "headtohead_sub": "The managed option vs doing it yourself, side by side.",
+        "matrix": "Feature comparison", "pricing": "Cost & hosting options",
+        "pricing_sub": "Managed vs self-hosted — confirm current pricing on the vendor's site.",
+        "proscons": "Is it worth it?", "verdict": "Bottom line", "verdict_lbl": "Bottom line",
+    },
+    "listicle": {
+        "summary": "The short list", "summary_lbl": "Top picks",
+        "picks": "The picks",
+        "headtohead": "The picks compared",
+        "headtohead_sub": "Key differences side by side; the stronger option is tinted green.",
+        "matrix": "How the picks compare", "pricing": "Pricing at a glance",
+        "pricing_sub": "Confirm current pricing on each vendor's site.",
+        "proscons": "Strengths & trade-offs", "verdict": "Our pick", "verdict_lbl": "Our pick",
+    },
+}
+_TYPE_LABELS["alternatives"] = _TYPE_LABELS["listicle"]
+
+
+def _labels(page_type: str) -> dict:
+    return _TYPE_LABELS.get(page_type, _TYPE_LABELS["comparison"])
+
+
+# 리스트글의 '픽' 헤딩 감지 — "1. Name — …" / "7–9. …" / "Name — tagline" 형태.
+# 메타 섹션("How we chose", "What to look for", "Honorable mentions" …)은 픽이 아니다.
+_ITEM_HEAD_RE = re.compile(r"^\s*\d+\s*[.)]|^\s*\d+\s*[–-]\s*\d+|\s[—–]\s")
+_META_HEAD_RE = re.compile(
+    r"^\s*(how|what|why|can|which|when|where|honou?rable|other|self-hosting|frequently|the\s+picks)\b", re.I)
+_ITEM_NUM_PREFIX_RE = re.compile(r"^\s*\d+\s*[.)–-]\s*")
+
+
+def _pick_headings(sections) -> list:
+    """리스트글 본문 섹션에서 '픽' 헤딩만 뽑아 [(sid, heading)]. b_body 와 동일한 slugify 로 앵커 일치."""
+    picks = []
+    for i, s in enumerate(sections or []):
+        h = (s.get("heading") or "").strip()
+        if h and _ITEM_HEAD_RE.search(h) and not _META_HEAD_RE.match(h):
+            picks.append((slugify(h) or f"s{i}", h))
+    return picks
+
+
+def _picklist(picks) -> str:
+    """픽 점프 목록(정적 HTML·JS 없음·치수 안정). 각 링크는 해당 본문 섹션 앵커로 이동."""
+    lis = ""
+    for n, (sid, h) in enumerate(picks, 1):
+        label = _ITEM_NUM_PREFIX_RE.sub("", h).strip() or h
+        lis += (f'<li><a href="#{sid}"><span class="n">{n:02d}</span>'
+                f'<span>{esc(label)}</span></a></li>')
+    return f'<ol class="picklist">{lis}</ol>'
+
 CSS = r"""
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
@@ -152,6 +222,12 @@ table.tbl td.ctr{text-align:center;font-weight:700}
 .related .card:hover{border-color:var(--accent);text-decoration:none}
 .related .cat{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px}
 .related .ttl{color:var(--ink);font-weight:600;font-size:15px;line-height:1.4}
+/* pick list (listicle jump nav — 유형 고유 내비게이션, 정적·치수안정) */
+ol.picklist{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+ol.picklist li{margin:0}
+ol.picklist a{display:flex;align-items:baseline;gap:9px;border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--ink-soft);font-size:15px;font-weight:600;line-height:1.4}
+ol.picklist a:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
+ol.picklist .n{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--accent);flex:none}
 /* search */
 .searchpage .sbar{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;padding:12px 16px;max-width:560px;margin:8px 0 8px}
 .searchpage .sbar:focus-within{border-color:var(--accent)}
@@ -441,45 +517,92 @@ def render(spec, draft: bool = False) -> str:
         toc.append((label, sid))
 
     add("Overview", "overview")
-    if getattr(spec, "tldr_html", None):
-        body.append(_section("At a glance", "summary",
-                             f'<div class="callout"><div class="lbl">In short</div>{spec.tldr_html}</div>'))
-        add("At a glance", "summary")
-    if getattr(spec, "comparison", None):
-        body.append(_section("Head to head", "comparison", _comparison(spec.comparison),
-                             sub="Key differences side by side; the stronger option is tinted green."))
-        add("Head to head", "comparison")
-    if getattr(spec, "feature_matrix", None):
-        fm = _matrix(spec.feature_matrix)
-        note = '<p class="footnote">✓ full · △ partial/paid · ✗ not supported</p>'
-        body.append(_section("Feature matrix", "features", fm + note))
-        add("Feature matrix", "features")
-    if getattr(spec, "pricing", None):
-        body.append(_section("Pricing", "pricing", _pricing(spec.pricing),
-                             sub="Confirm current pricing on each vendor's site."))
-        add("Pricing", "pricing")
-    if getattr(spec, "pros_cons", None):
-        body.append(_section("Pros & cons", "proscons", _proscons(spec.pros_cons)))
-        add("Pros & cons", "proscons")
 
-    body.append(_ad("in-content-1", "in-content"))
+    # page_type 별 섹션 라벨·순서 (진단 2026-07-25-26: 28편 골격 100% 동일 → 색인 보류).
+    # ⚠️ 아래 각 블록 빌더는 스펙 필드가 없으면 no-op → 어떤 순서를 골라도 콘텐츠 유실 없음.
+    pt = (getattr(spec, "page_type", "") or "comparison").lower()
+    if pt not in _TYPE_LABELS:
+        pt = "comparison"
+    L = _labels(pt)
 
-    for i, s in enumerate(spec.sections):           # 본문(딥다이브) 섹션
-        sid = slugify(s["heading"]) or f"s{i}"
-        body.append(_section(s["heading"], sid, s["html"]))
-        add(s["heading"], sid)
+    def b_summary():                                # 상단 한 줄 결론(콜아웃) — 라벨만 유형별
+        if getattr(spec, "tldr_html", None):
+            body.append(_section(L["summary"], "summary",
+                                 f'<div class="callout"><div class="lbl">{esc(L["summary_lbl"])}</div>'
+                                 f'{spec.tldr_html}</div>'))
+            add(L["summary"], "summary")
 
-    if getattr(spec, "verdict_html", None):
-        body.append('<section class="blk" id="verdict"><div class="callout good">'
-                    f'<div class="lbl">Verdict</div>{spec.verdict_html}</div></section>')
-        add("Verdict", "verdict")
+    def b_picks():                                  # 리스트글 전용: 픽 점프 목록(유형 고유 내비게이션)
+        if pt not in ("listicle", "alternatives"):
+            return
+        picks = _pick_headings(spec.sections)
+        if len(picks) < 3:                          # 2-way 'best of' 등은 목록 만들지 않음(형해화 방지)
+            return
+        body.append(_section(L.get("picks", "The picks"), "picks", _picklist(picks),
+                             sub="Jump straight to any pick below."))
+        add(L.get("picks", "The picks"), "picks")
 
-    if getattr(spec, "faq", None):              # FAQ 섹션(People-Also-Ask 대응) + FAQPage 스키마(_jsonld)
-        qa = "".join(f'<h3>{esc(f["q"])}</h3><p>{esc(f["a"])}</p>'
-                     for f in spec.faq if f.get("q") and f.get("a"))
-        if qa:
-            body.append(_section("FAQ", "faq", qa))
-            add("FAQ", "faq")
+    def b_headtohead():
+        if getattr(spec, "comparison", None):
+            body.append(_section(L["headtohead"], "comparison", _comparison(spec.comparison),
+                                 sub=L["headtohead_sub"]))
+            add(L["headtohead"], "comparison")
+
+    def b_matrix():
+        if getattr(spec, "feature_matrix", None):
+            fm = _matrix(spec.feature_matrix)
+            note = '<p class="footnote">✓ full · △ partial/paid · ✗ not supported</p>'
+            body.append(_section(L["matrix"], "features", fm + note))
+            add(L["matrix"], "features")
+
+    def b_pricing():
+        if getattr(spec, "pricing", None):
+            body.append(_section(L["pricing"], "pricing", _pricing(spec.pricing), sub=L["pricing_sub"]))
+            add(L["pricing"], "pricing")
+
+    def b_proscons():
+        if getattr(spec, "pros_cons", None):
+            body.append(_section(L["proscons"], "proscons", _proscons(spec.pros_cons)))
+            add(L["proscons"], "proscons")
+
+    def b_ad():
+        body.append(_ad("in-content-1", "in-content"))
+
+    def b_body():                                   # 본문(딥다이브/단계/항목) 섹션
+        for i, s in enumerate(spec.sections):
+            sid = slugify(s["heading"]) or f"s{i}"
+            body.append(_section(s["heading"], sid, s["html"]))
+            add(s["heading"], sid)
+
+    def b_verdict():
+        if getattr(spec, "verdict_html", None):
+            body.append('<section class="blk" id="verdict"><div class="callout good">'
+                        f'<div class="lbl">{esc(L["verdict_lbl"])}</div>{spec.verdict_html}</div></section>')
+            add(L["verdict"], "verdict")
+
+    def b_faq():                                    # People-Also-Ask 대응 + FAQPage 스키마(_jsonld)
+        if getattr(spec, "faq", None):
+            qa = "".join(f'<h3>{esc(f["q"])}</h3><p>{esc(f["a"])}</p>'
+                         for f in spec.faq if f.get("q") and f.get("a"))
+            if qa:
+                body.append(_section("FAQ", "faq", qa))
+                add("FAQ", "faq")
+
+    # 유형별 정보 흐름. 모든 필드 빌더가 각 순서에 포함되므로(누락 시 no-op) 콘텐츠 유실은 없다.
+    _ORDERS = {
+        # 비교: 결정(표·판정) 먼저 → 딥다이브
+        "comparison": [b_summary, b_headtohead, b_matrix, b_pricing, b_proscons,
+                       b_ad, b_body, b_verdict, b_faq],
+        # 가이드: 절차(단계 본문) 먼저 → 비용·트레이드오프는 뒤 → "Bottom line"
+        "guide": [b_summary, b_ad, b_headtohead, b_matrix, b_body,
+                  b_pricing, b_proscons, b_verdict, b_faq],
+        # 리스트: 픽 점프목록 + 픽 교차비교(표) 먼저 → 항목 본문 → 강점/약점 → "Our pick"
+        "listicle": [b_summary, b_picks, b_headtohead, b_matrix, b_pricing,
+                     b_ad, b_body, b_proscons, b_verdict, b_faq],
+    }
+    _ORDERS["alternatives"] = _ORDERS["listicle"]
+    for builder in _ORDERS[pt]:
+        builder()
 
     # 저자 박스
     body.append(f'<div class="authorbox"><span class="av lg">{esc(spec.author[:1].upper())}</span><div>'
