@@ -1,0 +1,21 @@
+# .gitattributes — 줄바꿈(EOL) 정책: 저장소·체크아웃 모두 LF 고정
+#
+# 배경(실제 사고 2026-07-25): Windows 작업트리(core.autocrlf=true)에서 체크아웃된
+# scripts/daily.sh 가 CRLF 로 변해 scp 로 서버에 유입 → 셰방이 `#!/usr/bin/env bash\r` 로
+# 깨지면서 09:00 서버 cron 일일 잡이 통째로 미실행됐다.
+# 이 파일이 있으면 어떤 OS·어떤 core.autocrlf 설정에서 체크아웃해도 LF 이므로
+# 같은 사고가 구조적으로 재발할 수 없다(사람 주의력에 의존하지 않는다).
+
+# 기본: 텍스트로 감지된 모든 파일은 저장소에 LF 로 저장하고 LF 로 체크아웃한다.
+* text=auto eol=lf
+
+# 서버(Ubuntu)에서 직접 실행·해석되는 파일 — LF 강제(가장 중요).
+*.sh   text eol=lf
+*.py   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# Windows 전용(로컬에서만 실행) — 네이티브 CRLF 유지.
+*.ps1  text eol=crlf

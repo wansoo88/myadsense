@@ -26,3 +26,8 @@ engine/store/signals.json
 Thumbs.db
 engine/store/published.json
 engine/store/indexnow_state.json
+
+# 런타임 상태(서버·로컬이 각자 씀 — 추적하면 서버 pull 이 'untracked would be overwritten' 로 영구 실패)
+engine/store/devto_state.json
+engine/store/generation_alert_state.json
+engine/store/last_publish_date.txt
