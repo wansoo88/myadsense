@@ -34,10 +34,23 @@ def _reason_path(slug: str) -> str:
 
 
 def hold(slug: str, html_doc: str, reason: str = "") -> str:
+    """승인 대기로 보류. **같은 내용을 두 번 보류해도 바이트가 같아야 한다**(멱등).
+
+    🔴 왜 정규화가 필요한가 (2026-08-01 실측): 예전 판은 받은 문자열을 그대로 텍스트 모드로 썼다.
+    호출부가 **파일에서 읽은 내용**(Windows 라 `\\r\\n`)을 넘기면 텍스트 모드가 `\\n` → `\\r\\n` 을 한 번 더
+    적용해 `\\r\\r\\n` 이 되고 바이트가 불어난다 — 실측 49,125 B → 49,385 B.
+    그러면 보류본이 게이트를 통과한 그 바이트가 아니게 되어 **판정과 산출물이 어긋난다**(43c 원칙 위반).
+    파이프라인 경로(메모리 문자열)는 무사했지만, 기존 파일을 재보류하는 도구는 전부 깨졌다.
+
+    → 개행을 먼저 `\\n` 으로 정규화한 뒤 쓴다. 쓰기 자체는 **기본 텍스트 모드 그대로** 둔다:
+      `approve()` 가 `shutil.move` 로 이 파일을 그대로 큐에 옮기므로, 큐 산출물(`stage_generate` 도
+      기본 텍스트 모드로 쓴다)과 개행 관례가 같아야 한다. 여기만 LF 로 바꾸면 큐 안에서 관례가 갈린다.
+    """
     os.makedirs(PENDING_DIR, exist_ok=True)
     path = os.path.join(PENDING_DIR, f"{slug}.html")
+    text = (html_doc or "").replace("\r\n", "\n").replace("\r", "\n")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(html_doc)
+        f.write(text)
     if reason:
         try:                                       # 사유 기록 실패가 보류 자체를 깨지 않게(부가 기능)
             with open(_reason_path(slug), "w", encoding="utf-8") as f:

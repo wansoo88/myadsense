@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import re
 import sys
 
 # stdout/stderr 를 UTF-8 로 강제 — Windows cp949 콘솔에서 '—'(—) 등 출력 시 UnicodeEncodeError 로
@@ -289,25 +290,165 @@ def _notify_hold(slug: str, keyword: str, rv, reasons: list[str]) -> None:
         print(f"  (보류 알림 실패 — 파이프라인은 계속) {type(e).__name__}: {e}")
 
 
-def stage_generate(cfg):
+# ══ 트렌드 전용 축 (ORDER 2026-08-01-45) ═══════════════════════════════════════════════════
+# 왜 '정렬'이 아니라 '필터'인가: `stage_research` 는 `next_batch_priority` 로 백로그를 **정렬만** 하고
+# `stage_generate` 는 그 상위 10개를 시드로 쓴다. 그 상위 10에는 비트렌드 토픽이 섞이므로
+# 정렬만으로는 "전용"이 되지 않는다 → 트렌드 모드에서는 `trend_axis.candidates` **만** 시드가 된다.
+#
+# 🔴 후보가 소진되면 **기존 백로그로 폴백하지 않는다** — 그날은 0편으로 끝낸다.
+#    0편은 정지 사유가 아니다(`guardrails.zero_generation_alert_days` 는 알림만 낸다).
+#    폴백을 허용하면 "트렌드 전용"이 첫날부터 이름뿐인 장식이 된다.
+#    (config `trend_axis.fallback_to_backlog: true` 로 사람이 명시적으로 켤 수는 있다 — 기본은 false.)
+def _trend_axis(cfg) -> dict:
+    t = cfg.get("topics")
+    return (t.get("trend_axis") or {}) if isinstance(t, dict) else {}
+
+
+def _trend_seeds(cfg) -> tuple[list, dict]:
+    """trend_axis.candidates → ([(keyword, cluster)…], {keyword: 후보}). config 기재 순 = 우선순위."""
+    seeds, by_kw = [], {}
+    for c in (_trend_axis(cfg).get("candidates") or []):
+        kw = str((c or {}).get("keyword") or "").strip()
+        if not kw or kw in by_kw:
+            continue
+        seeds.append((kw, str(c.get("cluster") or "ai-coding-tools")))
+        by_kw[kw] = c
+    return seeds, by_kw
+
+
+def _trend_hints(cand: dict) -> dict:
+    """후보의 **사람이 미리 확정한** 식별자 → generator hints (ORDER 45 ③).
+
+    `official_url` → 그라운딩 페치 대상(모델 URL 발견을 아예 건너뛴다),
+    `github`/`npm`/`kind`/`why` → 관측 대상(모델 식별자 발견을 아예 건너뛴다).
+    이 두 발견 단계가 07-08 반려 루프의 원인이었으므로, 트렌드 축에서는 경로 자체를 제거한다.
+    """
+    targets, per_entity = [], []
+    for e in (cand.get("entities") or []):
+        if not isinstance(e, dict):
+            continue
+        t = {"name": e.get("name")}
+        for k in ("kind", "why", "github", "npm", "statuspage", "dockerhub"):
+            if e.get(k):
+                t[k] = e[k]
+        targets.append(t)
+        per_entity.append([u for u in ([e.get("official_url")] + list(e.get("extra_urls") or [])) if u])
+    # URL 순서는 **제품별 라운드로빈**이다. 그냥 이어 붙이면 `grounding.max_sources`(기본 5)에서 잘릴 때
+    # 뒤쪽 제품의 1순위 소스가 통째로 날아가 **한쪽만 근거가 있는 비대칭 비교**가 된다
+    # (30-content 반려 2건의 사유가 정확히 비대칭 비교였다).
+    urls = []
+    for i in range(max((len(p) for p in per_entity), default=0)):
+        for p in per_entity:
+            if i < len(p) and p[i] not in urls:
+                urls.append(p[i])
+    return {"targets": targets, "source_urls": urls}
+
+
+def trend_preflight(cand: dict, cfg) -> tuple[bool, str, dict | None]:
+    """생성 **전에** 관측표가 실제로 서는지 확인한다 (ORDER 45 ②·④). (통과?, 사유, 관측결과)
+
+    LLM 호출 **앞**에 둔 이유: 여기서 걸리는 후보는 어차피 표 없이 글만 나오므로, 비싼 생성을 한 뒤
+    버리는 것보다 공개 API GET 몇 번으로 먼저 떨어뜨리는 편이 싸다(실패해도 토큰 비용 0).
+      ④ 등가성 — 선언된 `kind` 가 서로 다르면 비교 자체가 성립하지 않는다 → 후보를 **버린다**.
+      ② 관측표 — `observed.usable()` 을 못 넘으면 그 토픽을 **버린다**(표 없는 트렌드 글은 큐에 넣지 않는다).
+    ⚠️ 관측은 **1회**다. 수치가 마음에 안 든다고 짝을 바꿔 다시 재지 않는다(43c-review ③ · ORDER 45 ④).
+    """
+    from content import observed
+    o = (cfg["content"].get("observed_data") or {})
+    targets = _trend_hints(cand)["targets"]
+    need = int(o.get("min_entities", 2))
+    if len(targets) < need:
+        return False, f"식별자 {len(targets)}개 — 비교에 필요한 최소 {need}개 미만", None
+    if not observed.equivalent_kinds(targets):
+        kinds = ", ".join(f'{t.get("name")}={t.get("kind") or "(미선언)"}' for t in targets)
+        return False, f"비교 등가성 불충족 — kind 가 엇갈린다({kinds})", None
+    res = observed.collect(targets, timeout=int(o.get("timeout", 10)),
+                           max_entities=int(o.get("max_entities", 5)), sources=o.get("sources"))
+    ents = res.get("entities") or []
+    rows, diff = observed.live_rows(ents), observed.distinct_rows(ents)
+    if not observed.usable(res, min_entities=need, min_rows=int(o.get("min_rows", 3)),
+                           min_distinct_rows=int(o.get("min_distinct_rows", 2))):
+        return False, (f"관측표 불가 — 제품 {len(ents)}개 · 양쪽 다 값이 있는 행 {len(rows)} · "
+                       f"값이 갈리는 행 {len(diff)} · API {res.get('ok_calls')}/{res.get('total_calls')} 성공"), res
+    return True, (f"관측표 {len(rows)}행(값이 갈리는 행 {len(diff)}) · "
+                  f"API {res.get('ok_calls')}/{res.get('total_calls')} 성공 · 관측일 {res.get('observed_date')}"), res
+
+
+# ── 근접중복 코퍼스 (ORDER 45 PM 회신 7 — 플립 선행조건) ──────────────────────────────────
+# 🔴 무엇이 문제였나: `quality_gate.check(existing_corpus=corpus)` 의 `corpus` 는 **그 실행 안에서만** 쌓인다.
+#    하루 1편 카덴스에서는 매 실행이 `corpus=[]` 로 시작하므로 **어제 발행분과의 유사도를 아무도 보지 않는다.**
+#    트렌드 축에서 특히 치명적이다 — 후보 7개에 herdr 3회·ccmanager 3회·sculptor 2회·catnip 2회·
+#    container-use 2회가 겹쳐 등장하므로, 같은 제품쌍을 매일 다른 각도로 쓰다 보면 누적 유사도가 올라간다.
+# → 이미 게이트를 통과한 산출물(`dist/queue`)과 승인 대기분(`dist/pending_approval`)을 코퍼스로 **먼저 적재**한다.
+#   ⚠️ 비교 대상은 산문이다: 렌더된 HTML 에서 chrome(nav/header/footer/script/style)과 **표**를 걷어낸다.
+#     표를 남기면 사이트 공통 문구·수치가 섞여 유사도가 왜곡된다(생성 중 corpus 는 표를 제외한 산문이다).
+_CORPUS_STRIP_RE = re.compile(r"(?is)<(script|style|nav|header|footer|table|form)\b.*?</\1>")
+_CORPUS_MAIN_RE = re.compile(r"(?is)<main\b.*?</main>")
+
+
+def _html_prose(doc: str) -> str:
+    """렌더된 문서 → 근접중복 비교용 산문 텍스트(생성 중 corpus 와 같은 성격으로 맞춘다)."""
+    m = _CORPUS_MAIN_RE.search(doc or "")
+    body = m.group(0) if m else (doc or "")
+    body = _CORPUS_STRIP_RE.sub(" ", body)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body)).strip()
+
+
+def published_corpus(dirs=("dist/queue", "dist/pending_approval")) -> list:
+    """이미 통과한 산출물의 산문 목록. 읽기 실패는 그 파일만 건너뛴다(가드가 아예 없는 것보다 낫다)."""
+    out = []
+    for d in dirs:
+        for p in sorted(glob.glob(os.path.join(d, "*.html"))):
+            try:
+                with open(p, encoding="utf-8") as f:
+                    t = _html_prose(f.read())
+                if t:
+                    out.append(t)
+            except Exception as e:
+                print(f"  (코퍼스 적재 건너뜀 {p}: {type(e).__name__})")
+    return out
+
+
+def _backlog_seeds(cfg) -> list:
+    """기존 경로의 시드 — research 백로그 상위 10, 없으면 P1 코너스톤. (트렌드 모드에서는 쓰지 않는다.)"""
+    import json
+    if os.path.exists("dist/research/backlog.json"):
+        with open("dist/research/backlog.json", encoding="utf-8") as f:
+            ranked = json.load(f)
+        seeds = [(e["keyword"], e["cluster"]) for e in ranked[:10]]
+        print(f"generate: research 백로그 상위 {len(seeds)}개 사용")
+        return seeds
+    seeds = []
+    for c in cfg["topics"]["clusters"]:
+        if c.get("priority") == 1:
+            seeds += [(s, c["id"]) for s in c.get("seeds", [])[:3]]
+    return seeds
+
+
+def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
     """초안 생성 → 품질 게이트 → (샘플·medium 은 사람 승인 대기) → 발행 큐(dist/queue). 통과분만.
 
     ANTHROPIC_API_KEY 있으면 Claude(claude-opus-4-8) 실생성, 없으면 fixture(오프라인 드래프트).
     거절(게이트/검수) 시 사유를 피드백으로 재생성 — 최대 content.yaml on_reject.max_regeneration_attempts 회.
+
+    limit: 이번 실행에 한해 **일일 상한만** 대체한다(시범 생성용 `--trend-pilot`).
+           ⛔ 게이트·검수·킬스위치·보류는 무엇도 우회하지 않는다. `config/guardrails.yaml` 은 건드리지 않는다.
+    only:  이 키워드 하나만 시도한다(시범 대상 지정).
     """
     import json
     from content import generator, human_gate, quality_gate
-    backlog_path = "dist/research/backlog.json"
-    if os.path.exists(backlog_path):                     # research 가 만든 순위 백로그 우선(시드 + SC 트렌드 후보)
-        with open(backlog_path, encoding="utf-8") as f:
-            ranked = json.load(f)
-        seeds = [(e["keyword"], e["cluster"]) for e in ranked[:10]]
-        print(f"generate: research 백로그 상위 {len(seeds)}개 사용")
-    else:                                                # 없으면 P1 코너스톤 시드
-        seeds = []
-        for c in cfg["topics"]["clusters"]:
-            if c.get("priority") == 1:
-                seeds += [(s, c["id"]) for s in c.get("seeds", [])[:3]]
+    trend_on = bool(_trend_axis(cfg).get("enabled"))
+    trend_by_kw = {}
+    if trend_on:                                         # 🔴 트렌드 전용: trend_axis 후보만 시드가 된다
+        seeds, trend_by_kw = _trend_seeds(cfg)
+        print(f"generate: 트렌드 전용 축 ON — 후보 {len(seeds)}개만 시드로 사용"
+              f"(백로그 미사용{'' if not os.path.exists('dist/research/backlog.json') else ' — backlog.json 존재하나 읽지 않는다'})")
+    else:
+        seeds = _backlog_seeds(cfg)
+    if only:
+        seeds = [s for s in seeds if s[0] == only]
+        if not seeds:
+            print(f"generate: 지정 키워드 '{only}' 가 시드에 없다 — 0편")
     os.makedirs("dist/queue", exist_ok=True)
     # 실콘텐츠(fixture 아님)는 발행 전 항상 검수(adsense-review 루브릭 — 사용자 방침)
     review_on = os.environ.get("ADSENSE_FIXTURE") != "1" and (
@@ -316,6 +457,10 @@ def stage_generate(cfg):
     pub_path = "engine/store/published.json"
     published = set(json.load(open(pub_path, encoding="utf-8"))) if os.path.exists(pub_path) else set()
     daily = (cfg["guardrails"].get("rollout", {}) or {}).get("daily_generate", 4)
+    if limit is not None:                                # 시범 생성(--trend-pilot) — 상한 **하나만** 대체한다
+        print(f"generate: ⚠️ 일일 상한을 이번 실행에 한해 {daily} → {limit} 로 대체(시범 생성). "
+              f"config/guardrails.yaml 은 수정하지 않았다. 품질게이트·검수·보류·킬스위치는 전부 그대로다.")
+        daily = int(limit)
     # 하루 1편 멱등 가드 — 수동 발행 ↔ 20:00 로컬 배치 중복/경합 방지. 오늘 이미 발행 성공했으면 스킵.
     # 먼저 도는 쪽이 그날을 '선점'하고 나중 쪽은 자동 스킵(published.json·배포 경합 없음). review_on 일 때만.
     import datetime as _dt
@@ -330,18 +475,61 @@ def stage_generate(cfg):
             pass
     if review_on:
         seeds = [s for s in seeds if s[0] not in published]
+    if trend_on and not seeds:
+        # 🔴 후보 소진 = **0편으로 끝낸다**. 백로그 폴백 금지(ORDER 45 ①).
+        # ⚠️ `fallback_to_backlog` 는 **실제로 동작하는 값**이다(기본 false). 코드가 읽지 않는 config 키는
+        #    "값을 바꿔도 동작이 안 바뀌는 장식"이 되고, 이 저장소는 그 사고를 이미 겪었다(title_policy rev1).
+        if _trend_axis(cfg).get("fallback_to_backlog"):
+            print("generate: ⚠️ trend_axis.fallback_to_backlog=true — 사람이 명시적으로 켠 폴백. 백로그로 내려간다")
+            seeds = [s for s in _backlog_seeds(cfg) if not review_on or s[0] not in published]
+        if not seeds:
+            print("generate: 트렌드 후보 소진(미발행 후보 0) — "
+                  + ("폴백 백로그에도 미발행 시드가 없다" if _trend_axis(cfg).get("fallback_to_backlog")
+                     else "백로그로 폴백하지 않는다") + ". 오늘은 0편.")
+            print("generate(트렌드 전용): 0 신규 / 0 탈락 → dist/queue "
+                  f"(누적 발행 {len(published)}) — 0편은 정지 사유가 아니다(알림만)")
+            return 0
     max_attempts = 1 + int((cfg["content"].get("on_reject", {}) or {}).get("max_regeneration_attempts", 0))
     hsg = (cfg["content"].get("quality_gate", {}).get("human_sample_gate", {}) or {})
-    corpus, passed, rejected = [], 0, 0
+    # 🔴 발행분·승인대기분을 **먼저** 코퍼스에 적재한다(PM 회신 7). 이게 없으면 하루 1편 카덴스에서
+    #    어제 발행분과의 유사도가 한 번도 검사되지 않는다.
+    corpus = published_corpus()
+    print(f"generate: 근접중복 코퍼스 {len(corpus)}편 적재(dist/queue + dist/pending_approval) — "
+          f"임계 {cfg['content']['quality_gate']['near_duplicate']['max_similarity']}")
+    passed, rejected, dropped = 0, 0, 0
     for kw, cid in seeds:
         if review_on and passed >= daily:                # 하루 신규 상한 도달
             break
+        hints = None
+        is_trend = kw in trend_by_kw          # 폴백으로 내려온 백로그 시드에는 트렌드 규칙을 적용하지 않는다
+        if is_trend:
+            # ②④ 생성 **전** 판정 — 관측표가 안 서거나 등가 짝이 아니면 그 토픽은 버리고 다음 후보로.
+            ok, why, _res = trend_preflight(trend_by_kw.get(kw) or {}, cfg)
+            if not ok:
+                print(f"TREND DROP {kw}: {why} → 이 후보를 버리고 다음 후보로(생성 호출 없음)")
+                dropped += 1
+                continue
+            hints = _trend_hints(trend_by_kw.get(kw) or {})
+            print(f"TREND OK {kw}: {why}")
+            print(f"  식별자(사람 확정): "
+                  + " | ".join(f'{t.get("name")} kind={t.get("kind")} '
+                               f'{t.get("github") or t.get("npm")}' for t in hints["targets"])
+                  + f" · 그라운딩 URL {len(hints['source_urls'])}개")
         feedback, accepted, rv = None, False, None   # rv: 검수 판정(fixture 모드에선 None — 보류 판단이 읽는다)
+        trend_dropped = False                        # '표가 없어 버림'은 게이트 탈락과 다른 사건이다(집계 분리)
         for attempt in range(1, max_attempts + 1):
             try:
-                spec, page = generator.generate(kw, cfg["content"], cluster=cid, feedback=feedback)
+                spec, page = generator.generate(kw, cfg["content"], cluster=cid, feedback=feedback,
+                                                hints=hints)
             except Exception as e:
                 print(f"SKIP {kw}: 생성 실패 {e}"); break         # 시스템 오류는 피드백으로 못 고침 — 재시도 안 함
+            if is_trend and not getattr(spec, "observed", None):
+                # 사전 판정을 통과했어도 최종 spec 에 표가 없으면(해석 단락 확보 실패 등) 큐에 넣지 않는다.
+                # ②의 이중 방어 — 트렌드 축의 존재 이유가 관측표이므로 표 없는 글은 이 축의 산출물이 아니다.
+                print(f"TREND DROP {kw}: 최종 초안에 관측표가 붙지 않았다 — 표 없는 트렌드 글은 큐에 넣지 않는다")
+                dropped += 1
+                trend_dropped = True
+                break
             r = quality_gate.check(page, cfg["content"], existing_corpus=corpus)
             if not r.passed:
                 kept = _keep_rejected_spec(spec, stage="quality_gate", keyword=kw,
@@ -385,7 +573,7 @@ def stage_generate(cfg):
                     f.write(page.html)
             corpus.append(" ".join(page.blocks)); published.add(kw); passed += 1
             accepted = True; break
-        if not accepted:
+        if not accepted and not trend_dropped:
             rejected += 1
     if review_on:                                        # 발행 키워드 영속화(다음 날 중복 방지)
         os.makedirs("engine/store", exist_ok=True)
@@ -395,7 +583,13 @@ def stage_generate(cfg):
                 open(marker_path, "w", encoding="utf-8").write(today_str)
             except Exception:
                 pass
-    print(f"generate({'검수ON·일일' if review_on else 'fixture'}): {passed} 신규 / {rejected} 탈락 → dist/queue (누적 발행 {len(published)})")
+    mode = ("트렌드 전용·" if trend_on else "") + ("검수ON·일일" if review_on else "fixture")
+    print(f"generate({mode}): {passed} 신규 / {rejected} 탈락"
+          + (f" / {dropped} 버림(관측표·등가성 불충족)" if trend_on else "")
+          + f" → dist/queue (누적 발행 {len(published)})")
+    if trend_on and passed == 0:
+        print("generate: 오늘 0편 — 트렌드 축에서 조건을 채운 후보가 없었다. "
+              "0편은 정지 사유가 아니다(zero_generation_alert_days 알림만).")
     return passed
 
 
@@ -515,9 +709,37 @@ def main(argv=None):
     p.add_argument("--list-pending", action="store_true", help="휴먼 샘플 게이트 대기 목록 출력")
     p.add_argument("--rereview", metavar="SLUG",
                    help="보존된 반려 초안 재검수(dist/review/<slug>.spec.json → <slug>.rereview.json, 발행 안 함)")
+    p.add_argument("--trend-pilot", nargs="?", const="", metavar="KEYWORD",
+                   help="트렌드 축 시범 생성 1편(큐까지, 발행·배포 없음). 키워드 생략 시 첫 적격 후보. "
+                        "⚠️ 일일 상한만 1로 대체하고 guardrails.yaml 은 수정하지 않는다 — 게이트·검수·보류는 그대로.")
+    p.add_argument("--trend-plan", action="store_true",
+                   help="트렌드 후보 사전판정만 출력(생성 호출 없음) — 관측표·등가성 통과 여부 점검용")
     args = p.parse_args(argv)
     if args.rereview:
         rereview(args.rereview, load_config())
+        return 0
+    if args.trend_plan:
+        cfg = load_config()
+        seeds, by_kw = _trend_seeds(cfg)
+        pub = "engine/store/published.json"
+        import json as _json
+        done = set(_json.load(open(pub, encoding="utf-8"))) if os.path.exists(pub) else set()
+        ok_n = 0
+        for kw, cid in seeds:
+            if kw in done:
+                print(f"  - {kw}: 발행됨(스킵)")
+                continue
+            ok, why, _r = trend_preflight(by_kw.get(kw) or {}, cfg)
+            ok_n += bool(ok)
+            print(f"  {'OK  ' if ok else 'DROP'} {kw} [{cid}]: {why}")
+        print(f"trend-plan: 후보 {len(seeds)}개 중 미발행·적격 {ok_n}개")
+        return 0
+    if args.trend_pilot is not None:
+        cfg = load_config()
+        if not _trend_axis(cfg).get("enabled"):
+            print("trend-pilot: config/topics.yaml 의 trend_axis.enabled 가 꺼져 있다 — 아무것도 하지 않는다")
+            return 0
+        stage_generate(cfg, limit=1, only=(args.trend_pilot or None))
         return 0
     if args.list_pending:
         from content import human_gate
@@ -531,7 +753,7 @@ def main(argv=None):
         print(f"승인 완료 → {path} (다음 build/deploy부터 라이브)")
         return 0
     if not args.stage:
-        p.error("--stage 필요(또는 --approve/--list-pending/--rereview)")
+        p.error("--stage 필요(또는 --approve/--list-pending/--rereview/--trend-pilot/--trend-plan)")
     cfg = load_config()
     STAGES[args.stage](cfg)             # 반환값은 종료코드로 쓰지 않음(예외 시에만 비0)
     return 0

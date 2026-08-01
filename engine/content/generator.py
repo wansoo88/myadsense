@@ -12,8 +12,9 @@ import datetime
 import json
 import os
 import re
+import time
 
-from content import renderer, source_fetch
+from content import observed, renderer, source_fetch
 from content.quality_gate import Page
 
 
@@ -45,6 +46,8 @@ class ContentSpec:
     grounding_context: str = ""         # 생성 시 주입한 공식 소스 텍스트(검수 사실대조용, 렌더 미노출)
     faq: list = field(default_factory=list)  # [{"q","a"}] — People-Also-Ask 대응 + FAQPage 스키마
     selfcheck_flags: list = field(default_factory=list)  # 생성측 자가검수 잔여 경고(로그용, 렌더 미노출)
+    observed: dict | None = None        # 제3자 공개 API 관측 원자료(observed.py) — 감사·재현용 원본 보존
+    observation_takeaway: str | None = None  # 관측 수치에 대한 모델의 해석 한 단락(관측 섹션 안에 렌더)
 
 
 def _strip(h: str) -> str:
@@ -52,9 +55,14 @@ def _strip(h: str) -> str:
 
 
 def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
-    blocks = [_strip(spec.intro_html)] + [_strip(s["html"]) for s in spec.sections]
+    # ⚠️ 관측 데이터 섹션(observed.py 가 만든 표)은 **산문 집계에서 뺀다**: 표 셀의 단어가
+    #    min_prose_words 게이트를 채우면 게이트가 실질적으로 헐거워진다. 표는 unique_block 으로만 센다.
+    blocks = [_strip(spec.intro_html)] + [_strip(s["html"]) for s in spec.sections
+                                          if not s.get("observed")]
     if spec.verdict_html:
         blocks.append(_strip(spec.verdict_html))
+    if getattr(spec, "observation_takeaway", None):   # 관측 해석 단락은 **모델 산문**이므로 집계한다
+        blocks.append(_strip(spec.observation_takeaway))
     for f in (spec.faq or []):                 # FAQ 답변도 실질 산문으로 집계
         blocks.append(_strip(f.get("a", "")))
     unique = []
@@ -64,6 +72,8 @@ def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
         unique.append("pricing-table")
     if spec.pros_cons:
         unique.append("pros-cons")
+    if spec.observed:                          # 제3자 공개 API 관측(우리가 직접 조회한 원저 수치)
+        unique.append("observed-data")
     return Page(
         slug=spec.slug, title=spec.title, html=html_doc,
         blocks=[b for b in blocks if b], unique_blocks=unique,
@@ -73,10 +83,15 @@ def spec_to_page(spec: ContentSpec, html_doc: str) -> Page:
 
 
 def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False,
-             draft: bool = False, cluster: str | None = None, feedback: str | None = None):
+             draft: bool = False, cluster: str | None = None, feedback: str | None = None,
+             hints: dict | None = None):
     """topic(시드 키워드) → (spec, page). page.html 은 design.md 렌더 결과.
-    feedback: 이전 시도의 게이트/검수 거절 사유(있으면 재생성 시 고쳐야 할 지시로 주입)."""
-    spec = _resolve_provider(topic, content_cfg, force_fixture, feedback=feedback)
+    feedback: 이전 시도의 게이트/검수 거절 사유(있으면 재생성 시 고쳐야 할 지시로 주입).
+    hints: 사람이 **미리 확정한** 식별자(ORDER 2026-08-01-45 ③) — 모델 자동 발견을 건너뛴다.
+        {"source_urls": [공식 docs/홈 URL…], "targets": [{"name","kind","github"/"npm","why"}…]}
+      왜: 2026-07-08 재큐레이션의 반려 루프는 "신생 툴이라서"가 아니라 **공식 URL 자동 발견 실패**가
+      원인이었다. 발견을 운에 맡기지 않고 config 에 적힌 값을 그대로 쓴다."""
+    spec = _resolve_provider(topic, content_cfg, force_fixture, feedback=feedback, hints=hints)
     if cluster:
         spec.cluster = cluster                # 카테고리 허브 그룹핑용(렌더 시 meta로 기록)
     html_doc = renderer.render(spec, draft=draft)
@@ -84,7 +99,7 @@ def generate(topic: str, content_cfg: dict, *, force_fixture: bool = False,
 
 
 def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
-                       feedback: str | None = None) -> ContentSpec:
+                       feedback: str | None = None, hints: dict | None = None) -> ContentSpec:
     """provider 선택: api(키) | claude_cli(구독 헤드리스) | auto | fixture(오프라인)."""
     if force_fixture or os.environ.get("ADSENSE_FIXTURE") == "1":
         return _fixture(topic)                # 스테이징/프리뷰 빠른 빌드(LLM 호출 없음)
@@ -96,14 +111,25 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
             provider = "claude_cli"
         else:
             provider = "fixture"
-    grounding_text, fetched = _ground(topic, content_cfg)   # 공식 소스 페치(실패/비활성 시 "", [])
+    grounding_text, fetched = _ground(topic, content_cfg, hints)   # 공식 소스 페치(실패/비활성 시 "", [])
     if provider not in ("api", "claude_cli"):
         return _fixture(topic)
+    obs = _observe(topic, content_cfg, hints)   # 제3자 공개 API 관측(원저 데이터). 실패 시 None
+    obs_block = observed.prompt_block(obs) if obs else ""      # 생성 프롬프트용(사실 + 사용 지시)
+    # 자가검수·검수기가 보는 근거 = 벤더 소스 + 우리 관측 **수치만**(`data_block`).
+    #   · 지시문을 빼는 이유: grounding_context 는 reviewer.review() 의 입력이기도 하다. 지시문까지 주면
+    #     검수기가 '우리 지시를 이행했는가'를 판정 사유로 삼는다(파일럿 실측 — observed.data_block 주석).
+    #   · 관측 블록을 **앞에** 붙이는 이유: `_split_grounding` 은 '[SOURCE n] <url>' 마커로 잘라 뒤쪽
+    #     텍스트를 그 소스의 본문으로 본다 → 뒤에 붙이면 우리 수치가 마지막 벤더 페이지 내용인 것처럼
+    #     인용에 붙는다(허위 인용).
+    obs_data = observed.data_block(obs) if obs else ""
+    evidence_text = (obs_data + "\n\n" + grounding_text).strip() if obs_data else grounding_text
 
     def _one(fb):
         if provider == "api":
-            return _via_api(topic, content_cfg, feedback=fb, grounding=grounding_text)
-        return _via_claude_cli(topic, content_cfg, feedback=fb, grounding=grounding_text)
+            return _via_api(topic, content_cfg, feedback=fb, grounding=grounding_text, observed_block=obs_block)
+        return _via_claude_cli(topic, content_cfg, feedback=fb, grounding=grounding_text,
+                               observed_block=obs_block)
 
     spec = _one(feedback)
     # 생성측 자가검수 — 5종(제목계약·부재단정·무헤지수치·파이프라인언어·AI티)이 걸리면 다시 쓰게 한다.
@@ -115,7 +141,7 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
     # 돌린다. ⛔ **최대 2회**(_SELFCHECK_MAX_REWRITES). 그래도 안 줄면 멈추고 잔여를 로그로 보고한다 —
     # 무한 재작성은 비용만 태우고, 최종 판정은 어차피 reviewer.py 가 한다.
     if os.environ.get("ADSENSE_SELFCHECK") != "0":
-        details = selfcheck_detail(spec, grounding_text)
+        details = selfcheck_detail(spec, evidence_text, obs)
         rounds, history = 0, [len(details)]
         try:
             max_rounds = max(0, int(os.environ.get("ADSENSE_SELFCHECK_MAX_REWRITES",
@@ -125,11 +151,11 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
         while details and rounds < max_rounds:
             rounds += 1
             print(f"generate: 자가검수 {len(details)}건 — 재작성 {rounds}/{max_rounds} 회차\n  - "
-                  + "\n  - ".join(f[:120] for f in selfcheck(spec, grounding_text)))
+                  + "\n  - ".join(f[:120] for f in selfcheck(spec, evidence_text, obs)))
             try:
                 fb = ((feedback + "\n\n") if feedback else "") + _rewrite_feedback(details, attempt=rounds)
                 spec2 = _one(fb)
-                details2 = selfcheck_detail(spec2, grounding_text)
+                details2 = selfcheck_detail(spec2, evidence_text, obs)
             except Exception as e:               # 재작성 실패는 치명적이지 않다 — 원본으로 진행
                 print(f"generate: 자가검수 재작성 {rounds}회차 건너뜀({type(e).__name__}: {e})")
                 break
@@ -140,19 +166,263 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
         if details:
             print(f"generate: ⚠️ 자가검수 잔여 {len(details)}건 — 재작성 {rounds}회 후 중단"
                   f"(추이 {' → '.join(str(h) for h in history)}). 판정은 REVIEW 에 맡긴다")
-        spec.selfcheck_flags = selfcheck(spec, grounding_text)   # 잔여 경고(로그·검수 참고, 렌더 미노출)
-    _finalize_sources(spec, content_cfg, fetched, grounding_text)
+        spec.selfcheck_flags = selfcheck(spec, evidence_text, obs)   # 잔여 경고(로그·검수 참고, 렌더 미노출)
+    _neutralize_absence_cells(spec)              # 부재 칸 → "우리가 읽은 페이지에는 없었다" + 승패 제거
+    if obs:                                      # 관측 표·인용을 최종 spec 에 붙인다(재작성분에도 반드시 남게)
+        _attach_observed(spec, obs, content_cfg)
+    else:
+        # 관측이 없으면 해석 단락은 **렌더될 자리가 없다** → 남겨두면 게이트 산문에는 잡히는데
+        # 페이지에는 없는 유령 텍스트가 된다(= 게이트를 조용히 헐겁게 만든다). 버린다.
+        spec.observation_takeaway = None
+    _finalize_sources(spec, content_cfg, fetched, evidence_text)
     return spec
 
 
+# ── 제3자 공개 API 관측 (원저 데이터, ORDER 2026-07-25-33 / 2026-07-28-42) ─────────────────────
+# 왜: 31-content 실측 — 색인보류 9편의 소스 49개가 100% 벤더 자사 도메인, 자체 측정 0.
+#     구글이 읽고 다시 거절했다(42 근거: 재크롤 후에도 crawled-not-indexed 유지) → 페이지에
+#     **벤더 페이지에 없는 숫자**가 실려야 판정이 바뀔 여지가 생긴다.
+# 무엇: observed.py 가 공개 REST 엔드포인트(GitHub·npm·Statuspage·Docker Hub)를 직접 조회해
+#     제품마다 다른 값을 만들고, 관측일·엔드포인트를 표에 함께 렌더한다.
+# ⚠️ 전 과정 비치명적 — 식별자 발견 실패·API 실패·데이터 부족 어느 쪽이든 표 없이 생성을 계속한다.
+def _observe(topic: str, cfg: dict, hints: dict | None = None):
+    """토픽 → 관측 결과(dict) 또는 None. 어떤 실패도 예외로 올리지 않는다.
+
+    식별자 우선순위: `ADSENSE_OBSERVED_TARGETS=none`(사람의 명시적 끄기) > `hints["targets"]`
+    (config 에 사람이 확정) > 환경변수 지정 > 모델 발견. 앞의 둘은 **발견을 아예 시도하지 않는다.**
+    """
+    o = (cfg.get("observed_data") or {})
+    if not o.get("enabled"):
+        return None
+    t0 = time.time()
+    try:
+        max_entities = int(o.get("max_entities", 5))
+        # 사람이 식별자를 직접 줄 수 있다(⚠️ 모델 추측보다 정확하다).
+        #   ADSENSE_OBSERVED_TARGETS="Notion | github:makenotion/notion-sdk-js | npm:@notionhq/client
+        #                             Obsidian | github:obsidianmd/obsidian-releases | npm:obsidian"
+        # 왜 필요한가(2026-07-29 실측): notion-vs-obsidian 재생성에서 모델이 낸 식별자로는 공통 지표가
+        # 2행뿐이라 표가 붙지 않았는데, 손으로 고른 저장소·패키지로는 **4행(값 갈리는 행 3)** 이 나왔다.
+        # 데이터가 없던 게 아니라 **가리키는 곳이 틀렸던 것**이다. 발견 실패가 곧 데이터 부재는 아니다.
+        curated = os.environ.get("ADSENSE_OBSERVED_TARGETS") or ""
+        if curated.strip().lower() in ("none", "off", "skip"):
+            # 사람이 "이 짝은 등가 비교가 성립하지 않는다"고 판단한 경우(43c-review ③).
+            print("generate: 관측 비활성 — 사람이 이 글에 대해 등가 짝 없음으로 판단(ADSENSE_OBSERVED_TARGETS=none)")
+            return None
+        hinted = [t for t in ((hints or {}).get("targets") or []) if isinstance(t, dict)]
+        if hinted:                                 # config(trend_axis)에 사람이 확정한 식별자 — ORDER 45 ③
+            targets = hinted[:max_entities]
+            print(f"generate: 관측 대상 {len(targets)}개 — config 확정 식별자 사용(모델 발견 건너뜀): "
+                  + ", ".join(f'{t.get("name")}[{t.get("github") or t.get("npm")}]' for t in targets))
+        elif curated.strip():
+            targets = observed.parse_targets(curated, max_entities=max_entities)
+            print(f"generate: 관측 대상 {len(targets)}개 — 환경변수로 직접 지정(모델 발견 건너뜀)")
+        else:
+            raw = complete_text(observed.DISCOVER_SYSTEM, observed.discover_user(topic, max_entities),
+                                cfg, max_tokens=400)
+            targets = observed.parse_targets(raw, max_entities=max_entities)
+        if not targets:
+            print("generate: 관측 대상 식별자 0건 — 표 없이 생성 계속")
+            return None
+        if not observed.equivalent_kinds(targets):     # CLI↔CLI · SDK↔SDK 만 (43c-review ③)
+            kinds = [f'{t.get("name")}={t.get("kind")}' for t in targets]
+            print(f"generate: 비교 등가성 불충족({', '.join(kinds)}) — 표 없이 생성 계속")
+            return None
+        result = observed.collect(targets, timeout=int(o.get("timeout", 10)),
+                                  max_entities=max_entities, sources=o.get("sources"))
+        ents = result.get("entities") or []
+        rows, diff = observed.live_rows(ents), observed.distinct_rows(ents)
+        if not observed.usable(result, min_entities=int(o.get("min_entities", 2)),
+                               min_rows=int(o.get("min_rows", 3)),
+                               min_distinct_rows=int(o.get("min_distinct_rows", 3))):
+            print(f"generate: 관측 데이터 부족(제품 {len(ents)}개 · 양쪽 다 값이 있는 지표 {len(rows)}행 · "
+                  f"그중 값이 갈리는 행 {len(diff)} · API {result.get('ok_calls')}/"
+                  f"{result.get('total_calls')} 성공) — 표 없이 생성 계속")
+            return None
+        print(f"generate: 관측 데이터 — 제품 {len(result['entities'])}개 × 지표 {len(rows)}행"
+              f"(값이 갈리는 행 {len(diff)}), "
+              f"API {result['ok_calls']}/{result['total_calls']} 성공 "
+              f"{result['elapsed_ms']}ms (식별자 발견 포함 총 {round((time.time() - t0) * 1000)}ms)")
+        return result
+    except Exception as e:                      # 발견·수집·렌더 어디서 죽어도 생성은 계속된다
+        print(f"generate: 관측 데이터 건너뜀({type(e).__name__}: {e}) — 표 없이 생성 계속")
+        return None
+
+
+# ── 비교표의 '부재 칸' 중립화 (43-review §1-4 · ORDER 2026-07-28-42 통과조건 ③) ──────────────
+# 문제(실측): 파일럿의 feature matrix 가 한쪽엔 "Managed Postgres, Volumes, Tigris … documented",
+#   다른 쪽엔 "managed data services not detailed on pages reviewed 2026-07-28" 을 나란히 놨다.
+#   문장만 보면 스코프가 한정돼 있지만, **승자를 초록으로 칠하는 비교표 안에서는 "그 제품엔 없다"로 읽힌다.**
+#   게다가 그 서술은 소스와도 어긋났다 — railway.com/pricing 에 volume storage 가 실재한다.
+# 처리: 부재 어휘가 든 칸은 (a) 문구를 **"우리가 읽은 페이지에는 없었다"로 통일**하고
+#   (b) 그 행의 `winner` 를 지운다(= 초록 칠 제거). 렌더러는 손대지 않는다 — `winner=None` 이면
+#   `_comparison()` 이 애초에 색을 주지 않는다.
+# ⚠️ 삭제가 아니라 **표기 교정**이다: 우리가 확인 못 했다는 사실 자체는 독자에게 유용한 정보다.
+_ABSENCE_CELL_RE = re.compile(
+    r"\bnot\s+(?:detailed|described|documented|listed|mentioned|covered|specified|shown|stated"
+    r"|available|published|disclosed|advertised|provided|indicated|surfaced|posted)\b"
+    r"|\bnot\s+broken\s+out\b"
+    r"|\bno\s+(?:mention|details?|documentation|listing|figures?|pricing|breakdown)\b"
+    r"|\bnone\s+(?:listed|documented|described|found|published|given)\b"
+    r"|\bnot\s+found\s+on\b|\bcould\s*n[o']?t\s+(?:find|confirm|verify|locate)\b"
+    r"|\bunable\s+to\s+(?:confirm|verify|find|locate)\b"
+    r"|\bwe\s+(?:did\s+not|didn't)\s+(?:find|see|locate)\b", re.I)
+
+
+def _neutral_absence_text(today: str) -> str:
+    return f"Not covered on the pages we read ({today})"
+
+
+def _neutralize_absence_cells(spec: ContentSpec, today: str | None = None) -> int:
+    """비교표·기능표에서 부재를 말하는 칸을 중립 문구로 바꾸고 그 행의 승패 표시를 지운다. 바꾼 칸 수."""
+    today = today or datetime.date.today().isoformat()
+    text = _neutral_absence_text(today)
+    changed = 0
+    for attr in ("comparison", "feature_matrix"):
+        table = getattr(spec, attr, None)
+        if not isinstance(table, dict):
+            continue
+        for row in (table.get("rows") or []):
+            if not isinstance(row, dict):
+                continue
+            hit = False
+            for side in ("a", "b"):
+                val = row.get(side)
+                if isinstance(val, str) and _ABSENCE_CELL_RE.search(val):
+                    row[side] = text
+                    hit = True
+                    changed += 1
+            note = row.get("note")
+            if isinstance(note, str) and _ABSENCE_CELL_RE.search(note):
+                row["note"] = text
+                hit = True
+                changed += 1
+            if hit and row.get("winner"):          # 확인 못 한 항목으로 승패를 매기지 않는다
+                row["winner"] = None
+    if changed:
+        print(f"generate: 부재 표현 {changed}칸 중립화 — \"{text}\"(승패 표시 제거)")
+    return changed
+
+
+_TAKEAWAY_SYSTEM = ("You write one short analytical paragraph for an independent software-comparison site. "
+                    "Neutral editorial voice. You output only the paragraph as simple HTML — no preamble, "
+                    "no markdown, no code fences.")
+
+
+def _ensure_takeaway(spec: ContentSpec, result: dict, cfg: dict) -> bool:
+    """해석 단락을 확보한다(없거나 수치 인용이 없으면 **그것만** 다시 받아온다). 성공 여부 반환.
+
+    왜 별도 호출인가 (2026-07-28 실측): 스키마에 `observation_takeaway` 를 넣고 프롬프트로 필수라고
+    적었는데도 CLI 경로의 모델이 **빈 값**으로 돌려줬다(자가검수 재작성 2회를 거치며 유실된 것으로 보인다).
+    본문 인용 0회는 43-review 의 1순위 차단 사유이므로 운에 맡길 수 없다 → 짧은 전용 호출로 확정한다.
+    비용은 작다(≤600토큰 1회). 실패해도 예외를 올리지 않는다 — 호출부가 '표를 붙이지 않는' 쪽으로 처리한다.
+    """
+    # 해석 단락은 **자가검수 루프가 끝난 뒤** 만들어진다 → ⑥ 교차지표 검사가 여기서 한 번 더 필요하다.
+    # 수치를 가장 밀도 높게 다루는 단락이라 A의 릴리스와 B의 커밋을 맞댈 위험이 본문보다 오히려 크다.
+    # 반환 (사유, hard). **hard=True 인 것만 표를 떨어뜨릴 수 있다.**
+    #   · `takeaway_ok` 실패 = hard — "표가 있으면 해석이 있다"는 43-review 불변식이라 양보 불가.
+    #   · 교차지표 = soft — **휴리스틱 스캐너**다. 재요청은 시키되 **거부권은 주지 않는다.**
+    # 🔴 이 구분이 없어서 사고가 났다(run4·run5 실측): soft 검사를 표 부착 조건에 걸었더니
+    #    "표 없음 → 트렌드 글 폐기" 경로를 타고 **완성된 초안 3개가 통째로 버려졌다.**
+    #    값싼 보조 스캐너에 글 전체의 생사를 맡긴 것이 설계 오류였다 — 판정은 reviewer.py 소관이고,
+    #    실제로 원 결함도 reviewer.py 가 잡아냈다.
+    def _why_bad(text: str):
+        if not observed.takeaway_ok(result, text):
+            return ("It did not quote at least two of the specific figures with the observation date "
+                    f"{result.get('observed_date')}.", True)
+        hits = _cross_metric_hits(_strip(text), result)
+        return ((f"It compared unlike measurements: {hits[0][1]}.", False) if hits else ("", False))
+
+    bad, hard = _why_bad(spec.observation_takeaway or "")
+    if not bad:
+        return True
+    had = bool((spec.observation_takeaway or "").strip())
+    best = (spec.observation_takeaway or "") if not hard else ""   # soft 만 걸린 판은 최후 폴백으로 보관
+    # ⚠️ **지목해서** 다시 시킨다(최대 2회). 일반 지침만 반복하면 같은 실수가 반복된다 — 실측(2026-08-01
+    # 시범 run4): 교차지표 가드가 해석 단락을 두 번 떨어뜨렸고, 그 때문에 후보 2개가 **완성된 초안째**
+    # 버려졌다(생성 비용 전액 손실). 재요청 비용(≤700토큰)이 초안 하나를 버리는 것보다 압도적으로 싸다.
+    for attempt in (1, 2):
+        try:
+            req = observed.takeaway_request(result)
+            if attempt > 1 or had:
+                req += ("\n\nYour previous attempt was rejected. What was wrong with it: " + bad +
+                        " Write a new paragraph that fixes exactly that. When you set the two products "
+                        "against each other, quote the SAME measurement for both.")
+            raw = complete_text(_TAKEAWAY_SYSTEM, req, cfg, max_tokens=700)
+            text = re.sub(r"^```[a-zA-Z]*\n?|\n?```$", "", (raw or "").strip()).strip()
+            m = re.search(r"(?is)<p\b.*?</p>", text)
+            text = m.group(0) if m else (f"<p>{text}</p>" if text else "")
+            bad, hard = _why_bad(text)
+            if not bad:
+                spec.observation_takeaway = text
+                print(f"generate: 관측 해석 단락 {'재요청' if had else '보충'} 확보"
+                      f"({len(_strip(text).split())}단어, 시도 {attempt})")
+                return True
+            if not hard and not best:
+                best = text                            # soft 만 걸린 판 — 버리지 않고 들고 있는다
+            print(f"generate: 관측 해석 단락 시도 {attempt} 반려 — {bad}")
+        except Exception as e:
+            print(f"generate: ⚠️ 관측 해석 단락 요청 실패({type(e).__name__}: {e}) — 표를 붙이지 않는다")
+            break
+    if best:
+        # soft(휴리스틱)만 남았다 → **글을 버리지 않는다.** 수치 인용 요건은 충족한 단락이므로 표를 붙이고,
+        # 짝짓기 판정은 reviewer.py 에 맡긴다(그쪽이 원 결함을 실제로 잡아낸 층이다).
+        spec.observation_takeaway = best
+        print(f"generate: ⚠️ 관측 해석 단락의 지표 짝짓기 경고가 남았다 — 표는 붙이고 판정은 REVIEW 에 맡긴다"
+              f"({len(_strip(best).split())}단어)")
+        return True
+    print("generate: ⚠️ 관측 해석 단락이 수치 인용 요건을 못 채웠다 — 표를 붙이지 않는다")
+    spec.observation_takeaway = None
+    return False
+
+
+def _attach_observed(spec: ContentSpec, result: dict, cfg: dict) -> None:
+    """관측 표 섹션 + 확인 가능한 제3자 링크를 spec 에 붙인다. 실패해도 초안을 버리지 않는다.
+
+    🔴 **불변식: 표가 있으면 해석이 있다**(43-review 통과조건 ①). 해석 단락을 못 얻으면 표도 붙이지 않는다 —
+    "수치만 얹고 아무도 다루지 않는 페이지"가 정확히 이 파일럿이 막으려던 상태이기 때문이다.
+    표를 잃는 손해보다 **분석 없는 수치 블록**을 싣는 손해가 크다는 판단(REVIEW veto 근거 그대로).
+    """
+    try:
+        if not _ensure_takeaway(spec, result, cfg):
+            return
+        sec = observed.section(result, takeaway_html=(spec.observation_takeaway or ""))
+        if not sec:
+            spec.observation_takeaway = None     # 표가 안 붙으면 해석 단락도 렌더되지 않는다(유령 산문 방지)
+            return
+        # 본문 맨 앞에 둔다 — 비교표·가격 뒤, 딥다이브 앞(renderer 의 b_body 첫 섹션).
+        # ⚠️ 렌더러는 건드리지 않는다(31-content STOP): 이건 섹션 **내용**이지 골격 변경이 아니다.
+        spec.sections = [sec] + list(spec.sections or [])
+        spec.observed = result
+        have = {_norm_url(s.get("url")) for s in (spec.sources or [])}
+        for link in observed.source_links(result):
+            if _norm_url(link["url"]) not in have:
+                spec.sources.append(link)
+                have.add(_norm_url(link["url"]))
+        print(f"generate: 관측 표 삽입 — \"{sec['heading']}\" (인용 {len(spec.sources)}건)")
+    except Exception as e:
+        print(f"generate: 관측 표 삽입 건너뜀({type(e).__name__}: {e})")
+
+
 # ── 소스 그라운딩 (F10·F14) — 공식 페이지 페치 → 프롬프트 주입. 전 과정 방어적(실패=기억기반 폴백) ──
-def _ground(topic: str, cfg: dict) -> tuple[str, list]:
-    """(주입 텍스트, 페치된 URL 목록). grounding.enabled=false 이거나 어떤 단계든 실패하면 ('', [])."""
+def _ground(topic: str, cfg: dict, hints: dict | None = None) -> tuple[str, list]:
+    """(주입 텍스트, 페치된 URL 목록). grounding.enabled=false 이거나 어떤 단계든 실패하면 ('', []).
+
+    `hints["source_urls"]` 가 있으면 **모델 발견을 건너뛰고 그 URL 만** 페치한다(ORDER 45 ③).
+    🔴 이것이 07-08 반려 루프의 구조적 해소다: 그때 니치·신생 툴이 매일 0편이 된 직접 원인은
+    `_discover_source_urls` 가 신생 엔티티의 공식 URL 을 못 찾아 그라운딩이 빈손이 되고,
+    근거 없는 초안이 사실대조에서 반복 반려된 것이었다. 사람이 후보 등록 시 확정한 URL 을 쓰면
+    발견 실패라는 경로 자체가 없어진다.
+    """
     g = (cfg.get("grounding") or {})
     if not g.get("enabled"):
         return "", []
     try:
-        urls = _discover_source_urls(topic, cfg)
+        given = [u for u in ((hints or {}).get("source_urls") or []) if isinstance(u, str) and u.strip()]
+        if given:
+            urls = given[:int(g.get("max_sources", 5))]
+            print(f"generate: 그라운딩 URL {len(urls)}개 — config 확정값 사용(모델 발견 건너뜀): {urls}")
+        else:
+            urls = _discover_source_urls(topic, cfg)
         if not urls:
             return "", []
         docs = source_fetch.gather(
@@ -251,7 +521,6 @@ def _finalize_sources(spec: ContentSpec, cfg: dict, fetched: list, grounding_tex
     2026-07-25-16-content P2: 예전 판은 페치한 URL 을 **전부 무조건** sources 에 넣었다.
     본문이 쓰지 않은 페이지가 출처로 붙는 것은 E-E-A-T 상 허위 인용이고, 실제로 검수 반려를 만들었다
     (14-content ③-1: DO droplets 가격 페이지가 인용에만 있고 본문에 근거 없음 → [coherence]).
-    모델이 스스로 적은 인용(spec.sources)은 건드리지 않는다 — 좁히는 대상은 **우리가 덧붙이는 몫**뿐.
     """
     g = (cfg.get("grounding") or {})
     try:
@@ -617,8 +886,11 @@ _P_RE = re.compile(r"(?is)<(?:p|li|h3)[^>]*>(.*?)</(?:p|li|h3)>")
 def _prose_units(spec) -> list:
     """spec 의 산문 단락 목록(표·매트릭스는 제외 — 자가검수는 산문만 본다)."""
     htmls = [getattr(spec, "intro_html", "") or ""]
-    htmls += [s.get("html", "") for s in (getattr(spec, "sections", None) or [])]
-    for attr in ("verdict_html", "tldr_html"):
+    # 관측 데이터 섹션은 우리가 확정적으로 만든 **표**다(모델 산문이 아니다) → 자가검수 대상에서 제외.
+    # docstring 의 "표·매트릭스는 제외" 원칙과 같다: 수치·날짜·출처는 observed.py 가 보증한다.
+    htmls += [s.get("html", "") for s in (getattr(spec, "sections", None) or [])
+              if not s.get("observed")]
+    for attr in ("verdict_html", "tldr_html", "observation_takeaway"):
         if getattr(spec, attr, None):
             htmls.append(getattr(spec, attr))
     htmls += [f.get("a", "") for f in (getattr(spec, "faq", None) or [])]
@@ -673,6 +945,78 @@ def _unsupported_figures(unit: str, ground_values: set) -> list:
                 missing.append(m.group(0).strip())
             break
     return missing
+
+
+# ── ⑥ 교차지표 비교 (ORDER 2026-08-01-45 PM 회신 2-b) ──────────────────────────────────────
+# 무엇을 막나: **제품마다 다른 지표를 나란히 놓는 문장**. 실측 사례(시범편 1차, 검수 [coherence]):
+#   "herdr last committed that same day … Claude Squad last cut a tagged release, v1.0.19, on 2026-06-17"
+#   → 각 문장은 참이지만 herdr 의 **커밋**과 Claude Squad 의 **릴리스**를 비교로 제시했다. 표를 보면
+#   Claude Squad 마지막 커밋은 2026-07-30 으로 이틀 차였다 = 비교가 만든 인상 자체가 틀렸다.
+# 왜 사실검사로 안 걸리나: 인용된 수치가 **전부 우리 관측표에 실제로 있는 값**이라 날조도 미출처도 아니다.
+#   틀린 것은 값이 아니라 **짝짓기**다 → 값 검사가 아니라 '무엇과 무엇을 짝지었나' 검사가 필요하다.
+# 판정 규칙 = **표의 규칙을 산문에 그대로 옮긴 것**: 한 문장에 제품이 2개 이상 등장하고 각자 수치를
+#   인용했다면, **인용된 지표 집합이 서로 같아야 한다**. 표에서 `live_rows()` 가 "모든 제품이 값을 가진
+#   행만 렌더"(빈 칸 금지)하는 것과 같은 원칙이다 — 한쪽만 가진 축을 나란히 놓는 순간 비대칭 비교가 된다.
+#
+#   ⚠️ 처음엔 느슨하게 "공통 지표가 하나도 없을 때만" 발화하게 짰다가 **실측으로 뒤집었다**: 실제 반려된
+#   해석 단락은 한 문장 안에 정상 비교(커밋빈도 77.7 vs 0.8)와 결함 비교(herdr 마지막 커밋 vs
+#   Claude Squad 마지막 릴리스)를 **함께** 담고 있어서, 교집합이 비지 않아 미탐지됐다. 공통 축이 하나
+#   있다고 나머지 짝짓기가 면제되지는 않는다.
+#   → 대칭차가 비어 있지 않으면 발화한다. 한쪽에만 있는 지표를 말하고 싶으면 비교 문장 밖에서 하면 된다
+#     (프롬프트도 정확히 그렇게 지시한다 — observed.prompt_block 의 COMPARE LIKE WITH LIKE).
+#
+#   ⚠️ 한계(알고 쓴다): 토큰 기반이라 **대용 표현은 못 잡는다**("last committed that same day" 처럼
+#     날짜를 다시 쓰지 않는 경우). 위 실측 문장은 반대쪽(Claude Squad)의 릴리스 인용 때문에 잡혔다.
+#     이건 값싼 보조 스캐너이지 게이트가 아니다 — 최종 판정은 reviewer.py 가 한다.
+def _cross_metric_hits(text: str, obs: dict) -> list:
+    """(문장, 설명) — 서로 다른 지표를 제품 간에 나란히 놓은 문장. 없으면 []."""
+    if not isinstance(obs, dict):
+        return []
+    idx = observed.figure_index(obs)
+    names = [str(e.get("name") or "").strip() for e in (obs.get("entities") or []) if e.get("name")]
+    if not idx or len(names) < 2:
+        return []
+    hits = []
+    for s in _sentences(text or ""):
+        present = [n for n in names if re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", s, re.I)]
+        if len(present) < 2:
+            continue
+        by: dict = {}
+        for tok, pairs in idx.items():
+            # 뒤따르는 마침표를 막으면 **문장 끝 수치가 통째로 안 잡힌다**("… on 2026-07-30." 실측 미탐지).
+            # 버전 꼬리(1.0 ⊂ 1.0.19)만 배제하면 되므로 '.숫자'만 거부한다.
+            if not re.search(r"(?<![\w.])" + re.escape(tok) + r"(?!\w)(?!\.\d)", s):
+                continue
+            for name, key in pairs:
+                if name in present:
+                    by.setdefault(name, set()).add(key)
+        cited = {n: k for n, k in by.items() if k}
+        if len(cited) < 2:
+            continue
+        common = set.intersection(*cited.values())
+        extra = {n: sorted(k - common) for n, k in cited.items() if k - common}
+        # **양쪽이 각자 다른 축을 하나씩 더 들고 있을 때만** 발화한다 = 거짓 짝짓기의 구조적 지문.
+        # 한쪽만 축이 하나 더 있는 것은 "부연"이지 비교가 아니다(A의 릴리스를 B의 커밋에 맞댄 게 아니라,
+        # 같은 축으로 맞댄 뒤 한쪽에 정보를 덧붙인 형태).
+        # 🔴 왜 좁혔나 (2026-08-01 run4·run5 실측): 대칭차 기준은 **후보 3개 중 3개를 떨어뜨렸다**
+        #   (해석 단락 재요청 2회에도 모델이 같은 형태를 고집 → 완성된 초안째 폐기 ×3).
+        #   그 형태는 "herdr 77.7커밋/주 + 마지막 커밋일, Claude Squad 0.8커밋/주" 로,
+        #   **비교 축은 커밋/주로 일치**하고 한쪽에 날짜가 덧붙은 것뿐이었다 — 거짓 인상을 만들지 않는다.
+        #   과발화하는 스캐너는 모델을 이상한 문장으로 몰고 비용만 태운다(rev2 오탐 교훈과 같은 함정).
+        if len(extra) < 2:
+            continue
+        detail = " vs ".join(f"{n} → {'/'.join(sorted(k))}" for n, k in sorted(cited.items()))
+        unmatched = "; ".join(f"{n}: {'/'.join(v)}" for n, v in sorted(extra.items()))
+        hits.append((s, f"measurements are not matched across products ({detail}) — "
+                        f"cited for one product only: {unmatched}"))
+    return hits
+
+
+def _cross_metric_flags(spec, obs: dict | None = None) -> list:
+    """selfcheck 용 (kind, quote, note). obs 는 생성 중에는 인자로 받는다 —
+    `spec.observed` 는 `_attach_observed()` 가 **자가검수 루프 뒤에** 채우므로 그때는 아직 비어 있다."""
+    obs = obs if isinstance(obs, dict) else getattr(spec, "observed", None)
+    return [("cross-metric", s, note) for s, note in _cross_metric_hits("\n".join(_prose_units(spec)), obs)]
 
 
 def _criteria_unit(units: list):
@@ -732,6 +1076,12 @@ _REWRITE_GUIDANCE = {
     "pipeline-language": ("Remove wording that describes how this page was produced, or that points at where a "
                           "block will sit on the finished page. The reader knows nothing about any of that, and "
                           "the site template — not you — decides where tables, the verdict and the sources land."),
+    "cross-metric": ("You put a different measurement for each product side by side — for example one product's "
+                     "latest release next to another product's most recent commit. Each statement may be true "
+                     "on its own, but presenting them as a comparison compares unlike things and can leave a "
+                     "false impression. Compare like with like: use the SAME measurement for both products when "
+                     "you set them against each other. If a second measurement matters, give it for both "
+                     "products, or state it on its own without framing it as the comparison."),
     "ai-tell": ("Rewrite the quoted sentences themselves — deleting the flagged word and leaving the same "
                 "sentence shape behind does not fix it. Change the sentence lengths and the openings around "
                 "them so the passage stops running on one cadence, and say the point plainly in your own "
@@ -771,9 +1121,10 @@ def _rewrite_feedback(details: list, *, attempt: int = 1) -> str:
     return "\n".join(parts)
 
 
-def selfcheck_detail(spec, grounding: str = "") -> list:
+def selfcheck_detail(spec, grounding: str = "", observed_result: dict | None = None) -> list:
     """생성 직후 자가검수 → [(kind, quote, note)]. **판정·반려가 아니라 재작성 힌트**(REVIEW 가 판정한다).
-    grounding: 생성 시 주입한 소스 원문(있으면 수치를 소스와 대조 — 표면 토큰으로 못 지나감)."""
+    grounding: 생성 시 주입한 소스 원문(있으면 수치를 소스와 대조 — 표면 토큰으로 못 지나감).
+    observed_result: 관측 결과. 교차지표 검사(⑥)가 쓴다 — 이 시점엔 `spec.observed` 가 아직 비어 있다."""
     units = _prose_units(spec)
     prose = "\n".join(units)
     if not prose:
@@ -851,13 +1202,16 @@ def selfcheck_detail(spec, grounding: str = "") -> list:
         if ratio >= EM_DASH_PARA_RATIO_MAX:
             out.append(("ai-tell", " ⟂ ".join(u[:110] for u in dashed[:2]),
                         f"em-dash asides in {ratio:.0%} of paragraphs — one cadence throughout"))
+
+    # ⑥ 교차지표 비교 — 표의 등가성 규칙을 산문에도 적용한다(위 _cross_metric_hits 주석)
+    out += _cross_metric_flags(spec, observed_result)
     return out[:SELFCHECK_MAX_FLAGS]
 
 
-def selfcheck(spec, grounding: str = "") -> list[str]:
+def selfcheck(spec, grounding: str = "", observed_result: dict | None = None) -> list[str]:
     """selfcheck_detail 의 로그용 1줄 표현. 재작성 프롬프트에는 이 문자열을 쓰지 않는다(_rewrite_feedback)."""
     return [f"[{kind}] {note}" + (f' — "{quote[:120]}"' if quote else "")
-            for kind, quote, note in selfcheck_detail(spec, grounding)]
+            for kind, quote, note in selfcheck_detail(spec, grounding, observed_result)]
 
 
 # config/topics.yaml title_policy → 프롬프트 문구(요구사항 1줄씩). 모르는 키도 그대로 요구로 나간다
@@ -900,12 +1254,14 @@ def _title_contract_block(pol: dict | None = None) -> str:
 
 
 def _user_prompt(topic: str, language: str, feedback: str | None = None, grounding: str = "",
-                 today: str | None = None) -> str:
+                 today: str | None = None, observed_block: str = "") -> str:
     today = today or datetime.date.today().isoformat()
     base = (f"Write a {language} article for this search query: \"{topic}\".\n"
             "If it is an 'X vs Y' query, make page_type 'comparison' and fill comparison/pricing/pros_cons. "
             "If it is 'best ...' make it 'listicle'; if 'how to ...' make it 'guide' (comparison may be null). "
             "Include 2+ official sources. Aim for depth that fully answers the query.\n"
+            "Set 'observation_takeaway' to null unless this prompt gives you an OUR OWN OBSERVATION block "
+            "below; if it does, that field is required and its rules are stated there.\n"
             f"OBSERVATION DATE: {today}. Every price, plan name, quota, limit, model/region count or benchmark "
             f"figure you put in prose is an observation made on {today} — write that date next to the figures "
             f"the first time they appear in a section (\"as of {today}\") and cite the vendor page it came "
@@ -922,8 +1278,9 @@ def _user_prompt(topic: str, language: str, feedback: str | None = None, groundi
                  "prices, feature names, or claims about what a competitor does/doesn't support from memory. "
                  "If the sources don't cover something, describe it in general terms or leave it out — never "
                  "invent a number or a proper feature name. Do NOT attribute a quote to a vendor unless it "
-                 "appears verbatim in the sources. Express prices as tiers and tell readers to confirm on the "
-                 "vendor's site. Cite these source URLs in the 'sources' field.\n"
+                 "appears verbatim in the sources. Where this material shows an actual price, PRINT THAT "
+                 f"PRICE with the date ({today}) — do not replace a figure you were given with 'confirm "
+                 "current pricing'. Cite these source URLs in the 'sources' field.\n"
                  # ② 부재 단정: 소스는 부분 발췌다 — '안 보임'은 '없음'이 아니다.
                  "NEGATIVE CLAIMS: this material is a PARTIAL excerpt of each page. Something missing here is "
                  "NOT evidence that the vendor lacks it. Never write 'X does not support Y', 'X lacks Y', "
@@ -935,6 +1292,9 @@ def _user_prompt(topic: str, language: str, feedback: str | None = None, groundi
                  "'the fetched text', 'the supplied sources', 'the excerpt', 'in the version reviewed', "
                  "'[SOURCE 1]' or any other description of how this page was produced. Cite the vendor page "
                  "by name and date instead.\n\n" + grounding[:12000])
+    if observed_block:
+        # 우리 관측은 벤더 소스와 층위가 다르다(그들이 자기 페이지에 쓰지 않는 숫자) → 별도 블록으로 준다.
+        base += "\n\n" + observed_block
     if feedback:
         base += ("\n\nIMPORTANT: a previous draft for this exact topic was rejected in quality review. "
                   f"You MUST fix these specific problems in this rewrite — do not repeat them:\n{feedback}")
@@ -1015,6 +1375,7 @@ _CONTENT_SCHEMA = {
             "type": "object", "additionalProperties": False,
             "properties": {"title": {"type": "string"}, "url": {"type": "string"}},
             "required": ["title", "url"]}},
+        "observation_takeaway": {"type": ["string", "null"]},
         "faq": {"type": ["array", "null"], "items": {
             "type": "object", "additionalProperties": False,
             "properties": {"q": {"type": "string"}, "a": {"type": "string"}},
@@ -1022,15 +1383,23 @@ _CONTENT_SCHEMA = {
     },
     "required": ["title", "dek", "page_type", "intro_html", "sections", "comparison",
                  "pricing", "pros_cons", "tldr_html", "feature_matrix",
-                 "verdict_html", "sources", "related", "faq"],
+                 "verdict_html", "sources", "related", "faq", "observation_takeaway"],
 }
 
 _SYSTEM = """You are an editor for an independent software-comparison site (SaaS, developer, and AI tools) for an English-speaking audience.
 Write useful, original content that satisfies search intent. Rules:
-- E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of. Describe pricing as tiers (e.g. "free tier + paid Pro") and tell readers to confirm current pricing on the vendor's site.
+- E-E-A-T: be specific and accurate. Cite official sources (the vendors' own sites). Do NOT invent precise volatile facts — exact prices, exact benchmark numbers, or stats you are unsure of.
+- PRICING — PRINT THE NUMBER WHEN YOU HAVE IT: if a cited page shows an actual price, put that figure in the pricing entry with its observation date ("$5/mo minimum usage, as of <observation date>"). "Confirm current pricing on the vendor's site" is a footnote, NOT a substitute for a price you were given: a card that says only "usage-based — confirm on the vendor's site" while the source lists named tiers is a defect, and describing one vendor's tiers precisely while calling the other opaque is worse. Fall back to tier language ONLY where no cited page carries a number, and say which is which.
 - TITLE CONTRACT: the title may promise only what the body delivers. If the title says "best", "cheapest", "top N" or otherwise ranks, the body MUST (a) state the selection criteria explicitly and (b) name a specific pick per use case in tldr_html and verdict_html. If the material does not let you rank honestly, do not hedge inside a superlative title — change the title ("How to choose ...", "... compared"). A title that ranks over a body saying "there is no single best/cheapest" is a misleading headline.
-- NEGATIVE CLAIMS about a named product ("X does not support Y", "X lacks Y", "X has no Z", or the same thing implied): only when a cited page positively establishes the absence, and always scoped and dated — "the pricing page listed no managed database as of the observation date given in the prompt". Otherwise drop the claim. Do not describe one vendor from cited pages and its competitor from memory.
-- VOLATILE FACTS: every price, plan name, quota, limit, model/region count and benchmark figure in prose carries an as-of date (use the observation date given in the prompt) and traces to a vendor page cited in sources. Third-party benchmark and customer-result stats ("customer X saw 67% lower cost", "2x throughput") are marketing claims — leave them out unless the vendor's own cited page carries them, and then attribute them to that page rather than stating them as measured fact.
+- COMPARISON CELLS YOU COULD NOT VERIFY: write exactly "Not covered on the pages we read" — never "does not support", "not available", "lacks" — and set that row's winner to null. A cell you could not check is not a loss for that product, and a comparison table tints the winning side, so an unchecked cell must not be scored.
+- NEGATIVE CLAIMS about a named product ("X does not support Y", "X lacks Y", "X has no Z", or the same thing implied): only when a cited page positively establishes the absence, and always scoped and dated — "the pricing page listed no managed database as of the observation date given in the prompt". Otherwise drop the claim. Do not describe one vendor from cited pages and its competitor from memory. IN PROSE, use the same framing the comparison table uses: say what the pages you read did or did not list ("the pages we read on <date> did not list a paid tier"), never what the product does or does not have. You are working from excerpts, and an excerpt that omits something does not establish that the product lacks it — that gap is a fact about our reading, not about the product.
+- ONE PARENTHESIS, ONE PAGE: a citation in parentheses vouches only for facts that are actually printed on the page it names. Never bundle facts from two different pages behind a single citation — if two facts come from two pages, split the sentence or attach a citation to each. Writing "X is written in Go and licensed under AGPL-3.0 (vendor landing page)" when the landing page carries the licence but the language came from the repository file listing is a misattribution, even though both facts are true and both pages are in your sources. Check each parenthesis against the one page it points at before you keep it.
+- NOT YET SHIPPED IS NOT SHIPPED: if a source marks something as launching soon, coming soon, planned, upcoming, on a waitlist, in preview, in beta, or says it will happen "when X launches", then that capability DOES NOT EXIST TODAY. Never write it as something the product has, offers, includes or provides, and never put it in a comparison cell as a present capability. You may report the announcement itself — as an announcement, attributed and dated ("its docs said on <observation date> that a plugin marketplace was planned"). This is the time-axis form of the rule against inventing measurements: a capability that has not shipped is a fact that does not exist yet, and writing it as present is a factual error even though the source mentions it. This matters most for the newest tools, which announce constantly.
+- VERSION IDENTIFIERS ARE NOT INTERCHANGEABLE: the observation table's "Latest release" is the tag on the repository's releases feed. A version number printed on a documentation site is a different identifier maintained separately and often does not match. Never equate them, and never set them against each other as if one were wrong or out of date — a reader seeing two version strings for the same product reads a contradiction even when each is correctly attributed. If you mention a docs version, say plainly that it is the version the documentation states, and do not call either one "the latest".
+- VOLATILE FACTS: every price, plan name, quota, limit, model/region count, licence, free/paid status and benchmark figure carries an as-of date (use the observation date given in the prompt) and traces to a vendor page cited in sources. Third-party benchmark and customer-result stats ("customer X saw 67% lower cost", "2x throughput") are marketing claims — leave them out unless the vendor's own cited page carries them, and then attribute them to that page rather than stating them as measured fact.
+  THIS APPLIES TO EVERY SURFACE, not just the deep-dive sections: `tldr_html`, the intro, `verdict_html`, comparison and feature-matrix cells, pros/cons, faq answers, and `dek`. A hedge that appears only in the FAQ or a table cell does NOT cover an unhedged assertion in the summary or the verdict — state it the same careful way everywhere, or do not state it.
+  ⛔ NEVER put a claim that needs a hedge into `dek`. That one field is rendered as the meta description, the og:description AND the schema.org Article description, and none of those can carry an as-of date or a source — so a volatile claim placed there is permanently unhedged and machine-readable. Keep price, licence and free/paid claims in the body where the date and the citation travel with them, and let `dek` say what the article compares instead.
+  If no cited page states a product's price or licence at all, do not assert it in ANY form or surface: calling a product "free" with no page behind it is unsourced, not merely unhedged — the correct move is to say what the pages you read did and did not list.
 - FAQ: include 2-4 faq entries (q/a) answering real follow-up questions a searcher would ask (e.g. "Is X free?", "Can I switch from X to Y?"). Concise, factual, no fluff — these render as an FAQ section and FAQPage structured data.
 - Structure: at least 4 substantive sections. For comparisons include: a one-line tldr_html verdict; a comparison table (real differentiating features, set winner to 'a'/'b'/null); a feature_matrix where each row's a/b is exactly one of "✓" (full), "△" (partial/paid), or "✗" (none), with an optional footnote in note; tiered pricing; pros/cons per option; and a clear, evidence-based verdict_html.
 - NO false experience: do NOT claim first-person testing or personal use you did not perform (never write "after working with both", "I tested for weeks", "in my experience", "a joy to use"). Write from documented features and typical workflows. Do NOT state absolute superlatives ("the best", "#1", "fastest") as fact — attribute them or frame as opinion.
@@ -1040,7 +1409,8 @@ Write useful, original content that satisfies search intent. Rules:
 - Neutral, trustworthy, editorial tone. No fabricated testimonials or reviews. Output must match the provided JSON schema exactly."""
 
 
-def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None, grounding: str = "") -> ContentSpec:
+def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None, grounding: str = "",
+             observed_block: str = "") -> ContentSpec:
     """ANTHROPIC_API_KEY 사용 시 Claude(claude-opus-4-8)로 ContentSpec 생성 — 구조화 출력."""
     try:
         import anthropic  # SDK는 이 경로에서만 필요(드라이런 fixture는 불필요)
@@ -1052,7 +1422,8 @@ def _via_api(topic: str, content_cfg: dict, *, feedback: str | None = None, grou
     language = gen.get("language", "en")
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수에서 인증
 
-    user = _user_prompt(topic, language, feedback=feedback, grounding=grounding)
+    user = _user_prompt(topic, language, feedback=feedback, grounding=grounding,
+                        observed_block=observed_block)
 
     resp = client.messages.create(
         model=model,
@@ -1091,6 +1462,7 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
         tldr_html=d.get("tldr_html"), feature_matrix=d.get("feature_matrix"),
         sources=d.get("sources", []), related=d.get("related") or [],
         faq=d.get("faq") or [],
+        observation_takeaway=d.get("observation_takeaway") or None,
     )
 
 
@@ -1107,7 +1479,7 @@ def _extract_json(text: str) -> dict:
 
 
 def _via_claude_cli(topic: str, content_cfg: dict, *, feedback: str | None = None,
-                    grounding: str = "") -> ContentSpec:
+                    grounding: str = "", observed_block: str = "") -> ContentSpec:
     """Claude Code 헤드리스(구독 로그인)로 ContentSpec 생성 — API 키 불필요.
 
     `claude -p --append-system-prompt <sys> --output-format json --model <m>` (프롬프트는 stdin).

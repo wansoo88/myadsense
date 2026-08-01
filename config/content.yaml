@@ -17,6 +17,24 @@ grounding:
   max_chars_per_source: 3500    # 소스별 주입 텍스트 상한
   validate_source_urls: true    # 모델이 붙인 sources 중 유효(200~3xx)만 유지 — 죽은 인용 제거
 
+# 제3자 공개 API 관측(원저 데이터) — engine/content/observed.py. ORDER 2026-07-25-33 / 2026-07-28-42.
+# 왜: 발행분의 출처 49개가 100% 비교 당사자 벤더 자사 도메인이고 자체 측정이 0이었다(31-content 실측) →
+#     구글이 재크롤 후에도 색인을 거절했다. 벤더가 자기 페이지에 쓰지 않는 숫자(릴리스 기록·다운로드·장애 이력)를
+#     공개 API 로 직접 조회해 관측일·엔드포인트와 함께 싣는다. ⛔ 읽기전용 GET(트래픽 생성과 무관, F3 리스크 0).
+# ⚠️ 실패는 비치명적 — 어떤 단계가 실패해도 표 없이 생성이 계속된다(발행이 막히지 않는다).
+observed_data:
+  enabled: true
+  max_entities: 4               # 표에 넣을 제품 수 상한(호출 수 = 제품수 × 소스수)
+  timeout: 10                   # 초 (엔드포인트당)
+  min_entities: 2               # 이보다 적으면 표를 붙이지 않는다
+  min_rows: 3                   # **모든 제품이 값을 가진** 지표가 이보다 적으면 붙이지 않는다(빈 칸 금지)
+  min_distinct_rows: 2          # 그중 **제품끼리 값이 갈리는** 행 최소치(무의미한 표 금지).
+                                # 3 → 2 로 내림(2026-07-28, PM 승인): 43-review 요구로 `open_issues` 행을 뺐고
+                                # (인기·연식의 함수라 결함 비교로 오독됨), 대체 축(이슈 종료시간 중앙값)은
+                                # 실측이 못 쓸 수준이었다(flyctl 중앙값 1,396일=스테일봇, vercel·netlify 표본 0).
+                                # PM 지시 "없으면 행 수가 줄어도 좋다" → 억지 축을 만드는 대신 기준을 낮춘다.
+  sources: [github, npm, statuspage, dockerhub]
+
 # 품질 게이트 — 발행 전 전부 PASS 해야 발행 큐 진입 (quality_gate.py)
 quality_gate:
   unique_value:

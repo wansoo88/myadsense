@@ -25,6 +25,166 @@ title_policy:
   otherwise: retitle               # 못 채우면 최상급을 빼고 "How to choose …" / "… compared" 로 제목 변경
   never: superlative_title_over_no_ranking_body   # "best" 제목 + "there is no single best" 본문 = 반려
 
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# 🔥 trend_axis — 신규 생성 전용 축 (ORDER 2026-08-01-45-content, 사람 승인)
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# 왜 이 블록이 생겼나 (2026-08-01 실측 — 추정 아님):
+#   서버 nginx 로그에서 봇·나·서버 IP 를 뺀 **외부 실사람 방문**의 1위가 `/compare/orca-vs-herdr-…/`
+#   63회(고유 IP 56)였고, 전체 검색유입 59회 중 **31회(53%)가 이 1편**이었다. 유입 엔진은
+#   DuckDuckGo 16 · Brave 4 · Kagi 4 · Bing 3 이고 **구글은 1**이다. 같은 기간 GSC 색인은 42 URL 중 0,
+#   사이트맵은 07-25 제출 후 7일째 isPending, 진짜 Googlebot 은 2주간 29히트에 sitemap 요청 0회였다.
+#   dev.to 신디케이션은 25편 169뷰·리액션 0으로 사실상 무효였다.
+#   → 백링크 0인 신규 서브도메인이 **이길 수 있었던 유일한 지형은 "경쟁 문서가 존재하지 않는 신생 엔티티"**다.
+#
+# 규칙 (orchestrator.stage_generate 가 실제로 강제한다 — 장식 아님):
+#   ① 트렌드 모드에서는 **여기 있는 후보만** 시드가 된다. 백로그(clusters.seeds ·
+#      sequencing.next_batch_priority)는 읽지 않는다.
+#   ② 후보가 소진되면 **폴백하지 않고 0편**으로 끝낸다(`fallback_to_backlog: false`).
+#      0편은 정지 사유가 아니다 — guardrails.zero_generation_alert_days 는 알림만 낸다.
+#   ③ 식별자는 **사람이 미리 확정**한다(아래 official_url·github·npm·kind·why).
+#      07-08 반려 루프의 직접 원인은 "신생 툴이라서"가 아니라 **공식 URL 자동 발견 실패**였다 →
+#      발견 단계 자체를 없앤다(generator 가 이 값을 그대로 페치·관측한다).
+#   ④ `kind` 가 다르면 비교하지 않는다(IDE↔CLI 금지). 짝은 **관측 전에** 확정하고, 수치가 나쁘다고
+#      짝을 바꿔 재관측하지 않는다(1회 원칙 — 43c-review ③).
+#   ⑤ 관측표(observed.py `usable()`)를 못 만들면 그 후보는 **버린다**. 표 없는 트렌드 글은 큐에 넣지 않는다.
+#
+# ⚠️ npm 이름 스쿼팅 함정 (2026-08-01 실측): 이름이 같다고 그 제품이 아니다. 실제로 확인한 것 —
+#     `catnip`→alextewpin/catnip · `uzi`→icholy/uzi · `sculptor`→twolfson/sculptor ·
+#     `omnara`→omnara/omnara-voice 로 **전부 다른 프로젝트**였다. 그래서 npm 은 소유가 확인된
+#     `ccmanager`(kbwo) · `happy`(slopus) **두 개만** 적었다. (observed.py 가 owner 대조로 한 번 더 막는다.)
+# ⚠️ 저장소 이전도 실측됐다: `ogulcancelik/herdr` → **herdrdev/herdr**, `block/goose` → aaif-goose/goose.
+#     식별자는 값이지 상식이 아니다 — 바뀌면 여기를 고친다.
+#     ⚠️ 휴면 저장소 실측 제외 (2026-08-01): `devflowinc/uzi` **2025-06-04 이후 커밋 0** ·
+#     `omnara-ai/omnara` 2026-01-19 이후 커밋 0. 두 저장소가 낀 짝 4개(uzi×2 · omnara×2)는 3기준
+#     (docs 200 · 공개 저장소 · 심층 비교글 부재)을 **전부 통과했지만 후보에서 뺐다** — 관측표가
+#     `min_rows` 를 못 넘어 파이프라인이 어차피 버리고(실측), 무엇보다 1년 넘게 멈춘 도구를
+#     현역처럼 비교하는 글은 Roo Code(2026-05-15 개발 중단)를 반려한 것과 같은 사유로 부적합하다.
+trend_axis:
+  enabled: true                  # false 로 두면 기존 백로그 경로로 즉시 되돌아간다(코드 수정 불필요)
+  fallback_to_backlog: false     # 🔴 후보 소진 시 백로그로 내려가지 않는다 → 그날은 0편
+  # 검증일 2026-08-01. 3기준 전부 실호출로 확인한 것만 올렸다:
+  #   (1) official_url 200  (2) GitHub 공개 저장소 + observed 표 성립  (3) 심층 비교글 부재(검색 확인)
+  # 순서 = 우선순위. 같은 엔티티가 연속되지 않게 배치했다(연속 생성 시 근접중복 위험 완화).
+  candidates:
+    - keyword: "claude squad vs herdr"
+      cluster: ai-coding-tools
+      why: "둘 다 터미널에서 여러 코딩 에이전트를 붙잡아 두는 도구인데 이 짝을 정면으로 다룬 글이 없다. 유일하게 실트래픽이 붙은 orca-vs-herdr 와 같은 지형이고 내부링크로 이어진다."
+      entities:
+        - name: "Claude Squad"
+          kind: terminal-agent-manager
+          official_url: "https://smtg-ai.github.io/claude-squad/"
+          extra_urls: ["https://github.com/smtg-ai/claude-squad#readme"]
+          github: smtg-ai/claude-squad
+          why: "the project's own repository, where its releases are published"
+        - name: "herdr"
+          kind: terminal-agent-manager
+          official_url: "https://herdr.dev/"
+          extra_urls: ["https://herdr.dev/docs/", "https://github.com/herdrdev/herdr#readme"]
+          github: herdrdev/herdr
+          # 내부 메모(렌더 금지): 2026-08-01 확인 — ogulcancelik/herdr 에서 herdrdev/herdr 로 이전(301)
+          why: "the project's own repository, where its releases are published"
+
+    - keyword: "container use vs sculptor"
+      cluster: ai-coding-tools
+      why: "에이전트를 컨테이너에 격리하는 두 방식(MCP 서버 vs 데스크톱 UI). 각각의 소개글은 있어도 둘을 나란히 잰 글이 없다."
+      entities:
+        - name: "Container Use"
+          kind: containerized-agent-workspace
+          official_url: "https://container-use.com/introduction"
+          extra_urls: ["https://github.com/dagger/container-use#readme"]
+          github: dagger/container-use
+          why: "Dagger's own repository for the project"
+        - name: "Sculptor"
+          kind: containerized-agent-workspace
+          official_url: "https://imbue.com/product/sculptor"
+          extra_urls: ["https://github.com/imbue-ai/sculptor#readme"]
+          github: imbue-ai/sculptor
+          why: "Imbue's own repository for the project"
+
+    - keyword: "sculptor vs catnip"
+      cluster: ai-coding-tools
+      why: "컨테이너로 에이전트를 격리하는 또 다른 짝. catnip 은 검색에 비교 콘텐츠가 아예 잡히지 않는 수준의 저포화다."
+      entities:
+        - name: "Sculptor"
+          kind: containerized-agent-workspace
+          official_url: "https://imbue.com/product/sculptor"
+          github: imbue-ai/sculptor
+          why: "Imbue's own repository for the project"
+        - name: "Catnip"
+          kind: containerized-agent-workspace
+          official_url: "https://github.com/wandb/catnip#readme"
+          github: wandb/catnip
+          # 내부 메모(렌더 금지): npm `catnip` 은 alextewpin/catnip 로 무관 — 등록하지 않는다
+          why: "the Weights & Biases repository for the project"
+
+    - keyword: "ccmanager vs herdr"
+      cluster: ai-coding-tools
+      why: "tmux 를 요구하지 않는 세션 매니저 vs 에이전트 인지형 멀티플렉서. 개별 리뷰만 있고 짝 비교가 없다."
+      entities:
+        - name: "CCManager"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/kbwo/ccmanager#readme"
+          github: kbwo/ccmanager
+          npm: ccmanager
+          why: "the project's own repository and the npm package published from it"
+        - name: "herdr"
+          kind: terminal-agent-manager
+          official_url: "https://herdr.dev/"
+          extra_urls: ["https://herdr.dev/docs/", "https://github.com/herdrdev/herdr#readme"]
+          github: herdrdev/herdr
+          why: "the project's own repository, where its releases are published"
+
+    - keyword: "container use vs catnip"
+      cluster: ai-coding-tools
+      why: "컨테이너 격리 계열의 세 번째 짝. 둘 다 비교 콘텐츠가 사실상 없다."
+      entities:
+        - name: "Container Use"
+          kind: containerized-agent-workspace
+          official_url: "https://container-use.com/introduction"
+          extra_urls: ["https://github.com/dagger/container-use#readme"]
+          github: dagger/container-use
+          why: "Dagger's own repository for the project"
+        - name: "Catnip"
+          kind: containerized-agent-workspace
+          official_url: "https://github.com/wandb/catnip#readme"
+          github: wandb/catnip
+          why: "the Weights & Biases repository for the project"
+
+    - keyword: "happy vs agentapi"
+      cluster: ai-coding-tools
+      why: "로컬 코딩 에이전트를 터미널 밖에서 몰기 위한 두 접근(모바일/웹 클라이언트 vs HTTP API 서버). 검색엔진이 이 짝을 인식조차 못 하는 수준의 저포화이고, 두 저장소 모두 활성이다."
+      entities:
+        - name: "Happy Coder"
+          kind: agent-remote-control
+          official_url: "https://happy.engineering/"
+          extra_urls: ["https://github.com/slopus/happy#readme"]
+          github: slopus/happy
+          npm: happy
+          why: "the project's own repository and the npm package published from it"
+        - name: "AgentAPI"
+          kind: agent-remote-control
+          official_url: "https://coder.github.io/agentapi/"
+          extra_urls: ["https://github.com/coder/agentapi#readme"]
+          github: coder/agentapi
+          why: "Coder's own repository for the project"
+
+    - keyword: "ccmanager vs claude squad"
+      cluster: ai-coding-tools
+      why: "tmux 를 요구하지 않는 세션 매니저 vs tmux 기반 병렬 TUI. ⚠️ 3기준 중 (3)이 가장 약하다 — 자동생성 의존성 비교 페이지와 라운드업이 둘을 함께 다룬다(심층 1:1 은 없음). PM 판단(2026-08-01): **남기되 우선순위 최하위** — 기준3의 취지는 '우리가 이길 수 있는가'이고 저품질 자동생성 페이지는 이길 수 있다."
+      entities:
+        - name: "CCManager"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/kbwo/ccmanager#readme"
+          github: kbwo/ccmanager
+          npm: ccmanager
+          why: "the project's own repository and the npm package published from it"
+        - name: "Claude Squad"
+          kind: terminal-agent-manager
+          official_url: "https://smtg-ai.github.io/claude-squad/"
+          extra_urls: ["https://github.com/smtg-ai/claude-squad#readme"]
+          github: smtg-ai/claude-squad
+          why: "the project's own repository, where its releases are published"
+
 clusters:
   # ── P1: AI 코딩/개발 도구 (트렌딩·고의도·E-E-A-T 적합) ──
   - id: ai-coding-tools
