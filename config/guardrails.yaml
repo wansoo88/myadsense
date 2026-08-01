@@ -20,7 +20,7 @@ rollout:
   #   이미 읽히고 거절당한 10편에 자체 관측 데이터를 넣어 **재평가를 받는 쪽**으로 전환한다(33-content).
   #   ⚠️ 0 이면 orchestrator.py:337 `passed >= daily` 가 첫 반복에서 참이 되어 생성 루프가 즉시 종료된다.
   #      배포·ingest·monitor·syndicate 는 그대로 돈다(발행할 새 글이 없을 뿐).
-  daily_generate: 0            # (중단 전 값: 1 — 하루 1편 카덴스)
+  daily_generate: 1            # 트렌드 전용 축 재개(사람 승인 2026-08-01). 트렌드 축 factual 보류(6c9eab0) 착지 후 플립 — 순서 역전 금지
   daily_publish_cap: 20        # 발행 큐→사이트 점진 발행 상한 (생성과 별개)
   ramp_up_factor: 1.5          # 배치 정상 시 cap 증가율
   ramp_up_max: 200             # cap 상한
