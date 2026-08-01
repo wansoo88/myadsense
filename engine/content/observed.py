@@ -209,6 +209,16 @@ def _github(repo: str, timeout: int, calls: list, now, ctx: dict | None = None) 
     meta = _get_json(f"{api}/repos/{urllib.parse.quote(repo)}", timeout, calls)
     if isinstance(meta, dict) and meta.get("full_name"):
         out["repo"] = meta["full_name"]
+        # 🔴 저장소 이전 감지 (드리프트) — 호출을 **0개도 늘리지 않는다**(이미 받은 응답을 볼 뿐).
+        # urllib 이 301 을 자동으로 따라가므로 이전돼도 데이터는 정상 확보된다(실측: ogulcancelik/herdr →
+        # herdrdev/herdr, ArthurDEV44/paneflow → arthjean/paneflow, block/goose → aaif-goose/goose).
+        # ⚠️ 그래서 **조용하다** — 아무도 config 가 낡았다는 걸 모른다. 진짜 위험은 **이름 재사용**이다:
+        # 원 소유자가 같은 이름으로 새 저장소를 만들면 리다이렉트가 끊기고 그 경로는 **다른 프로젝트**를
+        # 가리킨다. 그 순간 우리는 조용히 엉뚱한 저장소를 측정한다 — npm 스쿼팅과 같은 실패 양식이다.
+        if meta["full_name"].lower() != str(repo).lower():
+            out["repo_moved_from"] = str(repo)
+            print(f"observed: ⚠️ 저장소 이전 감지 — config '{repo}' → 실제 '{meta['full_name']}'. "
+                  f"config/topics.yaml 의 식별자를 갱신하라(이름 재사용 시 다른 프로젝트를 측정하게 된다)")
         if isinstance(meta.get("open_issues_count"), int):
             out["open_issues"] = meta["open_issues_count"]
         pushed = _parse_dt(meta.get("pushed_at"))

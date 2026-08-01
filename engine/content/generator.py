@@ -465,8 +465,35 @@ def _url_title(u: str) -> str:
 
 
 def _norm_url(u: str) -> str:
-    """인용 중복 판정용 정규화 — scheme·www·트레일링 슬래시·대소문자 차이를 흡수."""
-    return re.sub(r"^https?://(www\.)?", "", (u or "").strip()).rstrip("/").lower()
+    """URL 동일 페이지 판정용 정규화 (51-review R1).
+
+    흡수(같은 페이지로 본다): scheme(`http`/`https`) · `www.` · 후행 슬래시 · 대소문자 ·
+      **프래그먼트(`#readme`, `#pricing`)** ← 51-review 신설
+    유지(다른 페이지로 본다): **쿼리스트링**(`?per_page=15` 등 — 내용이 달라진다) · 경로
+
+    🔴 프래그먼트 제거가 왜 필수인가: 이게 없으면 `…/claude-squad` 와 `…/claude-squad#readme` 를
+    **다른 페이지로 보고 정당한 인용을 잘라낸다**(오탈락). 우리는 `#readme` 형태로 페치해 놓고
+    모델은 프래그먼트 없이 인용하는 일이 실제로 있었다(run8 실물, 51-review §1-1).
+    ⚠️ 이 변경은 중복 판정에도 함께 적용된다 — **의도한 부수효과**다: run8 Sources 8개 중
+    2개(`…/claude-squad` 와 `…/claude-squad#readme`)가 같은 페이지였는데 독자에겐 8개로 보였다.
+    """
+    s = re.sub(r"#.*$", "", (u or "").strip())          # 프래그먼트 제거(쿼리는 남긴다)
+    return re.sub(r"^https?://(www\.)?", "", s).rstrip("/").lower()
+
+
+def _observed_read_urls(spec) -> set:
+    """관측(자체 측정)으로 **실제 호출해 200 을 받은** 엔드포인트의 정규화 URL 집합 (51-review R4).
+
+    R0 은 "읽었는가"를 묻지 "HTML 로 페치했는가"를 묻지 않는다. `api.github.com/...` 처럼 우리가
+    직접 부른 관측 엔드포인트는 `fetched`(HTML 페치) 집합에 없지만 **우리가 실제로 읽은 것이 맞다** —
+    31-content 가 요구한 자체 측정의 본체이므로 R1/R2 로 잘라내면 안 된다.
+    """
+    obs = getattr(spec, "observed", None)
+    out = set()
+    for c in ((obs or {}).get("calls") or []):
+        if isinstance(c, dict) and c.get("status") == 200 and c.get("url"):
+            out.add(_norm_url(c["url"]))
+    return out
 
 
 def _split_grounding(grounding_text: str) -> dict:
@@ -521,12 +548,35 @@ def _finalize_sources(spec: ContentSpec, cfg: dict, fetched: list, grounding_tex
     2026-07-25-16-content P2: 예전 판은 페치한 URL 을 **전부 무조건** sources 에 넣었다.
     본문이 쓰지 않은 페이지가 출처로 붙는 것은 E-E-A-T 상 허위 인용이고, 실제로 검수 반려를 만들었다
     (14-content ③-1: DO droplets 가격 페이지가 인용에만 있고 본문에 근거 없음 → [coherence]).
+    🔴 2026-08-01 (51-review R0·R2·R4): 위 마지막 줄은 **더 이상 참이 아니다.**
+    예전 판은 모델이 적은 인용에 `url_ok`(200 생존 확인)만 걸었다 → **한 번도 읽지 않은 페이지가
+    출처로 남았다**(50-review §4 가 관측한 결함의 생성 경로). 인용은 *"이 페이지에 이 사실이 있다"* 는
+    약속이고(F10 Trust), **읽지 않았으면 그 약속을 할 수 없다** — 이 원칙은 **누가 적었는지와 무관**하다.
+    → `spec.sources` 도 **"우리가 읽은 페이지" 집합**(HTML 페치분 ∪ 관측 API 호출분)과 대조해 없으면 제거한다.
+      이 검사는 `validate_source_urls`(생존 확인) **앞에** 선다.
+
+    ⛔ **사후 페치 성공을 인용 자격으로 인정하지 않는다**(R2 — PM 원안보다 엄격, REVIEW 판정):
+      이 함수는 **초안이 다 쓰인 뒤** 돈다. `fetched` 에 없었다는 건 모델이 그 페이지를 **본 적이 없다**는
+      뜻이고, 사후에 200 이 나와도 **본문은 그 페이지 없이 쓰였다**. 사후 페치를 자격으로 인정하면
+      지금 `url_ok` 가 하던 일과 실질적으로 같아진다 = 완화다. 제거된 URL 은 **다음 회차 그라운딩
+      후보로 로그만** 남긴다(이번 글의 근거 아님).
     """
     g = (cfg.get("grounding") or {})
     try:
         spec.grounding_context = grounding_text or ""
     except Exception:
         pass
+    # ── R0/R2/R4: 읽은 페이지 집합과 대조 (생존 확인보다 먼저) ──────────────────────────────
+    read = {_norm_url(u) for u in (fetched or []) if u} | _observed_read_urls(spec)
+    if spec.sources:
+        kept, cut = [], []
+        for s in spec.sources:
+            (kept if _norm_url((s or {}).get("url")) in read else cut).append(s)
+        if cut:
+            spec.sources = kept
+            urls = [(c or {}).get("url") for c in cut]
+            print(f"generate: 인용 제거 {len(cut)}개(모델이 적었으나 우리가 읽지 않은 페이지) — {urls}")
+            print(f"generate: ↳ 다음 회차 그라운딩 후보로 기록(이번 글의 인용 자격 아님) — {urls}")
     if g.get("validate_source_urls") and spec.sources:
         try:
             good, dropped = source_fetch.validate_sources(spec.sources, timeout=int(g.get("fetch_timeout", 12)))
@@ -555,9 +605,15 @@ def _finalize_sources(spec: ContentSpec, cfg: dict, fetched: list, grounding_tex
         print(f"generate: 인용 추가 {len(added)}개(본문에 근거 등장) — " + ", ".join(f"{u} [{w}]" for u, w in added))
     if skipped:
         print(f"generate: 인용 제외 {len(skipped)}개(페치했으나 본문 미사용) — {skipped}")
-    if not spec.sources and fetched:               # E-E-A-T 게이트(출처 필수)까지 비우지는 않는다
-        print("generate: ⚠️ 인용 0건 — 페치 소스 1개를 최소 인용으로 복원")
-        spec.sources = [{"title": _url_title(fetched[0]), "url": fetched[0]}]
+    # 🔴 R3 (51-review): 예전의 "인용 0건이면 페치 소스 1개를 최소 인용으로 복원" 폴백을 **삭제했다.**
+    #   그 폴백이 복원하던 `fetched[0]` 은 방금 `_source_used_in` 을 통과하지 못해 제외된 페이지다
+    #   (통과했다면 이미 `added` 로 들어가 sources 가 비어 있지 않다) = **본문이 쓰지 않은 페이지를
+    #   인용으로 붙이는 행위**이고, 이 함수 docstring 이 스스로 "E-E-A-T 상 허위 인용"이라 금지한 그것이다.
+    #   ⚠️ R2 와 **한 묶음**이다: R3 없이 R2 만 넣으면 모델 인용을 잘라낸 뒤 폴백이 대신 붙어
+    #   결함의 이름만 '틀린 귀속' → '무출처 단정' 으로 바뀌고 규칙이 무력화된다.
+    #   → 인용 0건 초안은 `require_sources` 게이트에서 떨어져 **재생성 대상**이 된다(게이트의 원래 역할).
+    if not spec.sources:
+        print("generate: ⚠️ 인용 0건 — 폴백 없이 그대로 둔다(require_sources 게이트에서 반려 → 재생성 대상)")
 
 
 def _claude_cli_available() -> bool:

@@ -389,6 +389,14 @@ def trend_preflight(cand: dict, cfg) -> tuple[bool, str, dict | None]:
     res = observed.collect(targets, timeout=int(o.get("timeout", 10)),
                            max_entities=int(o.get("max_entities", 5)), sources=o.get("sources"))
     ents = res.get("entities") or []
+    # 🔴 '저장소 404' 를 사유에 **따로** 적는다: 행이 모자란 것과 저장소가 사라진 것은 대응이 완전히 다르다
+    #   (전자는 지표 부족 → 짝을 다시 고른다, 후자는 식별자 갱신·후보 폐기). 뭉뚱그리면 원인을 못 가린다.
+    gone = sorted({c.get("url", "").split("/repos/")[-1].split("/stats")[0].split("/releases")[0]
+                   for c in (res.get("calls") or [])
+                   if c.get("status") == 404 and "/repos/" in str(c.get("url", ""))})
+    if gone:
+        return False, (f"저장소 응답 404 — 삭제·비공개이거나 식별자가 틀렸다: {', '.join(gone)} "
+                       f"(행 부족이 아니라 대상이 없다. config/topics.yaml 식별자를 확인하라)"), res
     rows, diff = observed.live_rows(ents), observed.distinct_rows(ents)
     if not observed.usable(res, min_entities=need, min_rows=int(o.get("min_rows", 3)),
                            min_distinct_rows=int(o.get("min_distinct_rows", 2))):
@@ -431,6 +439,31 @@ def published_corpus(dirs=("dist/queue", "dist/pending_approval")) -> list:
             except Exception as e:
                 print(f"  (코퍼스 적재 건너뜀 {p}: {type(e).__name__})")
     return out
+
+
+# ── '인용 0건' 반려 계측 (R0~R4 채택 조건 2·3, PM 2026-08-01) ──────────────────────────────
+# 왜 따로 세나: R0~R4 는 **측정으로 채택된 게 아니다**(리플레이 표본 실초안 6편 = 판단 불가).
+#   PM 이 실패 모드의 비대칭으로 채택했고 — 틀리면 글이 적어질 뿐(관측·복구 가능, 오발행 0) vs
+#   미채택이면 읽지 않은 페이지를 인용한 글이 발행(라이브 5편으로 이미 실현) — **진짜 수치는 운영에서** 나온다.
+#   그래서 '인용 0건' 반려만 다른 반려와 구분해 기록한다. 섞이면 나중에 셀 수 없다.
+# ⚠️ 부가 기능이다 — 어떤 실패도 생성 파이프라인을 멈추지 않는다.
+def _note_sources_zero(kw: str, slug: str, reasons, cfg, attempt: int) -> None:
+    try:
+        from monitor import sources_watch
+        st = sources_watch.record(kw, slug, reasons, cfg, attempt=attempt)
+        if not st:
+            return
+        print(f"SOURCES-ZERO {kw}: 인용 0건 반려(미페치 인용 가드 계측) — "
+              f"누적 {st['total']}건 · 연속 {st['consecutive']}일")
+        if st.get("notify"):
+            print(f"SOURCES-ZERO 트립와이어 발동 — {st['why']} → PM 보고")
+            try:
+                from monitor import alerts
+                alerts.send(sources_watch.notice(kw, st))
+            except Exception as e:
+                print(f"  (트립와이어 알림 실패 — 파이프라인은 계속) {type(e).__name__}: {e}")
+    except Exception as e:
+        print(f"  (인용0건 계측 건너뜀 — 파이프라인은 계속) {type(e).__name__}: {e}")
 
 
 def _backlog_seeds(cfg) -> list:
@@ -560,6 +593,7 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
                                            attempt=attempt, reasons=r.reasons)
                 print(f"GATE REJECT {kw} (시도 {attempt}/{max_attempts}): {r.reasons}"
                       + (f" (초안 보존 {kept})" if kept else ""))
+                _note_sources_zero(kw, spec.slug, r.reasons, cfg, attempt)   # 인용0건만 따로 계측
                 feedback = "; ".join(r.reasons); continue
             if review_on:                                # 검수 게이트
                 from content import reviewer
