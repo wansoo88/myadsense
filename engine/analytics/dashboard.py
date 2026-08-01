@@ -8,7 +8,7 @@ from __future__ import annotations
 DASHBOARD_HTML = r"""<!doctype html><html lang="ko"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>stack. 방문 분석 (admin)</title>
+<title>Utilverse 방문 분석 (admin)</title>
 <style>
 :root{--bg:#0f1115;--card:#171a21;--bd:#2a2f3a;--tx:#e7ebf2;--mut:#9aa4b2;
 --pv:#4c9ffe;--uq:#4ade80;--bot:#f5b942;--dl:#a78bfa}
@@ -62,7 +62,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 details{margin-top:8px}summary{cursor:pointer;color:var(--mut);font-size:12.5px}
 code{background:#20242e;padding:1px 6px;border-radius:5px;font-size:11.5px;color:#cbd5e1;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 </style></head><body><div class="wrap">
-<h1>stack. 방문 분석 <span class="tag" id="dom"></span></h1>
+<h1>Utilverse 방문 분석 <span class="tag" id="dom"></span></h1>
 <p class="sub" id="sub">불러오는 중…</p>
 
 <div class="bar-toolbar">
