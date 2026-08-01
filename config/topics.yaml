@@ -66,24 +66,6 @@ trend_axis:
   #   (1) official_url 200  (2) GitHub 공개 저장소 + observed 표 성립  (3) 심층 비교글 부재(검색 확인)
   # 순서 = 우선순위. 같은 엔티티가 연속되지 않게 배치했다(연속 생성 시 근접중복 위험 완화).
   candidates:
-    - keyword: "claude squad vs herdr"
-      cluster: ai-coding-tools
-      why: "둘 다 터미널에서 여러 코딩 에이전트를 붙잡아 두는 도구인데 이 짝을 정면으로 다룬 글이 없다. 유일하게 실트래픽이 붙은 orca-vs-herdr 와 같은 지형이고 내부링크로 이어진다."
-      entities:
-        - name: "Claude Squad"
-          kind: terminal-agent-manager
-          official_url: "https://smtg-ai.github.io/claude-squad/"
-          extra_urls: ["https://github.com/smtg-ai/claude-squad#readme"]
-          github: smtg-ai/claude-squad
-          why: "the project's own repository, where its releases are published"
-        - name: "herdr"
-          kind: terminal-agent-manager
-          official_url: "https://herdr.dev/"
-          extra_urls: ["https://herdr.dev/docs/", "https://github.com/herdrdev/herdr#readme"]
-          github: herdrdev/herdr
-          # 내부 메모(렌더 금지): 2026-08-01 확인 — ogulcancelik/herdr 에서 herdrdev/herdr 로 이전(301)
-          why: "the project's own repository, where its releases are published"
-
     - keyword: "container use vs sculptor"
       cluster: ai-coding-tools
       why: "에이전트를 컨테이너에 격리하는 두 방식(MCP 서버 vs 데스크톱 UI). 각각의 소개글은 있어도 둘을 나란히 잰 글이 없다."
@@ -183,6 +165,33 @@ trend_axis:
           official_url: "https://smtg-ai.github.io/claude-squad/"
           extra_urls: ["https://github.com/smtg-ai/claude-squad#readme"]
           github: smtg-ai/claude-squad
+          why: "the project's own repository, where its releases are published"
+
+    # ⏸ 우선순위 최하위로 미뤄 둠 (2026-08-01, ORDER 51-ops 후속 — PM 지시).
+    #    왜: 이 주제의 **시범편이 이미 dist/pending_approval 에 사람 승인 대기**로 존재한다(9회차 산출물).
+    #        그대로 두면 자동 실행이 같은 주제를 처음부터 다시 써서 같은 주제 두 편이 남는다.
+    #    ⚠️ 근접중복 가드는 이걸 막지 못한다 — 실측(2026-08-01): k=5 단어 shingle 의 Jaccard, 임계 0.70
+    #        인데 원문 단어의 90%만 남긴 변형이 이미 0.4671 이다(70% 유지 → 0.1302).
+    #        축자 복제 탐지기이지 '같은 주제 재작성' 탐지기가 아니다. 상세는 AUTOMATION.md §3.
+    #    복구 조건: 사람이 시범편을 **승인하거나 거부해 상태가 확정되면** 원위치(맨 앞)로 되돌린다.
+    #        ⛔ published.json 에는 손대지 않는다 — 발행되지 않은 것을 발행됐다고 적는 것은 상태 파일에
+    #        거짓을 넣는 것이고, 사람이 승인하지 않으면 그 주제가 영구히 건너뛰어진다.
+    - keyword: "claude squad vs herdr"
+      cluster: ai-coding-tools
+      why: "둘 다 터미널에서 여러 코딩 에이전트를 붙잡아 두는 도구인데 이 짝을 정면으로 다룬 글이 없다. 유일하게 실트래픽이 붙은 orca-vs-herdr 와 같은 지형이고 내부링크로 이어진다."
+      entities:
+        - name: "Claude Squad"
+          kind: terminal-agent-manager
+          official_url: "https://smtg-ai.github.io/claude-squad/"
+          extra_urls: ["https://github.com/smtg-ai/claude-squad#readme"]
+          github: smtg-ai/claude-squad
+          why: "the project's own repository, where its releases are published"
+        - name: "herdr"
+          kind: terminal-agent-manager
+          official_url: "https://herdr.dev/"
+          extra_urls: ["https://herdr.dev/docs/", "https://github.com/herdrdev/herdr#readme"]
+          github: herdrdev/herdr
+          # 내부 메모(렌더 금지): 2026-08-01 확인 — ogulcancelik/herdr 에서 herdrdev/herdr 로 이전(301)
           why: "the project's own repository, where its releases are published"
 
 clusters:
