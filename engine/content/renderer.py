@@ -964,14 +964,14 @@ def render_home(pages, *, domain: str = SITE_DOMAIN, canonical: str = "", active
                    '<a class="nl-cta" href="/contact/">Request a comparison</a></div></div></section>')
 
     jsonld = ('<script type="application/ld+json">' + json.dumps({
-        "@context": "https://schema.org", "@type": "WebSite", "name": "stack.",
+        "@context": "https://schema.org", "@type": "WebSite", "name": SITE_NAME,
         "url": base + "/", "description": "Independent SaaS, developer, and AI tool comparisons and guides.",
     }, ensure_ascii=False) + "</script>")
 
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head("stack. — independent software comparisons & guides", "We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership.", canonical or base + "/", "website", jsonld)}
+{_head(f"{SITE_NAME} — independent software comparisons & guides", "We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership.", canonical or base + "/", "website", jsonld)}
 </head>
 <body>
 <a class="skip" href="#featured">Skip to content</a>
@@ -1005,7 +1005,7 @@ def render_hub(name: str, dek: str, pages, *, domain: str = SITE_DOMAIN, canonic
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head(name + " — stack.", dek, canonical, "website")}
+{_head(f"{name} — {SITE_NAME}", dek, canonical, "website")}
 </head>
 <body>
 <a class="skip" href="#hub">Skip to content</a>
