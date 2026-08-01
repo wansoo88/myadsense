@@ -6,7 +6,9 @@
 # 입력: stack 전용 access_log (JSON 라인). 회전본(.1, .*.gz) 포함.
 logs:
   # nginx 가 stack vhost 전용으로 남기는 JSON 로그(회전 포함 glob)
-  json_glob: /var/log/nginx/stack.access.log*
+  json_glob:
+    - /var/log/nginx/utilverse.access.log*   # apex(현재 정본)
+    - /var/log/nginx/stack.access.log*       # 이전 주소 — 이전 전 이력 + 캐시 만료까지의 잔여 유입
   # (선택) 과거 데이터 보정 — 공용 combined 로그에서 stack 고유 경로만 안전 백필
   legacy_backfill: true
   legacy_glob: /var/log/nginx/access.log*

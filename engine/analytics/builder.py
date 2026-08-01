@@ -316,7 +316,7 @@ def run(cfg_all=None) -> str:
     db_path = cfg["output"].get("db", "engine/store/analytics.db")
     recent_limit = int(cfg["output"].get("recent_limit", 200))
     trend_days = int(cfg["output"].get("trend_days", 90))
-    domain = cfg.get("site", {}).get("domain", "stack.utilverse.info")
+    domain = cfg.get("site", {}).get("domain", "utilverse.info")
     excl = cfg.get("exclude", {})
 
     hits = parser.collect(cfg)

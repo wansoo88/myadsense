@@ -317,12 +317,19 @@ def collect(cfg: dict) -> list:
     site = cfg.get("site", {})
     exclude_ips = set(excl.get("ips") or [])
     cookie_name = excl.get("cookie_name", "noana")
-    domain = site.get("domain", "stack.utilverse.info")
+    domain = site.get("domain", "utilverse.info")
     global _DC_INDEX                              # 설정의 추가 데이터센터 대역 반영
     _DC_INDEX = _build_dc_index(excl.get("datacenter_cidrs"))
 
     hits = []
-    json_paths = sorted(glob.glob(logs.get("json_glob", "")))
+    # json_glob 은 문자열 또는 **목록**을 받는다(ORDER 2026-08-01-47-ops 후속).
+    # 도메인 이전 후 apex 는 utilverse.access.log 에 쓰고, 이전 주소(stack)로 들어오는 유입은
+    # 공개 resolver 캐시가 만료될 때까지 남는다 — 둔 로그를 함께 읽어야 추세가 끊기지 않는다.
+    # 겹치는 줄은 아래 (ts,ip,full,status) 중복 제거가 이미 걱러낸다.
+    _globs = logs.get("json_glob") or []
+    if isinstance(_globs, str):
+        _globs = [_globs]
+    json_paths = sorted({p for g in _globs for p in glob.glob(g)})
     hits.extend(parse_json_logs(json_paths, exclude_ips, domain, cookie_name))
     if logs.get("legacy_backfill"):
         legacy_paths = sorted(glob.glob(logs.get("legacy_glob", "")))

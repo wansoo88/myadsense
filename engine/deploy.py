@@ -61,7 +61,7 @@ def deploy(cfg, *, dry_run: bool = True):
         print("[deploy DRY-RUN] 실제 배포하려면 ADSENSE_DEPLOY=1")
         for s in steps:
             print("  " + " ".join(s))
-        print(f"  → https://stack.{droot} (nginx vhost·TLS 셋업 완료)")
+        print(f"  → https://{droot} (nginx vhost·TLS 셋업 완료)")
         return None
     if not os.path.isdir(SRC):
         raise RuntimeError("dist/site 없음 — 먼저 orchestrator --stage build")
@@ -70,7 +70,7 @@ def deploy(cfg, *, dry_run: bool = True):
         subprocess.run(s, check=True)
     if os.path.exists(tgz):
         os.remove(tgz)
-    print(f"[deploy] 완료 → https://stack.{droot}")
+    print(f"[deploy] 완료 → https://{droot}")
     return host
 
 
@@ -101,7 +101,7 @@ def _deploy_local(web_root: str, droot: str, *, dry_run: bool = True):
     # 3) 구 버전 정리(교체 완료 후 — 서비스 영향 없음)
     if os.path.isdir(old_dir):
         shutil.rmtree(old_dir)
-    print(f"[deploy LOCAL] {SRC} → {web_root} 원자적 교체 완료 → https://stack.{droot}")
+    print(f"[deploy LOCAL] {SRC} → {web_root} 원자적 교체 완료 → https://{droot}")
     return "local"
 
 
