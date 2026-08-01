@@ -23,7 +23,7 @@ def _domain(cfg) -> str:
     try:
         return cfg["sites"]["sites"][0]["domain"]
     except Exception:
-        return "stack.utilverse.info"
+        return renderer.SITE_DOMAIN
 
 
 def _gsc_verify_file(cfg) -> str | None:
@@ -54,6 +54,29 @@ def _indexnow_key(cfg) -> str | None:
         print(f"build: ⚠️ indexnow_key 형식 이상({v!r}) — 무시(영숫자/하이픈 8~128자)")
         return None
     return v
+
+
+def _adsense_publisher_id(cfg) -> str:
+    """AdSense **사이트 소유권 확인**용 퍼블리셔 ID(config/sites.yaml `adsense.publisher_id`).
+
+    유효할 때만 (a) 전 페이지 <head> 메타태그 (b) /ads.txt 를 만든다. 빈 값이면 둘 다 미생성 = 현행 유지.
+    형식 검증은 renderer 가 소유(같은 판정을 두 곳에서 다르게 하지 않는다) — 여기서는 경고만 찍는다.
+    ⛔ 광고 게재와 무관하다. 승인 전이므로 광고 로더 스크립트는 어디에도 넣지 않는다.
+    """
+    try:
+        raw = (cfg["sites"].get("adsense") or {}).get("publisher_id")
+    except Exception:
+        return ""
+    v = str(raw or "").strip()
+    if not v:
+        if raw not in (None, ""):     # 공백만 넣은 경우 — 값을 넣었다고 믿는 사람에게 조용한 미생성은 최악
+            print(f"build: ⚠️ adsense.publisher_id 가 공백뿐({raw!r}) — 무시(메타태그·ads.txt 미생성)")
+        return ""
+    ok = renderer.valid_publisher_id(v)
+    if not ok:
+        print(f"build: ⚠️ adsense.publisher_id 형식 이상({v!r}) — 무시"
+              "(ca-pub- + 숫자 16자리여야 함. 메타태그·ads.txt 미생성)")
+    return ok
 
 
 def _rfc822(d: str) -> str | None:
@@ -327,7 +350,7 @@ answer to "which of these tools should I choose, and why" — backed by document
 not marketing copy.</p>
 
 <h3>Who is responsible for this site</h3>
-<p>Content is researched, written, and maintained by <strong>The stack. editors</strong>, the editorial
+<p>Content is researched, written, and maintained by <strong>The {esc(renderer.SITE_NAME)} editors</strong>, the editorial
 team that operates this site. We are solely responsible for what is published here. Questions, corrections,
 and feedback reach us directly at <a href="mailto:{esc(email)}">{esc(email)}</a> or via our
 <a href="/contact/">contact page</a>.</p>
@@ -363,9 +386,9 @@ def _og_svg(domain: str) -> str:
         '<rect width="1200" height="630" fill="url(#bg)"/>'
         '<rect x="80" y="86" width="64" height="64" rx="15" fill="#2f6df6"/>'
         '<text x="112" y="132" font-size="38" font-weight="700" fill="#fff" text-anchor="middle" '
-        'font-family="Consolas,monospace">S</text>'
-        '<text x="164" y="134" font-size="40" font-weight="700" fill="#e7ebf2">stack.'
-        '<tspan fill="#9aa4b2" font-weight="500">' + esc(domain.replace("stack", "", 1) or ".utilverse.info") + '</tspan></text>'
+        f'font-family="Consolas,monospace">{esc(renderer.BRAND_MARK)}</text>'
+        f'<text x="164" y="134" font-size="40" font-weight="700" fill="#e7ebf2">{esc(renderer.SITE_NAME)}'
+        f'<tspan fill="#9aa4b2" font-weight="500">   {esc(domain)}</tspan></text>'
         '<text x="80" y="330" font-size="72" font-weight="800" fill="#e7ebf2">Tool choices, backed'
         '<tspan x="80" dy="86">by <tspan fill="#5b9cff">data</tspan> — not vibes.</tspan></text>'
         '<text x="80" y="548" font-size="30" fill="#9aa4b2">Independent SaaS, developer &amp; AI tool comparisons '
@@ -375,7 +398,7 @@ def _og_svg(domain: str) -> str:
 
 def _favicon_ico() -> bytes:
     """브랜드 파비콘(/favicon.ico — 16·32px 2엔트리). og.svg 마크와 동일한 시각언어:
-    액센트 블루(#2f6df6, design.md) 라운드 사각형 + 흰 'S'.
+    액센트 블루(#2f6df6, design.md) 라운드 사각형 + 흰 브랜드 마크(renderer.BRAND_MARK).
 
     외부 에셋·폰트·라이브러리 없이 픽셀을 직접 합성한다(자립적, 표준 라이브러리만).
     4× 수퍼샘플링으로 모서리·글자에 안티에일리어싱을 준다. 형식은 ICO 안의 32bpp BGRA 비트맵.
@@ -390,9 +413,18 @@ def _favicon_ico() -> bytes:
         dx, dy = x - cx, y - cy
         return (dx * dx + dy * dy) <= r * r if (dx or dy) else True
 
-    # 'S' — 가로 3줄 + 좌상/우하 세로 절반(블록형 모노스페이스 S, 16px 에서도 형태 유지)
+    # 브랜드 마크 글리프 — `renderer.BRAND_MARK` 를 그린다(ORDER 47 (a): 사이트명 Utilverse → 'U').
+    # 블록형 모노스페이스로 단순화해 16px 에서도 형태가 뭉개지지 않게 한다. 마크를 되돌리려면
+    # renderer.BRAND_MARK 를 바꾸고, 해당 글자의 획 정의를 아래에 추가하면 된다(모르는 글자는 'S' 로 폴백).
     GX0, GX1, GY0, GY1, T = 0.28, 0.72, 0.17, 0.83, 0.11     # 글리프 박스·획 두께
     GMID = (GY0 + GY1) / 2
+
+    def _inside_u(x, y):                                      # 좌·우 세로획 + 아래 가로획
+        if not (GX0 <= x <= GX1 and GY0 <= y <= GY1):
+            return False
+        if y >= GY1 - T:                                      # 아래 가로획
+            return True
+        return x <= GX0 + T or x >= GX1 - T                   # 좌·우 세로획
 
     def _inside_s(x, y):
         if not (GX0 <= x <= GX1 and GY0 <= y <= GY1):
@@ -407,6 +439,8 @@ def _favicon_ico() -> bytes:
             return True
         return False
 
+    _inside_mark = {"U": _inside_u, "S": _inside_s}.get(renderer.BRAND_MARK, _inside_s)
+
     def _bitmap(size: int) -> bytes:
         rows = []
         for py in range(size - 1, -1, -1):                    # BMP 는 bottom-up
@@ -419,7 +453,7 @@ def _favicon_ico() -> bytes:
                         y = (py + (sy + 0.5) / SS) / size
                         if _inside_rrect(x, y):
                             n_rect += 1
-                            if _inside_s(x, y):
+                            if _inside_mark(x, y):
                                 n_s += 1
                 total = SS * SS
                 alpha = round(255 * n_rect / total)
@@ -451,6 +485,9 @@ def _favicon_ico() -> bytes:
 def build(cfg) -> str:
     domain = _domain(cfg)
     base = f"https://{domain}"
+    # AdSense 소유권 확인 — 렌더 시작 **전에** 주입해야 모든 페이지 head 에 실린다(빈 값이면 무동작).
+    pub_id = _adsense_publisher_id(cfg)
+    renderer.set_adsense_publisher_id(pub_id)
     # 수익화 관측(/privacy/·/about/ 문구가 여기에 연동된다) — ⚠️ dist/site 를 지우기 **전에** 해야
     # 직전 빌드 산출물까지 스캔 대상에 들어간다(_monetization_observed docstring ②).
     mon = _monetization_observed(cfg)
@@ -547,6 +584,14 @@ def build(cfg) -> str:
     _write(os.path.join(SITE_DIR, "robots.txt"),
            f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n")
 
+    # 4.5) ads.txt — AdSense 사이트 소유권 확인(광고 게재 코드가 아니다). 유효한 ID 가 있을 때만 생성,
+    #      없으면 파일 자체를 만들지 않는다(= 지금처럼 404).
+    #      ⚠️ 두 가지가 틀리면 파일이 무효다: (1) 'ca-' 없는 `pub-` 로 시작한다  (2) 개행은 LF —
+    #      Windows 텍스트 모드 쓰기는 CRLF 가 되므로 바이트로 직접 쓴다(cron 셰방을 깨먹은 전례).
+    if pub_id:
+        _write_bytes(os.path.join(SITE_DIR, "ads.txt"),
+                     f"google.com, {pub_id[len('ca-'):]}, DIRECT, f08c47fec0942fa0\n".encode())
+
     # 5) Google Search Console 소유권 확인 파일 (URL 접두어) — cron 이 web_root 를 비우므로 매 빌드 재생성
     gsc = _gsc_verify_file(cfg)
     if gsc:
@@ -579,7 +624,8 @@ def build(cfg) -> str:
     _write_bytes(os.path.join(SITE_DIR, "favicon.ico"), _favicon_ico())
 
     print(f"build: {len(pages)} 콘텐츠 + {len(cat_urls)} 카테고리 허브 + {len(static_pages)} 필수 페이지 "
-          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''}{' + IndexNow-key' if inkey else ''} "
+          f"+ sitemap/robots{' + GSC(' + gsc + ')' if gsc else ''}{' + IndexNow-key' if inkey else ''}"
+          f"{' + ads.txt(' + pub_id + ')' if pub_id else ''} "
           f"+ feed.xml + search({len(search_index)}) + og.svg + favicon.ico → {SITE_DIR}/")
     print(f"build: 내부 링크 교정: Related {fixed_related}개 링크 + 브레드크럼 {fixed_crumb}개 페이지 "
           f"(실제 발행 페이지로 재작성)")

@@ -950,6 +950,156 @@ def test_hold_medium() -> None:
         warn("코퍼스에 통과 판정이 없어 보류 빈도를 측정하지 못했다")
 
 
+# ── 11. 소유권 확인 메타 ≠ 광고 게재 (ORDER 2026-08-01-48-review) ────────────────────────────
+# 실측 결함(46-ops): `<meta name="google-adsense-account" content="ca-pub-…">` 가 `_AD_CODE_RE` 의
+#   `ca-pub-\d{6}` 에 걸려 **2회차 빌드부터** ads=True → /privacy/ 가 광고 0건인데 현재형으로 단정.
+# ⚠️ 이 테스트는 **양방향**이다. 오탐만 막고 끝나면 반대 구멍(광고 게재 중인데 고지 없음 = F2 위반,
+#   17-ops 가 잡은 결함)이 열린다. 그래서 (b)(c) 와 (e)~(h) 로 **켜지는 방향**을 같이 못 박는다.
+_OWN_META = '<meta name="google-adsense-account" content="ca-pub-0000000000000000">'
+_AD_LOADER = ('<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'
+              '?client=ca-pub-0000000000000000" crossorigin="anonymous"></script>')
+_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8">{}</head><body><p>x</p>{}</body></html>'
+
+
+def _fake_repo(tmp: str, head: str = "", body: str = "") -> None:
+    """관측이 성립하는(templates>0) 최소 리포 — 렌더 템플릿 2개 + 빌드 산출물 1페이지."""
+    for rel in R._RENDER_SOURCES:
+        p = os.path.join(tmp, *rel.split("/"))
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("# selftest fake render template — contains no ad-network code\n")
+    p = os.path.join(tmp, "dist", "site", "index.html")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write(_PAGE.format(head, body))
+
+
+def _observe(tmp: str, head: str = "", body: str = "", cfg: dict | None = None) -> dict:
+    _fake_repo(tmp, head, body)
+    R._site_scan_cache.clear()
+    return R.monetization_state(content_cfg=cfg)
+
+
+def test_ownership_meta_not_ad_serving() -> None:
+    print("\n[11] 소유권 확인 메타 ≠ 광고 게재 — 양방향 (ORDER 48)")
+    cwd0, root0 = os.getcwd(), R._REPO_ROOT
+    env0 = os.environ.pop("ADSENSE_MONETIZED", None)      # 실행 환경에 흔들리지 않게 고정
+    tmp = tempfile.mkdtemp(prefix="ownership_meta_selftest_")
+    try:
+        # _scan_roots() 는 _REPO_ROOT ∪ cwd 를 본다 → 둘 다 tmp 로 옮겨야 실리포가 섞이지 않는다.
+        os.chdir(tmp)
+        R._REPO_ROOT = tmp
+
+        # (a) 소유권 메타만 → 광고 아님
+        a = _observe(tmp, head=_OWN_META)
+        print(f"        (a) 소유권 메타만        → ads={a['ads']} known={a['known']} "
+              f"| {'; '.join(a['evidence'])[:150]}")
+        check(a["ads"] is False and a["known"] is True,
+              "(a) 소유권 메타만 존재 → ads=False (관측은 성립: known=True)",
+              (a["ads"], a["known"]), (False, True))
+        check(a.get("ownership_meta") == 1 and any("ownership-verification" in e for e in a["evidence"]),
+              "(a) 제외 사실이 근거에 **기록**된다(조용한 제외 금지)",
+              (a.get("ownership_meta"), a["evidence"][-1][:60]), (1, "recorded"))
+
+        # (b) 실제 광고 로더 → 현재형 발동
+        b = _observe(tmp, head=_OWN_META, body=_AD_LOADER)
+        print(f"        (b) 광고 로더            → ads={b['ads']} | {'; '.join(b['evidence'])[:110]}")
+        check(b["ads"] is True, "(b) 실제 광고 코드(adsbygoogle/googlesyndication) → ads=True",
+              b["ads"], True)
+
+        # (c) 선언만 (페이지에 광고 코드 0건) → 현재형 발동. 선언은 켜는 방향으로만 작동한다.
+        c = _observe(tmp, head=_OWN_META, cfg={"monetization": {"ads_live": True}})
+        print(f"        (c) ads_live 선언만      → ads={c['ads']} | {'; '.join(c['evidence'])[:110]}")
+        check(c["ads"] is True and any("ads_live" in e for e in c["evidence"]),
+              "(c) config monetization.ads_live=true 선언만 → ads=True (탐지와 무관하게 발동)",
+              c["ads"], True)
+
+        # (d) 둘 다 없음 → 현재형 아님
+        d = _observe(tmp)
+        print(f"        (d) 둘 다 없음           → ads={d['ads']} known={d['known']}")
+        check(d["ads"] is False and d["known"] is True and d.get("ownership_meta") == 0,
+              "(d) 소유권 메타도 광고 코드도 없음 → ads=False", (d["ads"], d["known"]), (False, True))
+
+        # ── 완화가 아님을 못 박는 구멍 검사 ──────────────────────────────────────────────
+        # (e) 같은 페이지에 메타 + 로더 → 메타 제외가 로더를 삼키지 않는다
+        # ⚠️ 근거 문자열은 **최초 1건**만 싣는다(_scan_text) — 로더에는 googlesyndication.com 이
+        #    adsbygoogle 보다 앞서 나온다. 단언은 '로더 토큰 중 하나'로 건다(둘 다 요구하면 오탐 FAIL).
+        b_ev = "; ".join(b["evidence"])
+        check(b["ads"] is True and ("googlesyndication.com" in b_ev or "adsbygoogle" in b_ev),
+              "(e) 소유권 메타와 광고 로더가 같은 페이지에 있어도 **로더**가 잡힌다(ca-pub 매치가 아니다)",
+              b_ev[:70], "googlesyndication.com|adsbygoogle")
+        # (f) 소유권 메타 **태그 안**에 다른 광고 패턴이 섞이면 잡힌다 (태그 통째 삭제가 아니라 토큰만 제거)
+        f = _observe(tmp, head='<meta name="google-adsense-account" content="ca-pub-0000000000000000" '
+                               'data-x="adsbygoogle">')
+        print(f"        (f) 메타 태그 안 광고패턴 → ads={f['ads']} | {'; '.join(f['evidence'])[:100]}")
+        check(f["ads"] is True, "(f) 소유권 메타 태그 속성에 광고 패턴이 섞이면 여전히 ads=True",
+              f["ads"], True)
+        # (g) 메타 **밖**의 맨 ca-pub 문자열은 보조 그물이 그대로 건진다
+        g = _observe(tmp, head=_OWN_META, body='<script>var slot="ca-pub-1234567890123456";</script>')
+        print(f"        (g) 메타 밖 ca-pub       → ads={g['ads']} | {'; '.join(g['evidence'])[:100]}")
+        check(g["ads"] is True, "(g) 소유권 메타 밖의 ca-pub 은 그대로 탐지된다(보조 그물 유지)",
+              g["ads"], True)
+        # (h) 환경변수 선언 — 소유권 메타만 있어도 켜진다
+        os.environ["ADSENSE_MONETIZED"] = "1"
+        try:
+            h = _observe(tmp, head=_OWN_META)
+        finally:
+            os.environ.pop("ADSENSE_MONETIZED", None)
+        print(f"        (h) ADSENSE_MONETIZED=1  → ads={h['ads']} | {'; '.join(h['evidence'])[:100]}")
+        check(h["ads"] is True, "(h) 환경변수 선언만으로도 ads=True (끄는 선언은 없다)", h["ads"], True)
+        # (i) 속성 순서·따옴표 변형도 소유권 메타로 인식(오탐이 변형으로 되살아나지 않게)
+        for label, tag in (("속성 역순", '<meta content="ca-pub-0000000000000000" '
+                                         'name="google-adsense-account">'),
+                           ("작은따옴표", "<meta name='google-adsense-account' "
+                                          "content='ca-pub-0000000000000000'>"),
+                           ("대문자·공백", '<META  NAME = "google-adsense-account"  '
+                                           'CONTENT="ca-pub-0000000000000000" >')):
+            v = _observe(tmp, head=tag)
+            check(v["ads"] is False, f"(i) 소유권 메타 변형({label})도 광고로 보지 않는다", v["ads"], False)
+        # (i') 이름을 흉내만 낸 태그는 제외 대상이 아니다 — 모르는 태그는 엄격 쪽(fail-closed)
+        v = _observe(tmp, head='<meta name="google-adsense-account-fake" content="ca-pub-0000000000000000">')
+        print(f"        (i') 유사 이름 태그      → ads={v['ads']} | {'; '.join(v['evidence'])[:100]}")
+        check(v["ads"] is True and v.get("ownership_meta") == 0,
+              "(i') google-adsense-account-**fake** 는 소유권 메타가 아니다 → ca-pub 그대로 탐지",
+              (v["ads"], v.get("ownership_meta")), (True, 0))
+
+        # (j) 멱등성 — 같은 입력에서 반복 관측이 흔들리지 않는다(빌드 2회차 결함의 단위 대응)
+        runs = [_observe(tmp, head=_OWN_META) for _ in range(3)]
+        sig = {(r["ads"], r["affiliate"], r["known"], r.get("ownership_meta")) for r in runs}
+        print(f"        (j) 연속 3회 관측        → {sorted(sig)}")
+        check(len(sig) == 1 and runs[0]["ads"] is False,
+              "(j) 연속 3회 관측 결과 동일 · ads=False (2회차부터 뒤집히던 결함의 회귀 방지)",
+              sorted(sig), "1 distinct, ads=False")
+
+        # (k) 프롬프트 방향 — 오탐이면 검수기가 '없는 고지'를 요구하게 된다(허위 고지 재생산 경로)
+        check("this site IS monetized" not in R._system(a),
+              "(k) (a) 상태에서 검수기 프롬프트가 '수익화됨'으로 뒤집히지 않는다", "-", "not monetized")
+        check("this site IS monetized" in R._system(b) and "this site IS monetized" in R._system(c),
+              "(k) (b)·(c) 에서는 '수익화됨' 프롬프트가 그대로 발동한다(고지 요구 유지)", "-", "monetized")
+
+        # (l) 사람이 읽는 최종 산출물 — /privacy/ 시제가 관측을 그대로 따른다(결함의 실제 증상)
+        try:
+            from content import site_builder as SB
+            for label, st, want_present in (("(a) 소유권 메타만", a, False), ("(b) 광고 로더", b, True),
+                                            ("(c) ads_live 선언", c, True), ("(d) 없음", d, False)):
+                body_html = SB._privacy_body("example.test", "x@example.test", st)
+                got = "We use Google AdSense to display ads" in body_html
+                cond = "This site does not currently display advertising" in body_html
+                print(f"        (l) {label:<16} → 현재형={got} 조건형={cond}")
+                check(got is want_present and cond is (not want_present),
+                      f"(l) /privacy/ 시제 — {label} → 현재형={want_present}", (got, cond),
+                      (want_present, not want_present))
+        except Exception as e:                       # yaml 미설치 등 — 회귀 본체는 위에서 이미 증명됨
+            warn(f"site_builder import 실패 — /privacy/ 시제 검증을 수행하지 못했다: {e}")
+    finally:
+        os.chdir(cwd0)
+        R._REPO_ROOT = root0
+        R._site_scan_cache.clear()
+        if env0 is not None:
+            os.environ["ADSENSE_MONETIZED"] = env0
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main(argv: list[str]) -> int:
     print("reviewer_selftest — 고지 처리 회귀 테스트 (LLM 미호출) · 불변식: 판정 불변")
     test_classify()
@@ -965,6 +1115,7 @@ def main(argv: list[str]) -> int:
     test_verdict_conflict()
     test_feedback_annotation()
     test_hold_medium()
+    test_ownership_meta_not_ad_serving()
     print(f"\n결과: {'ALL PASS' if not _fails else str(len(_fails)) + ' FAILED'}"
           f"{f' · WARN {len(_warns)}' if _warns else ''}")
     for f in _fails:

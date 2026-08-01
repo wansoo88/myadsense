@@ -16,7 +16,7 @@ import urllib.request
 import urllib.robotparser
 from urllib.parse import urlparse
 
-UA = "stack.utilverse.info-research/1.0 (+https://stack.utilverse.info/about/; content grounding, read-only)"
+UA = "utilverse.info-research/1.0 (+https://utilverse.info/about/; content grounding, read-only)"
 _ROBOTS_CACHE: dict[str, urllib.robotparser.RobotFileParser | None] = {}
 
 

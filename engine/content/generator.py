@@ -1076,7 +1076,7 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
     title = d.get("title") or topic
     slug = renderer.slugify(title)
     today = datetime.date.today().isoformat()   # 모델이 아니라 시스템 날짜
-    domain = "stack.utilverse.info"
+    domain = renderer.SITE_DOMAIN
     words = len(_strip(d.get("intro_html", "") + " " + " ".join(s.get("html", "") for s in d.get("sections", []))).split())
     return ContentSpec(
         slug=slug, title=title, dek=d["dek"], page_type=d.get("page_type", "comparison"),
@@ -1149,7 +1149,7 @@ def _cursor_vs_copilot() -> ContentSpec:
         author="The stack. editors",
         author_bio="Independent software comparisons from official docs and public data.",
         published_at="2026-06-28", updated_at="2026-06-28", reading_time=8,
-        canonical="https://stack.utilverse.info/ai-coding/cursor-vs-github-copilot/",
+        canonical=f"{renderer.SITE_URL}/ai-coding/cursor-vs-github-copilot/",
         intro_html=(
             "<p>Both <strong>Cursor</strong> and <strong>GitHub Copilot</strong> bring AI into your editor, "
             "but they take different shapes: Cursor is an AI-first editor (a VS Code fork) built around the "
@@ -1254,7 +1254,7 @@ def _generic_comparison(topic: str) -> ContentSpec:
         author="The stack. editors",
         author_bio="Independent software comparisons from official docs and public data.",   # 허위 '핸즈온' 주장 제거
         published_at="2026-06-28", updated_at="2026-06-28", reading_time=6,
-        canonical=f"https://stack.utilverse.info/compare/{slug}/",
+        canonical=f"{renderer.SITE_URL}/compare/{slug}/",
         intro_html=f"<p>How do <strong>{a}</strong> and <strong>{b}</strong> compare? We weigh features, pricing and fit.</p>",
         sections=[
             {"heading": "Overview", "html": f"<p>{a} and {b} target similar needs with different trade-offs.</p>"},

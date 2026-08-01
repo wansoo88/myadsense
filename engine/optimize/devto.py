@@ -342,7 +342,7 @@ def _build_payload(url: str, file_path: str):
 def run(cfg) -> int:
     """라이브 글을 dev.to 에 canonical 신디케이션. 반환: 신규 발행 수(0=스킵)."""
     site = cfg["sites"]["sites"][0]
-    domain = site.get("domain", "stack.utilverse.info")
+    domain = site.get("domain", "utilverse.info")
     base = f"https://{domain}"
     syn = (cfg["sites"].get("syndication") or {}).get("devto") or {}
     per_run = max(1, int(syn.get("per_run", 1)))

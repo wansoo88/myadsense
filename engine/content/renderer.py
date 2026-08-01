@@ -13,10 +13,36 @@ import re
 # AdSense 승인 전에는 광고 슬롯 비노출(빈 플레이스홀더가 심사에 불리). 승인 후 ADSENSE_ADS=1 로 켬.
 ADS_ENABLED = os.environ.get("ADSENSE_ADS", "0") == "1"
 
+# AdSense **사이트 소유권 확인**용 퍼블리셔 ID — config/sites.yaml `adsense.publisher_id` 를
+# 빌드(site_builder.build)가 set_adsense_publisher_id() 로 주입한다.
+# ⛔ 이건 소유권 확인 메타태그일 뿐 **광고 게재 코드가 아니다.** 광고 로더 스크립트는 승인 이후 별건이며
+#    지금 넣으면 CWV 만 나빠지고 얻는 게 없다(ORDER 2026-08-01-46-ops §2-②).
+# 빈 값이거나 형식이 틀리면 아무것도 출력하지 않는다 = 현재 산출물 바이트와 완전히 동일.
+ADSENSE_PUBLISHER_ID = ""
+
+# 형식: 'ca-pub-' + 숫자 16자리. 오타가 전 페이지에 박히면 소유권 확인이 **조용히** 실패하고
+# 심사 1회전(며칠~4주)을 잃는다 → 애매하면 출력하지 않고 경고를 남기는 쪽(fail-closed)을 택한다.
+_PUB_ID_RE = re.compile(r"ca-pub-\d{16}")
+_PUB_META_RE = re.compile(r'[ \t]*<meta name="google-adsense-account"[^>]*>\n?')
+
 # E-E-A-T: "누가 사이트/콘텐츠를 책임지는지 명확히"(SQRG) — publisher/author 엔티티가 /about/(편집 기준·방법론)로 연결.
-SITE_NAME = "stack."
-SITE_URL = "https://stack.utilverse.info"
+# ⚠️ 이 상수들이 사이트 이름·주소의 **단일 출처**다. 화면 표기·og·JSON-LD·RSS 가 전부 여기서 파생된다
+#    (ORDER 2026-08-01-47-ops ③: 주소가 11곳에 흩어져 있어 config 만 바꾸면 반쪽 이전이 되던 문제).
+SITE_NAME = "Utilverse"                  # og:site_name · JSON-LD publisher.name — 발행 주체 이름(F10 Trust)
+SITE_DOMAIN = "utilverse.info"           # 화면에 표기되는 주소(사실 표기)
+SITE_URL = f"https://{SITE_DOMAIN}"
 ABOUT_URL = "/about/"
+
+# 구 주소 — `stack.utilverse.info` 로 **생성 시점에 구워진** 큐 문서의 절대 URL(canonical·og:url·og:image·
+# feed·JSON-LD)을 빌드에서 현행 주소로 교정한다(refresh_chrome). 이게 없으면 기존 글의 head 가
+# 통째로 구 주소로 남는다 — 실측 226건. 301 이 받아주더라도 canonical 이 구 주소면 정본이 흐려진다.
+LEGACY_SITE_URLS = ("https://stack.utilverse.info",)
+
+# 브랜드 마크(배지·파비콘·og 카드의 한 글자)와 헤더 주소 표기 — 전부 위 상수에서 파생.
+# 마크를 되돌리려면 BRAND_MARK 한 줄만 고치면 된다(파비콘 글리프는 site_builder._inside_mark).
+BRAND_MARK = SITE_NAME[0].upper()
+_BRAND_HEAD, _, _rest = SITE_DOMAIN.partition(".")
+_BRAND_TLD = "." + _rest
 
 esc = html.escape
 
@@ -337,12 +363,32 @@ _SUN = '<svg class="ic-sun" width="17" height="17" viewBox="0 0 24 24" fill="non
 _MOON = '<svg class="ic-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path></svg>'
 _FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
             "%3Crect width='32' height='32' rx='7' fill='%232f6df6'/%3E%3Ctext x='16' y='22' font-size='17'"
-            " fill='white' text-anchor='middle' font-family='monospace' font-weight='700'%3ES%3C/text%3E%3C/svg%3E")
+            " fill='white' text-anchor='middle' font-family='monospace' font-weight='700'%3E"
+            f"{BRAND_MARK}%3C/text%3E%3C/svg%3E")
+
+
+def valid_publisher_id(v) -> str:
+    """유효한 퍼블리셔 ID면 정규화해 돌려주고, 아니면 ""(= 아무것도 출력하지 않는다)."""
+    v = str(v or "").strip()
+    return v if _PUB_ID_RE.fullmatch(v) else ""
+
+
+def set_adsense_publisher_id(v) -> str:
+    """빌드가 config 값을 주입한다 — 검증 통과분만 저장한다. 반환값 = 실제로 적용된 값(""=무동작)."""
+    global ADSENSE_PUBLISHER_ID
+    ADSENSE_PUBLISHER_ID = valid_publisher_id(v)
+    return ADSENSE_PUBLISHER_ID
+
+
+def _adsense_meta() -> str:
+    """소유권 확인 메타태그 한 줄(끝 개행 포함). 값이 없으면 "" → head 바이트가 변하지 않는다."""
+    return (f'<meta name="google-adsense-account" content="{ADSENSE_PUBLISHER_ID}">\n'
+            if ADSENSE_PUBLISHER_ID else "")
 
 
 def _head(title, description, canonical="", og_type="article", extra=""):
     return f"""<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+{_adsense_meta()}<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)}</title>
 <meta name="description" content="{esc(description)}">
 {f'<link rel="canonical" href="{esc(canonical)}">' if canonical else ''}
@@ -365,7 +411,8 @@ def _head(title, description, canonical="", og_type="article", extra=""):
 
 def _header():
     return ('<header class="site"><div class="bar">'
-            '<a class="brand" href="/"><span class="badge">S</span><span>stack<span class="tld">.utilverse.info</span></span></a>'
+            f'<a class="brand" href="/"><span class="badge">{BRAND_MARK}</span>'
+            f'<span>{_BRAND_HEAD}<span class="tld">{_BRAND_TLD}</span></span></a>'
             '<nav class="cats hide-sm"><a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
             '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
             '<div class="right">'
@@ -379,12 +426,12 @@ def _header():
 
 def _footer():
     return ('<footer class="site"><div class="inner">'
-            '<span class="fb">stack.utilverse.info</span>'
+            f'<span class="fb">{SITE_DOMAIN}</span>'
             '<nav><a href="/about/">About</a><a href="/contact/">Contact</a>'
             '<a class="priv" href="/privacy/">Privacy Policy</a>'
             '<a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
             '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
-            '<span class="cp">© 2026 stack.utilverse.info</span>'
+            f'<span class="cp">© 2026 {SITE_DOMAIN}</span>'
             '</div></footer>')
 
 
@@ -686,6 +733,19 @@ def refresh_chrome(doc: str) -> str:
         doc = re.sub(r'(<meta property="og:type"[^>]*>)', lambda m: m.group(1) + og, doc, count=1)
     doc = doc.replace('<meta name="twitter:card" content="summary">',
                       '<meta name="twitter:card" content="summary_large_image">')
+    # AdSense 소유권 확인 메타 소급 — 큐 문서는 **생성 시점** head 가 구워져 있어 _head() 변경이 닿지 않는다
+    # (기존 발행분이 전부 빠지면 소유권 확인 자체가 성립하지 않는다). 기존 태그를 걷어낸 뒤 현재 값만
+    # 다시 넣는다: 멱등이고, 값이 바뀌거나 비워지면 그것도 그대로 반영된다.
+    doc = _PUB_META_RE.sub("", doc, count=1)
+    meta = _adsense_meta()
+    if meta:
+        doc = doc.replace('<meta charset="utf-8">\n', '<meta charset="utf-8">\n' + meta, 1)
+    # 구 주소 교정 — 큐 문서는 **생성 시점** 절대 URL(canonical·og:url·og:image·feed·JSON-LD)이 구워져 있다.
+    # 도메인 이전(ORDER 47) 후에도 이걸 두면 head 가 통째로 구 주소로 남는다(실측 226건).
+    # 301 이 받아주더라도 canonical 이 구 주소를 가리키면 정본이 흐려진다 → 빌드에서 현행 주소로 확정한다.
+    for old in LEGACY_SITE_URLS:
+        if old != SITE_URL:
+            doc = doc.replace(old, SITE_URL)
     return doc
 
 
@@ -855,7 +915,7 @@ def _feat_card(p, grad=False):
             f'<div class="mt">{esc(meta)}</div></div></a>')
 
 
-def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str = "", active_cat_urls=None) -> str:
+def render_home(pages, *, domain: str = SITE_DOMAIN, canonical: str = "", active_cat_urls=None) -> str:
     pages = list(pages)
     featured = pages[:3]
     base = f"https://{domain}"
@@ -938,7 +998,7 @@ def render_home(pages, *, domain: str = "stack.utilverse.info", canonical: str =
 </html>"""
 
 
-def render_hub(name: str, dek: str, pages, *, domain: str = "stack.utilverse.info", canonical: str = "") -> str:
+def render_hub(name: str, dek: str, pages, *, domain: str = SITE_DOMAIN, canonical: str = "") -> str:
     """카테고리 허브 페이지 — 해당 카테고리의 비교글 카드 그리드."""
     cards = "".join(_feat_card(p) for p in pages) or \
         '<p style="color:var(--muted);padding:18px 0">No articles in this category yet — check back soon.</p>'

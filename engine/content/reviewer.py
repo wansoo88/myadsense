@@ -73,6 +73,45 @@ _AD_CODE_RE = re.compile(
     r"adsbygoogle|googlesyndication\.com|data-ad-client|ca-pub-\d{6}|amazon-adsystem\.com"
     r"|doubleclick\.net|adservice\.google\.|ezoic\.net|adthrive\.com|mediavine\.com|raptive\.com", re.I)
 
+# ── 소유권 확인 메타 ≠ 광고 게재 (ORDER 2026-08-01-48-review) ──────────────────────────────
+# 실측(46-ops): AdSense **사이트 소유권 확인**용 한 줄
+#     <meta name="google-adsense-account" content="ca-pub-…">
+#   이 위 `ca-pub-\d{6}` 에 걸린다. 빌드는 **직전 산출물**을 스캔하므로 값 주입 후 **2회차 빌드부터**
+#   ads=True 로 뒤집히고, /privacy/·/about/ 이 광고 0건인데 "We use Google AdSense to display ads" 를
+#   현재형으로 단정한다(= 44-ops 가 제거한 허위 고지와 같은 부류). 검수기 프롬프트도 같은 근거로
+#   "this site IS monetized" 로 뒤집혀 없는 고지를 요구한다 → 재작성이 허위 고지를 본문에 넣는 경로.
+# 판정(REVIEW): **오탐이다.** 이 메타는 "이 사이트는 내 것"이라는 증명일 뿐 광고를 한 줄도 로드하지 않는다.
+#   실제 게재에는 로더(`adsbygoogle`·`googlesyndication.com`·`data-ad-client`)가 반드시 들어오고,
+#   그 패턴들은 위 정규식에 손대지 않고 그대로 남아 있다.
+# ⛔ 탐지 완화가 아니다 — 두 가지로 못 박는다:
+#   ① 태그를 통째로 지우지 않는다. **그 태그 안의 `ca-pub-…` 토큰만** 지운다. 소유권 메타 속성에 다른
+#      광고 패턴이 섞여 들어오면(예: 같은 태그의 data-* 에 adsbygoogle) 그건 여전히 잡힌다.
+#   ② 제외를 **조용히** 하지 않는다. 몇 페이지에서 제외했는지 세어 근거(`evidence`)에 싣는다 —
+#      사람이 빌드 로그·검수 프롬프트에서 "제외했다"는 사실 자체를 본다. 조용한 제외가 게이트를 형해화한다.
+#   ③ 이름은 **정확히** google-adsense-account 여야 한다. 뒤가 따옴표·공백·`>` 가 아니면(예:
+#      `google-adsense-account-fake`) 소유권 메타로 보지 않는다 → 그 안의 ca-pub 은 그대로 탐지된다
+#      (모르는 태그는 엄격 쪽으로 — 접두어만 흉내 낸 태그에 토큰을 숨기는 경로를 막는다).
+# 선언(`monetization.ads_live: true` / `ADSENSE_MONETIZED=1`)은 이 경로를 타지 않으므로 그대로 발동한다.
+# `ads.txt` 는 애초에 스캔 대상(*.html)이 아니라 무관하다.
+_OWNERSHIP_META_RE = re.compile(
+    r"<meta\b[^>]*\bname\s*=\s*[\"']?google-adsense-account(?=[\"'\s>])[^>]*>", re.I)
+_PUB_TOKEN_RE = re.compile(r"ca-pub-\d+", re.I)
+
+
+def _neutralize_ownership_meta(text: str) -> tuple[str, int]:
+    """소유권 확인 메타 **안의 ca-pub 토큰만** 무력화. 반환: (치환된 텍스트, 제외한 태그 수)."""
+    n = 0
+
+    def _sub(m: "re.Match[str]") -> str:
+        nonlocal n
+        tag, k = _PUB_TOKEN_RE.subn("", m.group(0))
+        if k:
+            n += 1
+        return tag
+
+    return _OWNERSHIP_META_RE.sub(_sub, text or ""), n
+
+
 # 제휴/추천 링크. 오탐이 큰 일반 파라미터(`ref=`, `source=`, `utm_*`)는 일부러 넣지 않는다 —
 # 벤더 문서 링크에 흔해서 그것만으로 '수익화'라고 볼 수 없다.
 _AFFILIATE_RE = re.compile(
@@ -93,11 +132,12 @@ _SITE_SCAN_CAP = 400                     # 산출물이 커져도 검수가 느�
 _site_scan_cache: dict[str, dict] = {}   # cwd 별 캐시 (cwd 가 바뀌면 관측도 달라진다)
 
 
-def _scan_text(name: str, text: str) -> tuple[str, str]:
-    """(광고코드 증거, 제휴링크 증거) — 없으면 빈 문자열."""
-    a = _AD_CODE_RE.search(text or "")
-    f = _AFFILIATE_RE.search(text or "")
-    return (f"{name}: {a.group(0)!r}" if a else "", f"{name}: {f.group(0)!r}" if f else "")
+def _scan_text(name: str, text: str) -> tuple[str, str, int]:
+    """(광고코드 증거, 제휴링크 증거, 제외한 소유권 메타 수) — 증거가 없으면 빈 문자열."""
+    text, own = _neutralize_ownership_meta(text)
+    a = _AD_CODE_RE.search(text)
+    f = _AFFILIATE_RE.search(text)
+    return (f"{name}: {a.group(0)!r}" if a else "", f"{name}: {f.group(0)!r}" if f else "", own)
 
 
 def _scan_roots() -> list[str]:
@@ -133,19 +173,21 @@ def _scan_site(refresh: bool = False) -> dict:
         tmpl += [os.path.join(root, p) for p in _RENDER_SOURCES
                  if os.path.exists(os.path.join(root, p))]
         built += sorted(glob.glob(os.path.join(root, _SITE_GLOB), recursive=True))[:_SITE_SCAN_CAP]
-    ads, aff = [], []
+    ads, aff, own = [], [], 0
     for p in tmpl + built:
         try:
             with open(p, encoding="utf-8", errors="replace") as f:
-                a, x = _scan_text(os.path.relpath(p, _REPO_ROOT) if p.startswith(_REPO_ROOT) else p,
-                                  f.read())
+                a, x, o = _scan_text(os.path.relpath(p, _REPO_ROOT) if p.startswith(_REPO_ROOT) else p,
+                                     f.read())
         except OSError:
             continue
         if a:
             ads.append(a)
         if x:
             aff.append(x)
+        own += o
     out = {"ads": ads, "affiliate": aff, "templates": len(tmpl), "built": len(built),
+           "ownership_meta": own,
            "scanned": f"{len(tmpl)} render template file(s) + {len(built)} built page(s)"}
     _site_scan_cache[ck] = out
     return out
@@ -188,7 +230,7 @@ def monetization_state(spec=None, content_cfg: dict | None = None) -> dict:
         aff = True
         ev.append("affiliate link found in templates/built pages — " + "; ".join(site["affiliate"][:3]))
     if spec is not None:
-        a, x = _scan_text("draft", _spec_raw(spec))
+        a, x, _ = _scan_text("draft", _spec_raw(spec))
         if a:
             ads = True
             ev.append("ad-network code in the draft — " + a)
@@ -215,8 +257,15 @@ def monetization_state(spec=None, content_cfg: dict | None = None) -> dict:
     elif not ev:
         ev.append(f"no ad-network code and no affiliate/referral link pattern in {site['scanned']}"
                   + (" or in this draft" if spec is not None else ""))
+    # 제외를 조용히 하지 않는다(위 _OWNERSHIP_META_RE ②). **맨 끝에** 덧붙여야 위의 기본 근거 문장을
+    # 밀어내지 않는다(`elif not ev:` 가 먼저 돌아야 한다).
+    if site.get("ownership_meta"):
+        ev.append(f"AdSense ownership-verification meta tag on {site['ownership_meta']} page(s) — "
+                  "site ownership proof, NOT ad serving; excluded from the ad-code scan "
+                  "(an ad loader would still match)")
     return {"monetized": ads or aff, "ads": ads, "affiliate": aff, "known": known,
-            "evidence": ev, "scanned": site["scanned"], "warning": warning}
+            "evidence": ev, "scanned": site["scanned"], "warning": warning,
+            "ownership_meta": site.get("ownership_meta", 0)}
 
 
 _SYSTEM = (

@@ -27,7 +27,7 @@ def _key_and_domain(cfg):
     key = (site.get("indexnow_key") or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9-]{8,128}", key or ""):
         return None, None
-    return key, site.get("domain", "stack.utilverse.info")
+    return key, site.get("domain", "utilverse.info")
 
 
 def _sitemap_urls():

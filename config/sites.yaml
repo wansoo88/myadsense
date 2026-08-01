@@ -3,13 +3,13 @@
 
 sites:
   - id: main
-    domain: stack.utilverse.info     # 기술 니치 라벨 (보유: utilverse.info). 변경은 이 줄만 수정
+    domain: utilverse.info     # 정본 주소(apex). ⚠️ 여기만 바꿔서는 부족 — renderer.SITE_DOMAIN 도 함께(47-ops ③)
     contact_email: kimcomplete8888@gmail.com   # Privacy/Contact 노출용 (메일서버 없음 → 개인메일 직접). 포워딩 도입 시 contact@도메인으로 교체
     google_site_verification: googleb6e6d11d4e30b353.html   # GSC URL-접두어 소유권 확인: Google 이 준 파일명(googleXXXX.html)을 그대로 넣으면 빌드가 그 파일을 생성(내용 자동). 비우면 미생성. 확인 완료 후에도 유지(구글 재확인 대비). ⚠️ cron 이 web_root 를 비우므로 수동 업로드는 지워짐 → 반드시 이 값으로 관리
     indexnow_key: 7656b37f604c21bf0f2790e112f28ec3   # IndexNow 색인 알림 키(공개용, 비밀 아님). 빌드가 /<key>.txt 생성 → deploy 후 변경 URL 을 Bing·Yandex 등에 자동 통보. ⛔ 트래픽 생성 아님(색인 알림 프로토콜). Google 은 미참여(사이트맵·GSC 로 커버). 비우면 미전송
     cms:
       adapter: static_ssg        # wordpress | static_ssg  (어댑터 선택)
-      base_url: https://stack.utilverse.info
+      base_url: https://utilverse.info
       # wordpress: REST API + 앱 비밀번호(.env: WP_USER, WP_APP_PASSWORD)
       # static_ssg: 리포 내 콘텐츠 디렉토리 + git push (.env: GIT_REMOTE)
       content_dir: content/      # static_ssg용
@@ -17,6 +17,12 @@ sites:
       privacy_policy: true       # 필수 (자동 생성·1회 발행)
       about: true                # 권장(신뢰 신호)
       contact: true              # 권장
+
+# AdSense 사이트 소유권 확인 (ownership verification) — 광고 게재 설정이 아니다.
+# 값이 있으면 빌드가 (a) 전 페이지 <head> 에 google-adsense-account 메타태그 (b) /ads.txt 를 만든다.
+# 빈 값이면 둘 다 만들지 않는다(= 지금과 완전히 동일한 산출물). 형식이 틀리면 경고만 남기고 역시 미생성.
+adsense:
+  publisher_id: ""       # ca-pub-XXXXXXXXXXXXXXXX (X=숫자 16자리) — 사람이 AdSense 계정에서 받아 채운다
 
 # 외부 API 활성화 (자격증명은 .env)
 apis:
@@ -43,7 +49,7 @@ deploy:
   host: 115.68.230.40            # Ubuntu, root
   ssh_key: ~/.ssh/autobtc_iwinv  # rsync/ssh 키 (engine/deploy.py)
   domain_root: utilverse.info    # 서브도메인 할당 (현재: stack.utilverse.info)
-  web_root: /var/www/stack.utilverse.info   # nginx 서빙 디렉토리 (배포 대상)
+  web_root: /var/www/utilverse.info   # nginx 서빙 디렉토리 (배포 대상). stack 은 301 전환 전까지 유지(47-ops (b))
   https: nginx_certbot           # 이 서버는 nginx(80/443) + certbot — Caddy 아님(data·itsmine 공유)
   status: live                   # stack.utilverse.info 라이브·실콘텐츠 15편 배포(2026-06-30). noindex 해제·색인 허용(2026-07-02 확인)
   scheduler: server_cron         # config/schedule.yaml → 서버 crontab (24/7)

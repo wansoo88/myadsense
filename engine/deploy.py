@@ -20,7 +20,7 @@ DEFAULT_KEY = "~/.ssh/autobtc_iwinv"
 def _cfg(cfg):
     d = (cfg.get("sites", {}) or {}).get("deploy", {}) or {}
     return (d.get("host", "115.68.230.40"),
-            d.get("web_root", "/var/www/stack.utilverse.info"),
+            d.get("web_root", "/var/www/utilverse.info"),
             os.path.expanduser(d.get("ssh_key", DEFAULT_KEY)),
             d.get("domain_root", "utilverse.info"))
 
@@ -109,7 +109,7 @@ def remove_noindex(cfg):
     """[STAGING] noindex 해제 — vhost 의 X-Robots-Tag 줄 제거 + nginx reload (실제 변경: ADSENSE_DEPLOY=1).
     이미 1회 적용됨(2026-07-02 색인 허용 확인). sed 삭제는 멱등이라 재실행해도 안전."""
     host, _, key, _ = _cfg(cfg)
-    conf = "/etc/nginx/sites-available/stack.utilverse.info"
+    conf = f"/etc/nginx/sites-available/{_cfg(cfg)[3]}"   # 서빙 중인 vhost(= domain_root)
     remote = (f"sed -i '/X-Robots-Tag/d' {conf} && nginx -t && systemctl reload nginx "
               f"&& echo 'noindex 제거·reload 완료'")
     cmd = ["ssh", "-i", key, "-o", "StrictHostKeyChecking=accept-new", f"root@{host}", remote]

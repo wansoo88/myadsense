@@ -29,7 +29,7 @@ output:
   trend_days: 90                   # 추세 차트 기간
 
 site:
-  domain: stack.utilverse.info
+  domain: utilverse.info
   timezone_note: "로그 타임스탬프는 서버 로컬(KST, +09:00) 기준"
 
 # 운영 배치(서버 cron) — 관리자 대시보드 '데이터 수집 주기' 패널에 표기(정보성 + 최근 성공/실패).
