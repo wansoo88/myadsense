@@ -234,14 +234,38 @@ def review_feedback(rv: dict, *, max_issues: int = 6, max_tells: int = 6, max_ch
 _HOLD_SEVERITY = "medium"
 
 
-def _hold_reasons(rv, slug: str, hsg: dict) -> list[str]:
-    """보류 사유 목록(비어 있으면 즉시 발행 큐). 판정을 **읽기만** 한다."""
+def _factual_open(rv) -> list:
+    """미해소 factual 지적 목록. **type 필드만** 읽는다 — 판정 텍스트를 해석하지 않는다.
+
+    ⛔ '양성 factual' 을 가려내는 텍스트 분류기를 만들지 않는다: ORDER 19 가 세 라운드 폐기했고
+       감사에서 21종 중 13종이 뚫린 기전이다. 있으면 있는 것으로 센다.
+    """
+    return [i for i in ((rv or {}).get("issues") or [])
+            if isinstance(i, dict) and str(i.get("type", "")).strip().lower() == "factual"]
+
+
+def _hold_reasons(rv, slug: str, hsg: dict, *, trend_axis: bool = False) -> list[str]:
+    """보류 사유 목록(비어 있으면 즉시 발행 큐). 판정을 **읽기만** 한다.
+
+    `trend_axis=True` 면 factual 지적이 하나라도 남으면 severity 와 무관하게 보류한다(아래).
+    기본값 False = 기존 경로 동작 무변화.
+    """
     from content import human_gate
     reasons = []
     sev = str((rv or {}).get("severity", "")).strip().lower()
     if sev == _HOLD_SEVERITY:
         n = len([i for i in ((rv or {}).get("issues") or []) if isinstance(i, dict)])
         reasons.append(f"severity=medium(미해소 지적 {n}건)")
+    # 트렌드 축 한정 — factual 이 하나라도 남으면 severity 와 무관하게 사람 보류.
+    # 왜 축 한정인가(49·50-review 실측): 통과 39건 중 28건(71.8%)이 미해소 factual 을 안고 통과했고
+    #   그중 18편은 low/none 이라 사람 눈에 닿은 적이 없다 — 탐지가 아니라 탐지 이후 처리가 문제였다.
+    #   전 축에 걸면 통과분 71.8% 가 보류 큐로 가 selftest [10] 의 50% 임계를 넘겨 게이트가 형해화된다.
+    #   트렌드 축은 하루 1편이라 비용이 **1건/일**로 갇힌다.
+    # ⛔ severity 임계는 건드리지 않는다. 이건 축 한정 **라우팅**이지 임계 조정이 아니다.
+    if trend_axis:
+        fx = _factual_open(rv)
+        if fx:
+            reasons.append(f"트렌드 축 factual 미해소 {len(fx)}건(축 한정 정책)")
     if hsg.get("enabled") and human_gate.is_sampled(slug, hsg.get("sample_pct", 0)):
         reasons.append(f"품질 캘리브레이션 표본({hsg.get('sample_pct')}%)")
     return reasons
@@ -560,7 +584,7 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
                           f"issues {len(rv.get('issues') or [])}건 → {len(feedback)}자 전달")
                     continue
             # 게이트·검수 통과 — 보류 사유(표본 / severity=medium)가 있으면 발행 큐 대신 승인 대기로.
-            hold_why = _hold_reasons(rv, spec.slug, hsg)
+            hold_why = _hold_reasons(rv, spec.slug, hsg, trend_axis=trend_on)
             if hold_why:
                 human_gate.hold(spec.slug, page.html,
                                 reason=_hold_notice(spec.slug, kw, rv, hold_why))
