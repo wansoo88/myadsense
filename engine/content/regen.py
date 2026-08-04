@@ -176,8 +176,24 @@ def regen_one(slug: str, cfg: dict, *, keyword: str | None = None, max_attempts:
     corpus = [] if corpus is None else corpus
     hsg = (cfg["content"].get("quality_gate", {}).get("human_sample_gate", {}) or {})
 
+    # 🔴 트렌드 축 후보면 **사람이 미리 확정한** URL·식별자를 그대로 쓴다 — 일일 경로와 같아야 한다.
+    #   왜(실측 2026-08-04): 이걸 안 넘겼더니 모델이 소스를 다시 찾다가 4개 중 **1개만** 찾았고,
+    #   관측 대상도 제품 2개 중 1개만 잡혀 **관측표가 통째로 사라진** 재생성본이 나왔다
+    #   (원본 관측표 3행 → 재생성본 0행). 재생성이 원본보다 나빠지는 경로였다.
+    #   ORDER 45 ③ 이 발견 단계를 제거한 이유가 그대로 여기에도 적용된다.
+    hints = None
+    try:
+        _, _cands = orchestrator._trend_candidates(cfg)
+        _cand = _cands.get(kw)
+        if _cand:
+            hints = orchestrator._trend_hints(_cand)
+    except Exception as e:                                # 힌트 해석 실패는 치명적이지 않다(옛 경로로 진행)
+        print(f"    (트렌드 확정값 조회 건너뜀 — {type(e).__name__}: {e})")
+
     print(f"\n=== REGEN {slug}")
-    print(f"    keyword   : {kw}")
+    print(f"    keyword   : {kw}"
+          + (f"  [트렌드 축 확정값 사용 — 소스 {len(hints.get('source_urls') or [])}개 ·"
+             f" 관측대상 {len(hints.get('targets') or [])}개]" if hints else "  [일반 축 — 모델 발견]"))
     print(f"    canonical : {orig['canonical']}  (불변)")
     print(f"    published : {orig['published_at']}  (보존) / updated → {today}")
     print(f"    cluster   : {orig['cluster']}")
@@ -189,7 +205,8 @@ def regen_one(slug: str, cfg: dict, *, keyword: str | None = None, max_attempts:
     feedback = None
     for attempt in range(1, max_attempts + 1):
         try:
-            spec, _ = generator.generate(kw, cfg["content"], cluster=orig["cluster"], feedback=feedback)
+            spec, _ = generator.generate(kw, cfg["content"], cluster=orig["cluster"],
+                                         feedback=feedback, hints=hints)
         except Exception as e:
             print(f"  ✗ 생성 실패: {type(e).__name__}: {e}")
             result["attempts"].append({"n": attempt, "stage": "generate", "error": f"{type(e).__name__}: {e}"})
