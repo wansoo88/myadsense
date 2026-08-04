@@ -1452,7 +1452,7 @@ def _dict_to_spec(topic: str, d: dict, content_cfg: dict) -> ContentSpec:
     return ContentSpec(
         slug=slug, title=title, dek=d["dek"], page_type=d.get("page_type", "comparison"),
         breadcrumb=[("Home", "/"), ("Compare", "/compare/"), (title, "")],
-        author=gen.get("author", "The stack. editors"),
+        author=gen.get("author", renderer.EDITOR_BYLINE),
         author_bio="Independent software comparisons from official docs and public data.",
         published_at=today, updated_at=today, reading_time=max(3, round(words / 200)),
         canonical=f"https://{domain}/compare/{slug}/",
@@ -1518,7 +1518,7 @@ def _cursor_vs_copilot() -> ContentSpec:
         dek="A comparison of pricing, features, and real-world workflow — so you can pick the right AI coding assistant for your stack.",
         page_type="comparison",
         breadcrumb=[("Home", "/"), ("AI Coding", "/ai-coding/"), ("Cursor vs GitHub Copilot", "")],
-        author="The stack. editors",
+        author=renderer.EDITOR_BYLINE,
         author_bio="Independent software comparisons from official docs and public data.",
         published_at="2026-06-28", updated_at="2026-06-28", reading_time=8,
         canonical=f"{renderer.SITE_URL}/ai-coding/cursor-vs-github-copilot/",
@@ -1623,7 +1623,7 @@ def _generic_comparison(topic: str) -> ContentSpec:
         dek=f"A comparison of {a} and {b} — pricing, features, and which to choose.",
         page_type="comparison",
         breadcrumb=[("Home", "/"), ("Compare", "/compare/"), (f"{a} vs {b}", "")],
-        author="The stack. editors",
+        author=renderer.EDITOR_BYLINE,
         author_bio="Independent software comparisons from official docs and public data.",   # 허위 '핸즈온' 주장 제거
         published_at="2026-06-28", updated_at="2026-06-28", reading_time=6,
         canonical=f"{renderer.SITE_URL}/compare/{slug}/",

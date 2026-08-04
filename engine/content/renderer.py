@@ -38,6 +38,15 @@ ABOUT_URL = "/about/"
 # 통째로 구 주소로 남는다 — 실측 226건. 301 이 받아주더라도 canonical 이 구 주소면 정본이 흐려진다.
 LEGACY_SITE_URLS = ("https://stack.utilverse.info",)
 
+# 편집 주체 이름 — 바이라인·저자 카드·Article JSON-LD `author.name` 이 전부 이걸 쓴다.
+# ⚠️ `/about/`(site_builder) 이 **같은 이름**을 써야 한다. 어긋나면 바이라인이 링크한 바로 그 페이지가
+#    다른 이름을 말하게 되고, 그건 F10 Trust 가 요구하는 "책임 주체가 명확할 것"에 정면으로 걸린다.
+#    실측(2026-08-04): 라이브 34편 전부가 편당 3곳에서 구 브랜드를 말하는데 `/about/` 만 신 브랜드였다.
+EDITOR_BYLINE = f"The {SITE_NAME} editors"
+# 구 브랜드로 **생성 시점에 구워진** 큐 문서를 빌드에서 교정한다(refresh_chrome). 큐 원본은 불변.
+# 구 주소(LEGACY_SITE_URLS)와 같은 원리 — 주소만 고치고 이름을 안 고쳐 남은 구멍이었다.
+LEGACY_EDITOR_BYLINES = ("The stack. editors",)
+
 # 브랜드 마크(배지·파비콘·og 카드의 한 글자)와 헤더 주소 표기 — 전부 위 상수에서 파생.
 # 마크를 되돌리려면 BRAND_MARK 한 줄만 고치면 된다(파비콘 글리프는 site_builder._inside_mark).
 BRAND_MARK = SITE_NAME[0].upper()
@@ -746,6 +755,11 @@ def refresh_chrome(doc: str) -> str:
     for old in LEGACY_SITE_URLS:
         if old != SITE_URL:
             doc = doc.replace(old, SITE_URL)
+    # 구 브랜드 바이라인 교정 — 주소와 같이 생성 시점에 구워진다. **정확 구절만** 바꾼다:
+    # 브랜드 토큰("stack.")을 통째로 치환하면 본문 산문의 같은 단어까지 건드린다.
+    for old in LEGACY_EDITOR_BYLINES:
+        if old != EDITOR_BYLINE:
+            doc = doc.replace(old, EDITOR_BYLINE)
     return doc
 
 

@@ -350,7 +350,7 @@ answer to "which of these tools should I choose, and why" — backed by document
 not marketing copy.</p>
 
 <h3>Who is responsible for this site</h3>
-<p>Content is researched, written, and maintained by <strong>The {esc(renderer.SITE_NAME)} editors</strong>, the editorial
+<p>Content is researched, written, and maintained by <strong>{esc(renderer.EDITOR_BYLINE)}</strong>, the editorial
 team that operates this site. We are solely responsible for what is published here. Questions, corrections,
 and feedback reach us directly at <a href="mailto:{esc(email)}">{esc(email)}</a> or via our
 <a href="/contact/">contact page</a>.</p>
