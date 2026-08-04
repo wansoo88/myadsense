@@ -51,8 +51,66 @@ _WS = re.compile(r"[ \t\r\f\v]+")
 _NL = re.compile(r"\n{3,}")
 
 
+# 비교표를 채우는 정보가 실제로 들어 있는 구간의 어휘.
+# 왜 필요한가(실측 2026-08-04): `kbwo/ccmanager` README 는 14,453자인데 앞에서 3,500자만 읽었다(24%).
+#   잘린 뒤쪽에 Install·Usage·Keyboard Shortcuts·Configuration 이 전부 있었고
+#   ('session' 33회·'worktree' 40회·'npm install' 4회 실재), 그 결과 비교표 9행 중 5행이
+#   "우리가 읽은 페이지에는 없었다"로 나갔다 — **소스에 없어서가 아니라 우리가 안 읽어서**였다.
+#   앞에서 자르는 방식은 README 처럼 배지·뱃지·목차가 앞을 차지하는 문서에서 특히 나쁘다.
+_VALUE_KEYWORDS = re.compile(
+    r"\b(?:install|installation|npm|npx|pip|brew|docker|getting started|quick ?start|usage|"
+    r"requirement|prerequisite|platform|macos|linux|windows|"
+    r"pricing|price|plan|tier|free|paid|subscription|license|licence|"
+    r"feature|configuration|configure|config|option|setting|shortcut|keybinding|"
+    r"plugin|extension|integration|api|cli|support|limit|quota)\b", re.I)
+
+
+def _smart_truncate(t: str, max_chars: int) -> str:
+    """예산 안에서 **정보가 있는 구간**을 남긴다. 앞에서 통째로 자르지 않는다.
+
+    도입부는 문서가 무엇인지 말해주므로 예산의 일부를 먼저 배정하고,
+    남은 예산은 위 어휘가 실제로 등장하는 문단에 **원문 순서를 지켜** 채운다.
+    ⚠️ 생략 표시를 넣지 않는다 — 모델이 그걸 보고 "페이지가 잘렸다"고 본문에 쓰면
+       독자에게 무의미한 파이프라인 언어가 된다(자가검수 pipeline-language 규칙과 충돌).
+    """
+    if len(t) <= max_chars:
+        return t
+    # ⚠️ 이 시점의 텍스트에는 **빈 줄이 없다**(호출부가 빈 줄을 이미 제거한다) → `\n\n` 로 나누면
+    #    전체가 한 덩어리가 되어 예산에 안 들어가고 결과가 빈 문자열이 된다(실측으로 잡은 결함).
+    #    그래서 줄 단위로 쪼갠 뒤 일정 크기 청크로 다시 묶는다.
+    lines = [ln for ln in t.split("\n") if ln.strip()]
+    chunks, cur, cur_len = [], [], 0
+    for ln in lines:
+        cur.append(ln); cur_len += len(ln) + 1
+        if cur_len >= 500:
+            chunks.append("\n".join(cur)); cur, cur_len = [], 0
+    if cur:
+        chunks.append("\n".join(cur))
+
+    head, used, i = [], 0, 0
+    head_budget = int(max_chars * 0.4)
+    for i, c in enumerate(chunks):
+        if used + len(c) > head_budget:
+            break
+        head.append(c); used += len(c) + 1
+    rest = chunks[i:]
+    scored = sorted(((len(_VALUE_KEYWORDS.findall(c)), n) for n, c in enumerate(rest)), reverse=True)
+    picked, budget = set(), max_chars - used
+    for score, n in scored:
+        if score <= 0:
+            break
+        if len(rest[n]) + 1 <= budget:
+            picked.add(n); budget -= len(rest[n]) + 1
+    out = "\n".join(head + [c for n, c in enumerate(rest) if n in picked])
+    # 안전망 — 선별이 예산을 크게 못 채웠거나(키워드 없는 문서) 비었으면 앞에서 자르는 옛 방식으로.
+    # 정보를 더 주려던 장치가 **오히려 덜 주는** 일이 없게 한다.
+    if len(out) < min(len(t), max_chars) * 0.8:
+        return t[:max_chars].strip()
+    return out[:max_chars].strip()
+
+
 def extract_readable(raw_html: str, max_chars: int = 4000) -> str:
-    """HTML → 사람이 읽는 텍스트(스크립트/스타일 제거, 태그 제거, 공백 정리, 절단)."""
+    """HTML → 사람이 읽는 텍스트(스크립트/스타일 제거, 태그 제거, 공백 정리, 예산 내 선별)."""
     t = _TAG_DROP.sub(" ", raw_html)
     t = re.sub(r"<(br|/p|/div|/li|/tr|/h[1-6])\s*>", "\n", t, flags=re.I)
     t = _TAGS.sub(" ", t)
@@ -61,7 +119,7 @@ def extract_readable(raw_html: str, max_chars: int = 4000) -> str:
     t = _NL.sub("\n\n", t)
     lines = [ln.strip() for ln in t.splitlines()]
     t = "\n".join(ln for ln in lines if ln)
-    return t[:max_chars].strip()
+    return _smart_truncate(t.strip(), max_chars)
 
 
 def check_url(url: str, timeout: int = 12) -> int | str:

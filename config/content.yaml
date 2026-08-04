@@ -14,7 +14,12 @@ grounding:
   enabled: true
   max_sources: 5                # 페치 상한(article 당)
   fetch_timeout: 12             # 초
-  max_chars_per_source: 3500    # 소스별 주입 텍스트 상한
+  max_chars_per_source: 12000   # 소스별 주입 텍스트 상한.
+                                # 🔴 3500 이었다 → 실측(2026-08-04): ccmanager README 14,453자 중 24%만 읽어
+                                #    Install·Usage·Config 가 통째로 잘렸고 비교표 9행 중 5행이 '확인 못 함'으로 나갔다.
+                                #    소스에 없어서가 아니라 우리가 안 읽어서였다. 대부분의 README·문서가 이 안에 들어온다.
+                                #    ⚠️ 올릴수록 프롬프트가 길어진다(하루 1편 기준 감당 가능). 잘라야 할 때는
+                                #       source_fetch._smart_truncate 가 앞에서 자르지 않고 정보 있는 구간을 고른다.
   validate_source_urls: true    # 모델이 붙인 sources 중 유효(200~3xx)만 유지 — 죽은 인용 제거
 
 # 제3자 공개 API 관측(원저 데이터) — engine/content/observed.py. ORDER 2026-07-25-33 / 2026-07-28-42.
@@ -55,6 +60,12 @@ quality_gate:
     block_prohibited_topics: true
     block_ad_clickbait: true    # "광고 클릭" 유도 문구 차단
     block_copyright_risk: true
+  comparison:
+    # 비교글인데 한쪽 열이 대부분 '확인 못 함'이면 비교가 성립하지 않는다 → 발행하지 않는다.
+    # 왜 행이 아니라 **열** 기준인가: 9행 중 5행이 한쪽만 비면 전체 칸으로는 28%라 낮아 보이지만
+    # 독자가 보는 것은 '한 제품 칸의 56%가 빈 표'다. 실측 2026-08-04 기준으로 정한 값.
+    max_absent_column_ratio: 0.40   # 한 제품 열의 공백 비율이 이걸 넘으면 거부(0 = 검사 끔)
+    min_rows_to_judge: 5            # 행이 이보다 적으면 비율이 불안정하므로 판정하지 않는다
   human_sample_gate:
     enabled: true
     sample_pct: 10              # 배치의 10%는 사람 승인 큐 (캘리브레이션)

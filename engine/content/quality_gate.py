@@ -49,10 +49,52 @@ def jaccard(a: str, b: str) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
+_ABSENCE_MARK = "Not covered on the pages we read"
+
+
+def lopsided_columns(html_text: str) -> tuple[int, int, int]:
+    """비교표의 **제품별** 데이터 칸 중 '확인 못 함' 칸 수. (a 부재, b 부재, 행 수)
+
+    왜 행 전체가 아니라 **열**로 세나(실측 2026-08-04): 9행 중 5행이 한쪽만 비었을 때
+    전체 칸 기준으로는 18칸 중 5칸(28%)이라 낮아 보이지만, 독자가 보는 것은
+    **한 제품 칸의 56%가 비어 있는 표**다. 비교글의 값은 양쪽이 채워질 때만 생긴다.
+
+    ⚠️ **표별로** 판정하고 가장 나쁜 표를 돌려준다. 페이지의 모든 표를 합치면
+       빈 칸 없는 관측표(3행)가 섞여 비율이 희석된다 — 실측: 합산 5/19(26%)로 통과했지만
+       독자가 보는 head-to-head 표만 보면 5/9(56%)였다.
+    """
+    worst = (0, 0, 0)
+    for tbl in re.findall(r"<table.*?</table>", html_text, re.S):
+        a = b = rows = 0
+        for tr in re.findall(r"<tr.*?</tr>", tbl, re.S):
+            tds = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S)
+            if len(tds) < 3:                     # 항목명 + 제품 2칸 형태만 센다
+                continue
+            rows += 1
+            a += _ABSENCE_MARK in tds[1]
+            b += _ABSENCE_MARK in tds[2]
+        if rows and max(a, b) / rows > (max(worst[0], worst[1]) / worst[2] if worst[2] else -1):
+            worst = (a, b, rows)
+    return worst
+
+
 def check(page: Page, cfg: dict, existing_corpus: list[str]) -> GateResult:
     """페이지를 config 임계값으로 검사. 통과해야 발행 큐로."""
     g = cfg["quality_gate"]
     r = GateResult(passed=True)
+
+    # 0. 한쪽이 비어 있는 비교표 — 비교글인데 비교가 성립하지 않는다.
+    #    실측(2026-08-04): 발행된 글의 표 9행 중 5행이 한 제품만 "확인 못 함"이었고,
+    #    원인은 소스에 없어서가 아니라 **소스를 24%만 읽어서**였다(source_fetch 참조).
+    #    수집을 고쳐도 진짜로 자료가 없는 조합은 남으므로, 그건 발행하지 않고 버린다.
+    _lop = (g.get("comparison") or {}).get("max_absent_column_ratio", 0)
+    if _lop:
+        a, b, rows = lopsided_columns(page.html)
+        if rows >= int((g.get("comparison") or {}).get("min_rows_to_judge", 5)):
+            worst = max(a, b) / rows
+            if worst > float(_lop):
+                r.fail(f"comparison: 한쪽 열 공백 과다({max(a, b)}/{rows} = {worst:.0%} "
+                       f"> {float(_lop):.0%}) — 비교가 성립하지 않는다")
 
     # 1. 고유 가치 — 순수 템플릿 치환만이면 거부
     if g["unique_value"]["require_unique_block"] and not page.unique_blocks:
