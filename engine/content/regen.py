@@ -183,12 +183,13 @@ def regen_one(slug: str, cfg: dict, *, keyword: str | None = None, max_attempts:
     #   ORDER 45 ③ 이 발견 단계를 제거한 이유가 그대로 여기에도 적용된다.
     hints = None
     try:
-        _, _cands = orchestrator._trend_candidates(cfg)
+        _, _cands = orchestrator._trend_seeds(cfg)
         _cand = _cands.get(kw)
         if _cand:
             hints = orchestrator._trend_hints(_cand)
     except Exception as e:                                # 힌트 해석 실패는 치명적이지 않다(옛 경로로 진행)
-        print(f"    (트렌드 확정값 조회 건너뜀 — {type(e).__name__}: {e})")
+        print(f"    ⚠️ 트렌드 확정값 조회 실패 — {type(e).__name__}: {e}
+       → 모델 발견 경로로 진행한다(소스·관측 대상이 줄어들 수 있다). 심볼명을 확인하라.")
 
     print(f"\n=== REGEN {slug}")
     print(f"    keyword   : {kw}"
