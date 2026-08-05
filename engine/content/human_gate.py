@@ -27,10 +27,52 @@ def is_sampled(slug: str, sample_pct: int) -> bool:
 # 대신 같은 디렉터리에 사유 파일을 나란히 둔다 → 파일 목록만 열어도 읽힌다.
 REASON_SUFFIX = ".reason.txt"
 REJECTED_DIR = "dist/review"          # 사람이 거부한 초안 보존 위치(_keep_rejected_spec 와 같은 곳)
+PUBLISHED_PATH = "engine/store/published.json"
 
 
 def _reason_path(slug: str) -> str:
     return os.path.join(PENDING_DIR, f"{slug}{REASON_SUFFIX}")
+
+
+def unpublish(slug: str) -> str | None:
+    """거부된 글의 키워드를 `published.json` 에서 뺀다. 뺀 키워드(해당 없으면 None).
+
+    왜 필요한가(실측 2026-08-05): `orchestrator.stage_generate` 는 보류(hold)든 큐든 **가리지 않고**
+    `published.add(kw)` 를 한다 → 사람이 거부해 **발행되지 않은** 글이 '발행됨'으로 남는다.
+    실제로 `sculptor vs catnip` 이 라이브 404 인데 published.json 에 있었고, 로그의 '누적 발행'
+    수치도 그만큼 부풀려졌다. 상태 파일이 사실과 어긋나는 것 자체가 문제이고, 부작용으로
+    **그 주제는 영구히 건너뛰어진다** — 다시 쓰려 해도 생성 루프가 조용히 스킵한다.
+
+    ⚠️ 보류(hold) 시점에는 빼지 않는다. 승인 대기 중에 같은 주제가 매일 재생성되면
+       `dist/pending_approval` 에 같은 주제가 쌓인다. **거부라는 확정 사건에만** 되돌린다.
+    ⚠️ 검수 판정(`passed`)은 건드리지 않는다 — 여기서 바꾸는 것은 '발행됐는가'뿐이다.
+    """
+    import json
+    if not os.path.exists(PUBLISHED_PATH):
+        return None
+    from content import renderer                       # 지연 임포트(이 모듈은 stdlib 만으로도 동작해야 한다)
+    try:
+        with open(PUBLISHED_PATH, encoding="utf-8") as f:
+            kws = json.load(f)
+        if not isinstance(kws, list):
+            return None
+        # slug 는 '<키워드 slug>-<제목 꼬리>' 형태다 → **가장 긴** 접두 일치를 고른다
+        # (regen.resolve_keyword 와 같은 규칙: 'cursor vs github copilot' 과 'cursor vs windsurf' 를 가른다).
+        best, best_kw = "", None
+        for kw in kws:
+            ks = renderer.slugify(str(kw))
+            if ks and (slug == ks or slug.startswith(ks + "-")) and len(ks) > len(best):
+                best, best_kw = ks, kw
+        if best_kw is None:
+            return None
+        payload = json.dumps(sorted(k for k in kws if k != best_kw),
+                             ensure_ascii=False, indent=2)   # 문자열로 먼저 → 부분 파일 방지
+        with open(PUBLISHED_PATH, "w", encoding="utf-8") as f:
+            f.write(payload)
+        return best_kw
+    except Exception as e:                              # 기록 정정 실패가 거부 자체를 막지는 않는다
+        print(f"  (published.json 정정 실패 — 거부는 그대로 유효) {type(e).__name__}: {e}")
+        return None
 
 
 def hold(slug: str, html_doc: str, reason: str = "") -> str:
@@ -99,7 +141,8 @@ def approve(slug: str) -> str:
 def reject(slug: str) -> str:
     """사람이 거부 — 발행하지 않고 보존만 한다(dist/review/<slug>.human-rejected.html).
 
-    ⛔ 검수 판정(`passed`)을 바꾸지 않는다. 사람이 '이 글은 안 내보낸다'고 결정한 기록일 뿐이다."""
+    ⛔ 검수 판정(`passed`)을 바꾸지 않는다. 사람이 '이 글은 안 내보낸다'고 결정한 기록일 뿐이다.
+    다만 `published.json` 의 '발행됨' 기록은 되돌린다 — 발행되지 않았기 때문이다(unpublish 참조)."""
     src = os.path.join(PENDING_DIR, f"{slug}.html")
     if not os.path.exists(src):
         raise FileNotFoundError(f"승인 대기 중 아님: {src}")
@@ -110,4 +153,8 @@ def reject(slug: str) -> str:
         os.replace(_reason_path(slug), os.path.join(REJECTED_DIR, f"{slug}.human-rejected.reason.txt"))
     except OSError:
         pass
+    kw = unpublish(slug)
+    if kw:
+        print(f"  published.json 정정 — '{kw}' 제거(발행되지 않았다). "
+              f"⚠️ 이 주제는 다시 생성 대상이 된다 — 원치 않으면 config/topics.yaml 에서 후보를 빼라.")
     return dst
