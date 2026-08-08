@@ -521,6 +521,7 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
     print(f"generate: 근접중복 코퍼스 {len(corpus)}편 적재(dist/queue + dist/pending_approval) — "
           f"임계 {cfg['content']['quality_gate']['near_duplicate']['max_similarity']}")
     passed, rejected, dropped = 0, 0, 0
+    queued = 0            # 실제로 dist/queue 에 들어간 편수(보류는 세지 않는다 — 아래 마커 참조)
     for kw, cid in seeds:
         if review_on and passed >= daily:                # 하루 신규 상한 도달
             break
@@ -595,6 +596,7 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
             else:
                 with open(f"dist/queue/{spec.slug}.html", "w", encoding="utf-8") as f:
                     f.write(page.html)
+                queued += 1                              # 보류가 아니라 **실제 발행 큐 진입**만 센다
             corpus.append(" ".join(page.blocks)); published.add(kw); passed += 1
             accepted = True; break
         if not accepted and not trend_dropped:
@@ -602,7 +604,13 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
     if review_on:                                        # 발행 키워드 영속화(다음 날 중복 방지)
         os.makedirs("engine/store", exist_ok=True)
         json.dump(sorted(published), open(pub_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-        if passed:                                       # 오늘 발행 성공 마커 — 멱등 가드용(수동↔20:00 배치)
+        # 🔴 `passed` 가 아니라 `queued` 다(2026-08-08 실측). `passed` 는 보류분도 세므로, 그날 생성분이
+        #    전부 사람 보류로 갔는데도 '오늘 발행함' 마커가 찍혔다. 그러면 위 멱등 가드가 그날 남은
+        #    모든 생성을 막아 **하루 카덴스가 통째로 날아간다**(그날 라이브에 나간 글은 0편인데도).
+        #    실제 사고: 08-08 09:00 에 ccmanager vs claude squad 가 3회 시도 끝에 보류 → 마커 설정 →
+        #    확정된 신규 후보(clawk vs sculptor)를 그날 생성할 수 없었다.
+        #    마커의 계약은 '오늘 발행 성공'이므로 큐 진입분만 세는 것이 맞다.
+        if queued:                                       # 오늘 발행 성공 마커 — 멱등 가드용(수동↔20:00 배치)
             try:
                 open(marker_path, "w", encoding="utf-8").write(today_str)
             except Exception:
