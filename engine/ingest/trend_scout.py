@@ -26,11 +26,9 @@ from __future__ import annotations
 
 import datetime
 import json
-import math
 import os
 import re
 import sys
-import time
 import urllib.parse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -344,6 +342,13 @@ def pair(usable: list, cfg: dict | None = None) -> list:
         ga, gb = a["pf"]["grounding_chars"], b["pf"]["grounding_chars"]
         asym = (max(ga, gb) / min(ga, gb)) if min(ga, gb) else 999.0
         blocks = []
+        # 🔴 토픽 겹침은 "둘 다 AI 에이전트와 관련 있다"는 뜻이지 "같은 일을 한다"가 아니다.
+        #    실측 2026-08-08: loop-engineering(패턴·점수 툴킷) 과 wigolo(웹검색 MCP 서버)가
+        #    공통 토픽 claude·mcp 로 묶여 ✓ 를 받았다. 기계 검사(릴리스·비대칭·등가성)는 전부
+        #    통과하는데 **독자가 둘 사이에서 고를 일이 없는** 짝이었다 — 지어낸 비교가 된다.
+        #    그래서 토픽 기반은 결코 통과 표시를 주지 않는다. 사람이 '무슨 일을 하는가'를 읽고 정한다.
+        if basis == "topics":
+            blocks.append("토픽만 겹침 — 같은 일을 하는지 **설명을 읽고** 확인하라(기계로는 판별 불가)")
         if max_asym and asym > max_asym:
             blocks.append(f"비대칭 {asym:.1f}배 > {max_asym}배 (한쪽 열이 빈다)")
         if a["pf"].get("last_push_date") and a["pf"]["last_push_date"] == b["pf"].get("last_push_date"):
@@ -465,6 +470,8 @@ def digest(r: dict) -> str:
         L.append(f"  ⚠️ 상한(max_candidates)으로 {r['dropped_by_cap']}건은 검증하지 않았다 — 조용한 절단 아님")
     L.append("")
     L.append("── 짝 제안 (양쪽 관측표 성립 · 근거 충분) " + "─" * 20)
+    L.append("   ⚠️ ✓ 는 **기계 검사** 통과일 뿐이다 — 릴리스·비대칭·최종커밋일·kind 규칙.")
+    L.append("      '독자가 이 둘 사이에서 고르는가'는 기계가 못 잰다. 아래 설명(└)을 읽고 사람이 정한다.")
     if not r["pairs"]:
         L.append("  없음 — 아래 '탈락 사유'를 보고 쿼리나 임계를 조정하라")
     for p in r["pairs"][:12]:
@@ -485,6 +492,10 @@ def digest(r: dict) -> str:
             L.append(f"      {c['github']}  ⭐{pf.get('stars')}  근거 {pf['grounding_chars']:,}자"
                      f"(README {pf['readme_chars']:,}+사이트 {pf['site_chars']:,})"
                      f"  릴리스 {pf.get('latest_release_date') or '없음'}")
+            # 🔴 '무엇을 하는 툴인가'를 반드시 함께 보여준다. 이 줄이 없어서 별·산문·릴리스만 보고
+            #    서로 대체재가 아닌 짝을 고를 뻔했다(2026-08-08). 비교글은 **독자가 둘 중 하나를
+            #    고르는 상황**에서만 성립한다 — 그 판단에 필요한 유일한 정보가 이 한 줄이다.
+            L.append(f"         └ {(c.get('desc') or '(설명 없음)')[:150]}")
     L.append("")
     L.append("── 탈락 사유 " + "─" * 44)
     for c in r["candidates"]:
