@@ -87,7 +87,12 @@ trend_axis:
       cluster: ai-coding-tools
       why: "코딩 에이전트를 격리하는 두 경계 — 하이퍼바이저(일회용 리눅스 VM) vs 도커 컨테이너. 둘 다 2026년 신생이고 개별 소개글만 있을 뿐 이 짝을 정면으로 잰 글이 없다. catnip 소멸로 짝을 잃은 sculptor 를 살아 있는 상대와 다시 세운다."
       entities:
-        - name: "Clawk"
+        # 🔴 표기는 소문자 `clawk` 이다 (2026-08-08 발행분 검수 [coherence] 지적 → OPS 요청).
+        #    표 머리글은 이 `name` 을 **그대로** 쓰는데(`observed._col_id`), 본문은 저장소 표기를 따라
+        #    소문자로 쓰므로 대문자로 두면 같은 페이지 안에서 두 표기가 갈린다.
+        #    근거(README 실물 실측): 소문자 `clawk` **67회** · 대문자 `Clawk` **0회**. 헤딩도 전부 소문자다.
+        #    선례: `herdr` 도 같은 이유로 소문자로 적혀 있다.
+        - name: "clawk"
           kind: isolated-agent-workspace
           official_url: "https://github.com/clawkwork/clawk#readme"
           extra_urls: ["https://github.com/clawkwork/clawk/blob/main/docs/commands.md"]
@@ -189,7 +194,11 @@ trend_axis:
       cluster: ai-coding-tools
       why: "코딩 에이전트를 병렬로 돌리는 두 워크벤치 — 브라우저 콕핏 + git worktree 격리(cezar) vs 데스크톱 앱 + 도커 컨테이너 격리(sculptor). 둘 다 2026년 신생이고 개별 소개만 있을 뿐 이 짝을 정면으로 잰 글이 없다."
       entities:
-        - name: "Cezar"
+        # 🔴 소문자 `cezar` 로 **선제 수정**했다 (2026-08-08). clawk 에서 실제로 반려 사유가 된 것과
+        #    같은 결함이 이 후보에서 그대로 재발할 참이었다 — 이 글은 내일 09:00 에 뽑힌다.
+        #    근거(README 실물 실측): 소문자 `cezar` **60회** · 대문자 `Cezar` 2회(문장 첫머리),
+        #    H1 자체가 `cezar ⚡` 다.
+        - name: "cezar"
           kind: parallel-agent-workspace
           official_url: "https://github.com/open-mercato/cezar#readme"
           github: open-mercato/cezar
