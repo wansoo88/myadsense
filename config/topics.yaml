@@ -66,6 +66,43 @@ trend_axis:
   #   (1) official_url 200  (2) GitHub 공개 저장소 + observed 표 성립  (3) 심층 비교글 부재(검색 확인)
   # 순서 = 우선순위. 같은 엔티티가 연속되지 않게 배치했다(연속 생성 시 근접중복 위험 완화).
   candidates:
+    # ── 2026-08-08 추가 (trend_scout b162ca3 산출물에서 CONTENT 가 확정 — ORDER 45 ③ 유지) ──
+    # 검증 3기준 전부 실호출로 확인:
+    #   (1) official_url 200 — github.com/clawkwork/clawk#readme 200 · imbue.com/product/sculptor 200
+    #   (2) 관측표 성립 — observed.collect 실행 결과 live_rows 3 · distinct_rows 3 · usable()=True
+    #       (clawk: v0.3.0 2026-08-05 · 주 2.5커밋 · 최종 08-05 / sculptor: sculptor-v0.44.0rc2 2026-08-07 ·
+    #        주 151.6커밋 · 최종 08-07 — 세 행 모두 값이 갈린다)
+    #   (3) 심층 비교글 부재 — 검색 2회. 전용 1:1 비교글 0건이고, 두 번째 질의는 clawk 자체를 못 찾았다.
+    #       개별 소개(Developers Digest·rywalker)와 샌드박스 라운드업(Blaxel·Northflank)은 있으나 이 짝은 없다.
+    #       = orca-vs-herdr(검색유입 53%)와 같은 지형.
+    # ⚠️ kind 를 `containerized-agent-workspace` 로 적지 않았다 — clawk 은 컨테이너가 아니라 **VM**
+    #    (Apple Virtualization.framework / Firecracker)이다. 두 엔티티에 같은 문자열을 줘야
+    #    `equivalent_kinds()` 가 통과하므로 상위 축인 `isolated-agent-workspace` 로 맞췄다.
+    #    격리 방식의 차이(하이퍼바이저 경계 vs 컨테이너)가 이 글의 본론이지 비교 불가 사유가 아니다.
+    # 📌 URL 배분: `_trend_hints` 가 제품별 라운드로빈으로 섞고 `grounding.max_sources: 5` 에서 자른다.
+    #    clawk 2개 · sculptor 3개 = 정확히 5개라 **아무것도 안 잘린다**. 실측 산문량(크롬 제외):
+    #    clawk 14,037+11,940=약 24k · sculptor 5,780+4,761+5,488=약 16k → 1.5배. 한쪽 열이 비지 않는다.
+    #    (대조: ccmanager 13,252 vs claude-squad 5,162 = 2.6배가 '공백 56%'로 반복 탈락한 그 짝이다.)
+    - keyword: "clawk vs sculptor"
+      cluster: ai-coding-tools
+      why: "코딩 에이전트를 격리하는 두 경계 — 하이퍼바이저(일회용 리눅스 VM) vs 도커 컨테이너. 둘 다 2026년 신생이고 개별 소개글만 있을 뿐 이 짝을 정면으로 잰 글이 없다. catnip 소멸로 짝을 잃은 sculptor 를 살아 있는 상대와 다시 세운다."
+      entities:
+        - name: "Clawk"
+          kind: isolated-agent-workspace
+          official_url: "https://github.com/clawkwork/clawk#readme"
+          extra_urls: ["https://github.com/clawkwork/clawk/blob/main/docs/commands.md"]
+          github: clawkwork/clawk
+          # 내부 메모(렌더 금지): 홈페이지 없음(GitHub API homepage=null) — 문서가 저장소 안에만 있다.
+          #   docs/configuration.md(11,268자)도 후보였으나 max_sources 5 에서 sculptor 쪽이 잘려
+          #   비대칭이 되므로 넣지 않았다.
+          why: "the project's own repository, where its releases are published"
+        - name: "Sculptor"
+          kind: isolated-agent-workspace
+          official_url: "https://imbue.com/product/sculptor"
+          extra_urls: ["https://github.com/imbue-ai/sculptor#readme", "https://imbue.com/blog/sculptor-announce"]
+          github: imbue-ai/sculptor
+          why: "Imbue's own repository for the project"
+
     - keyword: "container use vs sculptor"
       cluster: ai-coding-tools
       why: "에이전트를 컨테이너에 격리하는 두 방식(MCP 서버 vs 데스크톱 UI). 각각의 소개글은 있어도 둘을 나란히 잰 글이 없다."
@@ -83,21 +120,10 @@ trend_axis:
           github: imbue-ai/sculptor
           why: "Imbue's own repository for the project"
 
-    - keyword: "sculptor vs catnip"
-      cluster: ai-coding-tools
-      why: "컨테이너로 에이전트를 격리하는 또 다른 짝. catnip 은 검색에 비교 콘텐츠가 아예 잡히지 않는 수준의 저포화다."
-      entities:
-        - name: "Sculptor"
-          kind: containerized-agent-workspace
-          official_url: "https://imbue.com/product/sculptor"
-          github: imbue-ai/sculptor
-          why: "Imbue's own repository for the project"
-        - name: "Catnip"
-          kind: containerized-agent-workspace
-          official_url: "https://github.com/wandb/catnip#readme"
-          github: wandb/catnip
-          # 내부 메모(렌더 금지): npm `catnip` 은 alextewpin/catnip 로 무관 — 등록하지 않는다
-          why: "the Weights & Biases repository for the project"
+    # ⛔ 제거됨 2026-08-08: "sculptor vs catnip" · "container use vs catnip"
+    #    사유: `wandb/catnip` 이 GitHub 에서 사라졌다(404 실측 — 08-04 존재 → 08-06 소멸).
+    #    저장소가 없으면 official_url 도 관측표도 성립하지 않아 파이프라인이 **매일 자동으로 드롭**했다.
+    #    남겨두면 매일 헛돈다(OPS 보고 2026-08-08). sculptor 는 위 `clawk vs sculptor` 로 살아 있는 짝을 얻었다.
 
     - keyword: "ccmanager vs herdr"
       cluster: ai-coding-tools
@@ -115,22 +141,6 @@ trend_axis:
           extra_urls: ["https://herdr.dev/docs/", "https://github.com/herdrdev/herdr#readme"]
           github: herdrdev/herdr
           why: "the project's own repository, where its releases are published"
-
-    - keyword: "container use vs catnip"
-      cluster: ai-coding-tools
-      why: "컨테이너 격리 계열의 세 번째 짝. 둘 다 비교 콘텐츠가 사실상 없다."
-      entities:
-        - name: "Container Use"
-          kind: containerized-agent-workspace
-          official_url: "https://container-use.com/introduction"
-          extra_urls: ["https://github.com/dagger/container-use#readme"]
-          github: dagger/container-use
-          why: "Dagger's own repository for the project"
-        - name: "Catnip"
-          kind: containerized-agent-workspace
-          official_url: "https://github.com/wandb/catnip#readme"
-          github: wandb/catnip
-          why: "the Weights & Biases repository for the project"
 
     - keyword: "happy vs agentapi"
       cluster: ai-coding-tools
@@ -150,22 +160,50 @@ trend_axis:
           github: coder/agentapi
           why: "Coder's own repository for the project"
 
-    - keyword: "ccmanager vs claude squad"
+    # ⛔ 제거됨 2026-08-08: "ccmanager vs claude squad" (OPS 권고 — 게이트 반복 탈락, LLM 3회/일 낭비)
+    #    통설은 "claude-squad 문서가 얇아서"였는데 **실측하니 아니다**(2026-08-08, 크롬 제외 실제 산문):
+    #      claude-squad README 4,688 + docs 474 = 5,162자
+    #      ↕ 같은 잣대로 잰 발행 성공작: container-use 4,829 · happy 2,881 · **herdr 2,771**(검색유입 53%)
+    #    즉 얇아서가 아니라 **상대와의 비대칭**이다 — ccmanager 13,252 vs 5,162 = 2.6배.
+    #    한쪽 열 공백 40% 초과 규칙(79e0140)에 매일 걸린 것이 이 기울기다.
+    #    → 교훈: 후보 선정에서 볼 것은 '양쪽이 두꺼운가'가 아니라 **'양쪽이 비슷한가'**다.
+    #      (위 clawk vs sculptor 는 24k vs 16k = 1.5배로 맞췄다.)
+
+    # ── 2026-08-08 추가 ② (검증 근거는 보고 2026-08-08-52-content) ──
+    # (1) official_url 200 — github.com/open-mercato/cezar#readme 200 · imbue.com/product/sculptor 200
+    # (2) 관측표 — 등가성 True. 오늘(08-08) 실행에서는 **구별행 2개로 미달**이었다:
+    #     양쪽 최종커밋이 둘 다 2026-08-07 이라 그 행이 같은 값이 됐다(릴리스·주간커밋은 갈렸다).
+    #     ⚠️ 이건 영구 결격이 아니라 **날짜 우연**이다 — 두 저장소의 최종커밋일이 갈리는 날 성립한다.
+    #     성립 안 하는 날은 `trend_preflight` 가 생성 **전에** 버리고 다음 후보로 넘어간다
+    #     (orchestrator.py:565 "TREND DROP … 생성 호출 없음") → LLM 비용 0. ccmanager-vs-claude-squad 가
+    #     매일 3회씩 태운 것은 preflight 는 통과하고 **생성 후** 게이트에서 떨어졌기 때문이고, 이 경우는 다르다.
+    # (3) 심층 비교글 부재 — 검색 확인. cezar 개별 소개(X·저장소)는 있으나 이 짝의 1:1 은 0건.
+    # ⛔ cezar 를 ccmanager 와 붙이지 않았다: "Claude Code 세션 매니저 / 병렬 에이전트 / worktree 도구"
+    #    3개 카테고리를 nimbalyst.com 이 전용 비교글로 이미 점유했다(기준3 실패). 그 카테고리는 우리가
+    #    이길 수 있는 지형이 아니다 — 같은 사유로 ccmanager vs claude squad 가 위에서 제거됐다.
+    # 📌 sculptor 가 위 clawk 짝과 중복 등장한다. 허용한 이유: 축이 다르다(격리 경계 vs 병렬 실행 워크벤치),
+    #    그리고 herdr 가 3편에 등장하며 유일하게 실트래픽을 만든 선례가 있다. 근접중복은 걸리지 않는다
+    #    (다른 주제 · 서로 다른 주력 제품).
+    - keyword: "cezar vs sculptor"
       cluster: ai-coding-tools
-      why: "tmux 를 요구하지 않는 세션 매니저 vs tmux 기반 병렬 TUI. ⚠️ 3기준 중 (3)이 가장 약하다 — 자동생성 의존성 비교 페이지와 라운드업이 둘을 함께 다룬다(심층 1:1 은 없음). PM 판단(2026-08-01): **남기되 우선순위 최하위** — 기준3의 취지는 '우리가 이길 수 있는가'이고 저품질 자동생성 페이지는 이길 수 있다."
+      why: "코딩 에이전트를 병렬로 돌리는 두 워크벤치 — 브라우저 콕핏 + git worktree 격리(cezar) vs 데스크톱 앱 + 도커 컨테이너 격리(sculptor). 둘 다 2026년 신생이고 개별 소개만 있을 뿐 이 짝을 정면으로 잰 글이 없다."
       entities:
-        - name: "CCManager"
-          kind: terminal-agent-manager
-          official_url: "https://github.com/kbwo/ccmanager#readme"
-          github: kbwo/ccmanager
-          npm: ccmanager
+        - name: "Cezar"
+          kind: parallel-agent-workspace
+          official_url: "https://github.com/open-mercato/cezar#readme"
+          github: open-mercato/cezar
+          npm: cezar-cli
+          # 내부 메모(렌더 금지): npm 소유 실검증 2026-08-08 — registry repository owner = open-mercato ✅
+          #   (30일 다운로드 54,504). 단 sculptor 쪽에 npm 이 없어 npm 행은 렌더되지 않는다
+          #   (live_rows 는 전원이 값을 가진 행만 남긴다) — 식별자만 남겨 둔다.
+          #   homepage 는 openmercato.com(회사 사이트)이라 제품 근거가 아니므로 쓰지 않았다.
           why: "the project's own repository and the npm package published from it"
-        - name: "Claude Squad"
-          kind: terminal-agent-manager
-          official_url: "https://smtg-ai.github.io/claude-squad/"
-          extra_urls: ["https://github.com/smtg-ai/claude-squad#readme"]
-          github: smtg-ai/claude-squad
-          why: "the project's own repository, where its releases are published"
+        - name: "Sculptor"
+          kind: parallel-agent-workspace
+          official_url: "https://imbue.com/product/sculptor"
+          extra_urls: ["https://github.com/imbue-ai/sculptor#readme", "https://imbue.com/blog/sculptor-announce"]
+          github: imbue-ai/sculptor
+          why: "Imbue's own repository for the project"
 
     # ⏸ 우선순위 최하위로 미뤄 둠 (2026-08-01, ORDER 51-ops 후속 — PM 지시).
     #    왜: 이 주제의 **시범편이 이미 dist/pending_approval 에 사람 승인 대기**로 존재한다(9회차 산출물).
