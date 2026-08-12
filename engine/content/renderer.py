@@ -78,7 +78,8 @@ _TYPE_LABELS = {
         "headtohead": "Head to head",
         "headtohead_sub": "Key differences side by side; the stronger option is tinted green.",
         "matrix": "Feature matrix", "pricing": "Pricing",
-        "pricing_sub": "Confirm current pricing on each vendor's site.",
+        # {as_of} 는 b_pricing 에서 글의 갱신일로 치환된다.
+        "pricing_sub": "Prices below were checked against each vendor's official pricing page on {as_of}. Vendors change pricing without notice — the linked page is authoritative.",
         "proscons": "Pros & cons", "verdict": "Verdict", "verdict_lbl": "Verdict",
     },
     "guide": {
@@ -86,7 +87,7 @@ _TYPE_LABELS = {
         "headtohead": "How the options compare",
         "headtohead_sub": "The managed option vs doing it yourself, side by side.",
         "matrix": "Feature comparison", "pricing": "Cost & hosting options",
-        "pricing_sub": "Managed vs self-hosted — confirm current pricing on the vendor's site.",
+        "pricing_sub": "Managed vs self-hosted costs, checked against the vendor's official pricing page on {as_of}.",
         "proscons": "Is it worth it?", "verdict": "Bottom line", "verdict_lbl": "Bottom line",
     },
     "listicle": {
@@ -95,7 +96,7 @@ _TYPE_LABELS = {
         "headtohead": "The picks compared",
         "headtohead_sub": "Key differences side by side; the stronger option is tinted green.",
         "matrix": "How the picks compare", "pricing": "Pricing at a glance",
-        "pricing_sub": "Confirm current pricing on each vendor's site.",
+        "pricing_sub": "Prices below were checked against each vendor's official pricing page on {as_of}. Vendors change pricing without notice — the linked page is authoritative.",
         "proscons": "Strengths & trade-offs", "verdict": "Our pick", "verdict_lbl": "Our pick",
     },
 }
@@ -613,7 +614,12 @@ def render(spec, draft: bool = False) -> str:
 
     def b_pricing():
         if getattr(spec, "pricing", None):
-            body.append(_section(L["pricing"], "pricing", _pricing(spec.pricing), sub=L["pricing_sub"]))
+            # 부제에 **관측일**을 박는다. 예전 문구 "Confirm current pricing on each vendor's site." 는
+            # 독자에게 아무것도 주지 않고 "우리도 모른다"만 말한다 — 2026-08-11 AdSense
+            # '가치 없는 콘텐츠' 거절의 직접적 근거였다(라이브 39편에 143회). 날짜가 박히면
+            # 같은 한 줄이 회피가 아니라 검증 신호가 된다.
+            sub = L["pricing_sub"].replace("{as_of}", spec.updated_at or spec.published_at or "")
+            body.append(_section(L["pricing"], "pricing", _pricing(spec.pricing), sub=sub))
             add(L["pricing"], "pricing")
 
     def b_proscons():

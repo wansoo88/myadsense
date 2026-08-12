@@ -1,0 +1,241 @@
+# prices.yaml — 가격 관측 데이터 (벤더 공식 페이지에서 확인한 값만)
+#
+# 왜 이 파일이 있나: 2026-08-11 AdSense 가 "가치가 별로 없는 콘텐츠"로 사이트를 거절했다.
+#   라이브 39편 전수 측정 결과 유료 플랜인데 가격 숫자가 없는 카드가 41개(19편)였고,
+#   그 자리에 "confirm current pricing on the vendor's site" 가 143회 들어가 있었다.
+#   가격 비교 글이 가격을 안 적으면 원본 출처보다 나은 게 없다 = low value 의 정의다.
+#
+# 규칙:
+#   1. **관측한 값만 적는다.** 못 구한 항목은 비워 두고 `unverified: true` 로 남긴다 —
+#      추측한 숫자는 없는 숫자보다 나쁘다(사실 오류가 된다).
+#   2. 모든 항목에 `source`(공식 URL)와 `as_of`(관측일)를 단다.
+#   3. `price` 는 카드에 그대로 렌더되므로 짧게. 부연은 `note` 로.
+#   4. 갱신 시 as_of 를 반드시 같이 올린다. 낡은 날짜가 붙은 값은 낡았음이 보이는 게 낫다.
+
+meta:
+  as_of: 2026-08-12
+  method: 각 벤더 공식 pricing 페이지 조회(WebFetch/WebSearch). 3자 블로그 수치는 채택하지 않음.
+  # 섹션 부제로 렌더되는 문구 — 기존 "Confirm current pricing on each vendor's site." 를 대체한다.
+  section_sub: "Prices below were checked against each vendor's official pricing page on {as_of}. Vendors change pricing without notice — the linked page is authoritative."
+
+# ─────────────────────────────────────────────────────────────
+# 카드 패치 매핑: slug + plan(정확일치) → price/note
+# ─────────────────────────────────────────────────────────────
+cards:
+
+  - slug: aider-vs-cursor-terminal-ai-coding-vs-the-ai-ide
+    plan: "Cursor Pro"
+    price: "$20 / month"
+    source: https://cursor.com/pricing
+
+  - slug: best-password-managers-in-2026-1password-vs-bitwarden-and-what-to-look-for
+    plan: "1Password Individual"
+    price: "$2.99 / month"
+    note: "billed annually"
+    source: https://1password.com/pricing/personal
+  - slug: best-password-managers-in-2026-1password-vs-bitwarden-and-what-to-look-for
+    plan: "1Password Families"
+    price: "$4.49 / month"
+    note: "billed annually"
+    source: https://1password.com/pricing/personal
+  - slug: best-password-managers-in-2026-1password-vs-bitwarden-and-what-to-look-for
+    plan: "1Password Teams Starter Pack / Business"
+    price: "Teams Starter Pack $24.95/mo · Business $8.99/user/mo"
+    note: "Starter Pack covers 10 members; both billed annually"
+    source: https://1password.com/business-pricing
+  - slug: best-password-managers-in-2026-1password-vs-bitwarden-and-what-to-look-for
+    plan: "Bitwarden Paid (Personal / Business / Enterprise)"
+    price: "Premium $1.65/mo · Families $3.99/mo · Teams $4 · Enterprise $6 per user/mo"
+    note: "billed annually"
+    source: https://bitwarden.com/pricing/
+
+  - slug: bitwarden-vs-1password-which-password-manager-should-you-use
+    plan: "1Password (Individual)"
+    price: "$2.99 / month"
+    note: "billed annually"
+    source: https://1password.com/pricing/personal
+  - slug: bitwarden-vs-1password-which-password-manager-should-you-use
+    plan: "1Password Families"
+    price: "$4.49 / month"
+    note: "billed annually; covers 5 family members"
+    source: https://1password.com/pricing/personal
+
+  - slug: bruno-vs-postman-git-native-client-vs-cloud-platform-2026
+    plan: "Postman — Paid plans"
+    price: "Solo $9 · Team $19 · Enterprise $49 per user/mo"
+    note: "billed annually. Postman renamed its tiers — the old Basic/Professional names are gone."
+    source: https://www.postman.com/pricing/
+
+  - slug: claude-code-vs-cursor-which-ai-coding-tool-fits-your-workflow
+    plan: "Cursor — Pro"
+    price: "$20 / month"
+    source: https://cursor.com/pricing
+  - slug: claude-code-vs-cursor-which-ai-coding-tool-fits-your-workflow
+    plan: "Cursor — Business/Teams"
+    price: "$40 / user / month"
+    note: "Teams tier; Enterprise is custom-quoted"
+    source: https://cursor.com/pricing
+  - slug: claude-code-vs-cursor-which-ai-coding-tool-fits-your-workflow
+    plan: "Claude Code — via Claude Pro"
+    price: "$20 / month ($17 annual)"
+    note: "Claude Code is included in every paid Claude plan"
+    source: https://claude.com/pricing
+  - slug: claude-code-vs-cursor-which-ai-coding-tool-fits-your-workflow
+    plan: "Claude Code — via Claude Max"
+    price: "from $100 / month"
+    note: "Max 5x and Max 20x usage tiers"
+    source: https://claude.com/pricing
+  - slug: claude-code-vs-cursor-which-ai-coding-tool-fits-your-workflow
+    plan: "Claude Code — via API (pay-as-you-go)"
+    price: "Token-based — no subscription"
+    note: "billed per token through the Anthropic Console"
+    source: https://claude.com/pricing
+
+  - slug: cursor-vs-windsurf-which-ai-code-editor-should-you-use-in-2026
+    plan: "Cursor — Pro"
+    price: "$20 / month"
+    source: https://cursor.com/pricing
+  - slug: cursor-vs-windsurf-which-ai-code-editor-should-you-use-in-2026
+    plan: "Cursor — Teams / Business"
+    price: "$40 / user / month"
+    source: https://cursor.com/pricing
+  - slug: cursor-vs-windsurf-which-ai-code-editor-should-you-use-in-2026
+    plan: "Windsurf — Pro"
+    price: "$20 / month"
+    note: "raised from $15 on 2026-03-19, when credits were replaced by daily/weekly quotas; a $200/mo Max tier was added. Windsurf is now part of Cognition (Devin) and windsurf.com redirects to devin.ai."
+    source: https://devin.ai/pricing
+
+  - slug: github-copilot-vs-codeium-which-ai-coding-assistant-should-you-use
+    plan: "GitHub Copilot — Pro / Pro+"
+    price: "Pro $10 · Pro+ $39 per user/mo"
+    note: "a $100/mo Max tier also exists"
+    source: https://github.com/features/copilot/plans
+  - slug: github-copilot-vs-codeium-which-ai-coding-assistant-should-you-use
+    plan: "GitHub Copilot — Business / Enterprise"
+    price: "Business $19 · Enterprise $39 per seat/mo"
+    source: https://docs.github.com/en/copilot/about-github-copilot/plans-for-github-copilot
+  - slug: github-copilot-vs-codeium-which-ai-coding-assistant-should-you-use
+    plan: "Codeium (Windsurf) — Pro / Teams"
+    price: "Pro $20 / month"
+    note: "Codeium became Windsurf and was acquired by Cognition in Dec 2025; pricing moved to quotas on 2026-03-19 and a $200/mo Max tier was added. Team pricing is quoted on request."
+    source: https://devin.ai/pricing
+
+  - slug: hetzner-vs-digitalocean-pricing-features-and-which-cloud-host-to-choose
+    plan: "Hetzner Cloud — shared & Arm VMs (CX / CPX / CAX)"
+    price: "from €5.49 / month (CX23)"
+    note: "Arm CAX11 €5.99; CPX22 €19.49. Germany/Finland, excl. VAT, after the 2026-06-15 increase."
+    source: https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/
+  - slug: hetzner-vs-digitalocean-pricing-features-and-which-cloud-host-to-choose
+    plan: "Hetzner — dedicated vCPU & bare-metal servers"
+    price: "from €42.99 / month (CCX13)"
+    note: "CCX23 €85.99 · CCX33 €138.49. The 2026-06-15 adjustment raised dedicated-vCPU plans sharply (CCX13 was €15.99)."
+    source: https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/
+  - slug: hetzner-vs-digitalocean-pricing-features-and-which-cloud-host-to-choose
+    plan: "DigitalOcean — Basic Droplets"
+    price: "from $4 / month"
+    note: "512MB/1vCPU $4 · 1GB $6 · 2GB $12 · 4GB/2vCPU $24"
+    source: https://www.digitalocean.com/pricing/droplets
+  - slug: hetzner-vs-digitalocean-pricing-features-and-which-cloud-host-to-choose
+    plan: "DigitalOcean — Optimized Droplets + managed services"
+    price: "from $42 / month (CPU-Optimized 4GB)"
+    note: "General Purpose 8GB/2vCPU $63. Managed databases, Kubernetes and App Platform are billed separately."
+    source: https://www.digitalocean.com/pricing/droplets
+
+  - slug: how-to-self-host-a-ghost-blog-a-complete-step-by-step-guide
+    plan: "Self-hosted (VPS)"
+    price: "from ~$4–6 / month + domain"
+    note: "e.g. DigitalOcean Basic Droplet $6/mo (1GB) or Hetzner CX23 €5.49/mo — Ghost's own docs recommend 1GB+ RAM"
+    source: https://www.digitalocean.com/pricing/droplets
+  - slug: how-to-self-host-a-ghost-blog-a-complete-step-by-step-guide
+    plan: "Ghost(Pro) — managed"
+    price: "Starter $18 · Publisher $29 · Business $199 per month"
+    note: "billed yearly"
+    source: https://ghost.org/pricing/
+
+  - slug: jasper-vs-copy-ai-which-ai-writing-platform-fits-your-team
+    plan: "Jasper — Creator / Pro (paid)"
+    price: "Pro $69/seat/mo ($59 annual)"
+    note: "Jasper no longer lists a Creator tier; Business is custom-quoted."
+    source: https://www.jasper.ai/pricing
+  - slug: jasper-vs-copy-ai-which-ai-writing-platform-fits-your-team
+    plan: "Copy.ai — Paid tiers"
+    price: "Chat $29/mo ($24 annual); GTM plans from $1,000/mo"
+    note: "Copy.ai has moved upmarket — Growth $1,000 · Expansion $2,000 · Scale $3,000 per month, billed annually."
+    source: https://www.copy.ai/prices
+
+  - slug: linear-vs-jira-which-issue-tracker-fits-your-team-in-2026
+    plan: "Linear — Paid tiers (Basic / Business)"
+    price: "Basic $10 · Business $16 per user/mo"
+    note: "billed yearly"
+    source: https://linear.app/pricing
+  - slug: linear-vs-jira-which-issue-tracker-fits-your-team-in-2026
+    plan: "Jira — Standard / Premium"
+    price: "Standard from $7.53 · Premium $13.53 per user/mo"
+    source: https://www.atlassian.com/software/jira/pricing
+
+  - slug: nordvpn-vs-expressvpn-how-the-two-premium-vpns-compare-2026
+    plan: "NordVPN — tiered plans"
+    price: "Basic $4.59 · Plus $5.49 · Complete $6.49 per month"
+    note: "average monthly cost on the 1-year term ($68.85 / $82.35 / $97.35 per year). VPN promo pricing changes often."
+    source: https://nordvpn.com/pricing/
+
+  - slug: otter-ai-vs-fireflies-ai-which-ai-meeting-notetaker-fits-your-team
+    plan: "Otter Pro"
+    price: "$16.99 / user / month ($8.33 annual)"
+    source: https://otter.ai/pricing
+  - slug: otter-ai-vs-fireflies-ai-which-ai-meeting-notetaker-fits-your-team
+    plan: "Otter Business"
+    price: "$30 / user / month ($19.99 annual)"
+    source: https://otter.ai/pricing
+
+  - slug: planetscale-vs-neon-which-cloud-database-fits-your-app
+    plan: "Neon"
+    price: "Free tier · paid plans are usage-based"
+    note: "Launch and Scale are pay-as-you-go — compute, storage and transfer metered hourly with no monthly minimum."
+    source: https://neon.com/pricing
+
+  - slug: postman-vs-insomnia-which-api-client-should-you-use-in-2026
+    plan: "Postman — Paid (Basic / Professional / Enterprise)"
+    price: "Solo $9 · Team $19 · Enterprise $49 per user/mo"
+    note: "billed annually. Postman replaced the Basic/Professional names with Solo/Team."
+    source: https://www.postman.com/pricing/
+  - slug: postman-vs-insomnia-which-api-client-should-you-use-in-2026
+    plan: "Insomnia — Paid (Pro / Enterprise)"
+    price: "Pro $12 · Enterprise $45 per user/mo"
+    note: "Enterprise is self-serve up to 50 users"
+    source: https://insomnia.rest/pricing
+
+  - slug: proton-pass-vs-bitwarden-which-password-manager-fits-you
+    plan: "Proton Pass Plus"
+    price: "$2.99 / month"
+    note: "on the 12-month plan ($35.88/year)"
+    source: https://proton.me/pass/pricing
+  - slug: proton-pass-vs-bitwarden-which-password-manager-fits-you
+    plan: "Proton Pass Family / Unlimited"
+    price: "quoted per plan on Proton's pricing page"
+    unverified: true
+    note: "Proton loads prices dynamically per currency — Family and Unlimited rates could not be read from the public page on 2026-08-12, so no figure is asserted here."
+    source: https://proton.me/pass/pricing
+  - slug: proton-pass-vs-bitwarden-which-password-manager-fits-you
+    plan: "Bitwarden (Business / Enterprise)"
+    price: "Teams $4 · Enterprise $6 per user/month"
+    note: "billed annually"
+    source: https://bitwarden.com/pricing/
+
+  - slug: railway-vs-render-which-cloud-platform-should-you-deploy-on
+    plan: "Render — Paid instances & team plans"
+    price: "Pro $25/mo flat · Scale $499/mo flat"
+    note: "Render dropped per-seat billing in 2026 — Pro ($25 flat) replaced Professional ($19/member) and Scale ($499 flat) replaced Organization ($29/member); legacy workspaces migrated on 2026-08-01."
+    source: https://render.com/pricing
+
+  - slug: self-hosted-analytics-vs-google-analytics-which-should-you-use
+    plan: "Managed Privacy Analytics (Cloud)"
+    price: "from $9 / month (Plausible, 10k pageviews)"
+    note: "Plausible Starter $9 · Growth $14 · Business $19 per month at the 10k-pageview tier; 2 months free on annual billing."
+    source: https://plausible.io/#pricing
+
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "GitHub Copilot code review"
+    price: "Included from $10/user/mo (Copilot Pro)"
+    note: "also in Business $19 and Enterprise $39 per seat/month"
+    source: https://github.com/features/copilot/plans
