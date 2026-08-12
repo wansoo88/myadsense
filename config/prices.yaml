@@ -239,3 +239,68 @@ cards:
     price: "Included from $10/user/mo (Copilot Pro)"
     note: "also in Business $19 and Enterprise $39 per seat/month"
     source: https://github.com/features/copilot/plans
+
+  # ── 2차 보강 (2026-08-12) ──────────────────────────────────
+  # 1차 패치가 놓친 두 편. 이유가 서로 다르다:
+  #   · notion-vs-obsidian — 숫자는 있었으나 **원화(₩)** 였다. 생성 시 Notion 페이지가
+  #     서버 위치를 따라 KR 스토어프론트로 응답했기 때문. 영어권 독자 대상 사이트에
+  #     ₩ 가 박히는 건 그 자체로 결함이다.
+  #   · the-9-best-… — 카드가 전부 "Free tier; paid Pro…" 식 티어 서술이라 숫자가 0개.
+  #     1차 분류기가 "Free" 로 시작하는 문자열을 정당한 무료 표기로 보고 통과시켰다.
+
+  - slug: notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026
+    plan: "Obsidian Sync (add-on)"
+    price: "$4 / user / month"
+    note: "billed annually; $5 on monthly billing"
+    source: https://obsidian.md/pricing
+  - slug: notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026
+    plan: "Obsidian Publish (add-on)"
+    price: "$8 / site / month"
+    note: "billed annually; $10 on monthly billing"
+    source: https://obsidian.md/pricing
+  - slug: notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026
+    plan: "Obsidian Enterprise"
+    price: "Commercial license $50 / user / year"
+    note: "required when Obsidian is used for work at a company of 2+ people; a one-time $25 Catalyst license is separate and optional."
+    source: https://obsidian.md/pricing
+  - slug: notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026
+    plan: "Notion Plus"
+    price: "₩14,000 per member / month"
+    note: "Notion localises pricing by region and served ₩ to our request on 2026-08-12 — check notion.com/pricing in your own region for the local figure."
+    source: https://www.notion.com/pricing
+  - slug: notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026
+    plan: "Notion Business (Recommended)"
+    price: "₩30,000 per member / month"
+    note: "Notion localises pricing by region — see the note on the Plus plan."
+    source: https://www.notion.com/pricing
+
+  - slug: the-9-best-github-copilot-alternatives-in-2026
+    plan: "GitHub Copilot"
+    price: "Free · Pro $10 · Pro+ $39 · Business $19 · Enterprise $39 per user/mo"
+    note: "a $100/mo Max tier also exists"
+    source: https://github.com/features/copilot/plans
+  - slug: the-9-best-github-copilot-alternatives-in-2026
+    plan: "Cursor"
+    price: "Free Hobby · Pro $20/mo · Teams $40/user/mo"
+    note: "Enterprise is custom-quoted"
+    source: https://cursor.com/pricing
+  - slug: the-9-best-github-copilot-alternatives-in-2026
+    plan: "Windsurf"
+    price: "Free · Pro $20/mo · Max $200/mo"
+    note: "Windsurf is now part of Cognition (Devin); Pro rose from $15 and credits became quotas on 2026-03-19."
+    source: https://devin.ai/pricing
+  - slug: the-9-best-github-copilot-alternatives-in-2026
+    plan: "Tabnine"
+    price: "Code Assistant $39 · Agentic Platform $59 per user/mo"
+    note: "annual subscription; Tabnine-provided model access can add token costs"
+    source: https://www.tabnine.com/pricing/
+  - slug: the-9-best-github-copilot-alternatives-in-2026
+    plan: "Amazon Q Developer"
+    price: "Free · Pro $19 / user / month"
+    note: "free tier is capped at 50 agentic requests per month"
+    source: https://aws.amazon.com/q/developer/pricing/
+  - slug: the-9-best-github-copilot-alternatives-in-2026
+    plan: "Sourcegraph Cody"
+    price: "Enterprise only — from $16K"
+    note: "Sourcegraph's public pricing page now lists only an Enterprise tier; the standalone Cody free/individual plans are no longer sold there."
+    source: https://sourcegraph.com/pricing
