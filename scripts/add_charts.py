@@ -45,8 +45,12 @@ SUB_RE = re.compile(r'(<p class="sub">.*?</p>)', re.S)
 H2_RE = re.compile(r"(<h2[^>]*>.*?</h2>)", re.S)
 CHART_RE = re.compile(r'<figure data-chart="[^"]*">.*?</figure>', re.S)
 
-# 이 단어가 있으면 그 카드의 숫자는 "그 플랜의 확정 가격"이 아니다 — 축에 세우지 않는다.
-VAGUE = ("confirm", "custom", "contact", "usage", "from ", "starts", "varies", "quote")
+# 이 말이 붙은 숫자는 "그 플랜의 확정 가격"이 아니다 — 축에 세우지 않는다.
+# ⚠️ "from $7.53" 은 여기 없다. 그건 벤더가 공표한 **하한**이라 검증 가능하고,
+#    막대에 'from $7.53' 이라고 그대로 적으면 독자를 속이지 않는다.
+#    반면 "About $4" · "~$20" 은 우리가 어림한 값이라 축에 올리면 안 된다.
+VAGUE = ("confirm", "custom", "contact", "usage", "varies", "quote",
+         "about $", "around", "approx", "roughly", "~$")
 
 CUR_NAME = {"$": "USD", "€": "EUR", "₩": "KRW", "£": "GBP"}
 
@@ -158,6 +162,16 @@ def vendor_of(card_name: str) -> str:
     return re.split(r"\s*[—–-]\s+", card_name, 1)[0].strip()
 
 
+def vendor_key(card_name: str) -> str:
+    """차트가 **양쪽**을 그리고 있는지 세는 열쇠. 'Bitwarden Free' 와 'Bitwarden Premium' 은 한 표다.
+
+    한쪽 벤더만 남은 막대 그래프는 정보가 아니라 오해다 — Fireflies 가격이
+    "confirm on vendor site" 라 빠지면 Otter 3줄만 그려지고, 독자는
+    Fireflies 가 무료인 줄 안다.
+    """
+    return re.split(r"[\s(—–-]", card_name.strip(), 1)[0].lower().strip(".,")
+
+
 def parse_card(card_name: str, raw: str) -> list[dict]:
     """가격 카드 하나 → 축에 세울 수 있는 점들. 못 세우면 빈 목록.
 
@@ -169,17 +183,23 @@ def parse_card(card_name: str, raw: str) -> list[dict]:
     if any(v in low for v in VAGUE):
         return []  # 'around $20 … confirm' 류 — 확정값이 아니니 축에 세우지 않는다
 
-    period = "month" if MONTH_RE.search(text) else "year" if YEAR_RE.search(text) else None
+    has_m, has_y = bool(MONTH_RE.search(text)), bool(YEAR_RE.search(text))
+    if has_m and has_y:
+        # '$2.49/mo (billed upfront, auto-renews ~$99.95/yr)' — 한 문장에 두 주기가 섞여 있다.
+        # 어느 숫자가 어느 축의 값인지 기계가 고를 수 없다. 통째로 뺀다.
+        return []
+    period = "month" if has_m else "year" if has_y else None
     seat = bool(SEAT_RE.search(text))
+    free = {"amount": 0.0, "cur": None, "period": None, "seat": False, "disp": "Free"}
 
     if not AMT_RE.search(text):
         # 숫자가 아예 없다 — 'Free …' 로 시작할 때만 0 으로 인정한다.
-        return ([{"label": card_name, "amount": 0.0, "cur": None, "period": None,
-                  "seat": False, "disp": "Free"}] if low.startswith("free") else [])
+        return [dict(free, label=card_name)] if low.startswith("free") else []
     if period is None:
         return []  # 금액은 있는데 청구주기를 모른다 — 같은 축에 세울 수 없다
 
-    segs = [s.strip() for s in re.split(r"·|;", text) if s.strip()]
+    # ⚠️ 세미콜론으로는 쪼개지 않는다. '·' 는 플랜 구분자지만 ';' 는 문장 구분자다.
+    segs = [s.strip() for s in text.split("·") if s.strip()]
     if len(segs) > 4:
         return []
     vendor = vendor_of(card_name)
@@ -188,19 +208,23 @@ def parse_card(card_name: str, raw: str) -> list[dict]:
         m = AMT_RE.search(seg)
         if not m:
             if seg.lower().startswith("free"):
-                pts.append({"label": card_name if len(segs) == 1 else "%s Free" % vendor,
-                            "amount": 0.0, "cur": None, "period": None,
-                            "seat": False, "disp": "Free"})
+                pts.append(dict(free, label=card_name if len(segs) == 1 else "%s Free" % vendor))
             continue
         amt = float(m.group("amt").replace(",", ""))
         if m.group("k"):
             amt *= 1000 if m.group("k").lower() == "k" else 1_000_000
-        if not (0 < amt < 1_000_000):
-            continue
-        name = TRAIL_RE.sub("", LEAD_RE.sub("", seg[: m.start()].strip(" ([")).strip()).strip()
+        head = seg[: m.start()]
+        name = TRAIL_RE.sub("", LEAD_RE.sub("", head.strip(" ([")).strip()).strip()
         label = card_name if len(segs) == 1 or not name else "%s %s" % (vendor, name)
+        if amt == 0:                       # '$0' · '₩0' 은 무료 플랜이다
+            pts.append(dict(free, label=label))
+            continue
+        if amt >= 1_000_000 or "," in name or len(name) > 24:
+            continue                       # 이름이 문장 조각이면 쪼개기가 틀린 것이다
+        floor = bool(re.search(r"\bfrom\b|\bstarting at\b", head, re.I))
         pts.append({"label": label, "amount": amt, "cur": m.group("cur"), "period": period,
-                    "seat": seat, "disp": m.group(0).strip()})
+                    "seat": seat, "vendor": vendor_key(card_name),
+                    "disp": ("from " if floor else "") + m.group(0).strip()})
     return pts
 
 
@@ -225,19 +249,24 @@ def price_chart(body: str) -> str | None:
         return None
     cur, period = max(groups, key=lambda k: groups[k])
 
-    picked, skipped = [], 0
+    picked, dropped = [], 0
     for ps in points:
         keep = [p for p in ps if p["cur"] is None or (p["cur"] == cur and p["period"] == period)]
         if keep:
             picked.extend(keep)
         else:
-            skipped += 1
-    paid = [p["amount"] for p in picked if p["amount"] > 0]
-    if len(picked) < 3 or len(set(paid)) < 2 or len(picked) > 12:
+            dropped += 1
+    paid = [p for p in picked if p["amount"] > 0]
+    if len(picked) < 3 or len({p["amount"] for p in paid}) < 2 or len(picked) > 12:
+        return None
+    # 유료 막대가 한 벤더에서만 나오면 그 그림은 "상대는 공짜"라는 거짓말이 된다.
+    if len({p["vendor"] for p in paid}) < 2:
+        return None
+    # 카드의 3분의 1 넘게 못 그렸으면 남은 것만으로 그린 그림은 이 페이지의 가격이 아니다.
+    if dropped * 3 > cards:
         return None
 
-    dropped = skipped
-    top = max(paid)
+    top = max(p["amount"] for p in paid)
     x0, row_h = 146, 28
     width = VB_W - x0 - 78
     height = len(picked) * row_h + 24
