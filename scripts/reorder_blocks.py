@@ -141,25 +141,44 @@ def split_blocks(text: str) -> tuple[int, int, list[tuple[str, str]]] | None:
 
 
 def reorder_toc(text: str, order: list[str], known: set[str]) -> str:
-    """TOC 앵커도 같은 순서로 맞춘다. known 에 없는 앵커(#overview·#sources)는 제자리 유지."""
+    """TOC 앵커도 같은 순서로 맞춘다. known 에 없는 앵커(#overview·#sources)는 제자리 유지.
+
+    ⚠️ 목차는 **한 페이지에 두 벌** 있다 — 데스크톱 `<nav class="toc">` 와 모바일
+    `<details>`. 문서 전체 앵커를 한 줄로 세워 섹션 수와 비교하면 2배가 나와서
+    "앵커와 섹션이 1:1 이 아니다"로 오판하고 목차를 그대로 둔다(실제로 그렇게 새어나갔다).
+    그래서 **연속으로 붙어있는 앵커 덩어리**(= 목차 하나) 단위로 따로 재정렬한다.
+    """
     anchors = list(ANCHOR_RE.finditer(text))
     if not anchors:
         return text
-    seq = [a for a in anchors if a.group("id") in known]
-    if not seq:
+
+    # 사이에 공백 말고 아무것도 없으면 같은 목차로 본다.
+    runs: list[list[re.Match]] = []
+    for a in anchors:
+        if runs and not text[runs[-1][-1].end():a.start()].strip():
+            runs[-1].append(a)
+        else:
+            runs.append([a])
+
+    edits: list[tuple[int, int, str]] = []
+    for run in runs:
+        seq = [a for a in run if a.group("id") in known]
+        if len(seq) < 2:
+            continue
+        by_id = {a.group("id"): a.group(0) for a in seq}
+        new_html = [by_id[i] for i in order if i in by_id]
+        if len(new_html) != len(seq):
+            continue  # 이 목차는 섹션과 1:1 이 아니다 — 건드리지 않는다
+        for a, html in zip(seq, new_html):
+            edits.append((a.start(), a.end(), html))
+
+    if not edits:
         return text
-
-    by_id = {a.group("id"): a.group(0) for a in seq}
-    new_html = [by_id[i] for i in order if i in by_id]
-    if len(new_html) != len(seq):
-        return text  # 앵커와 섹션이 1:1 이 아니면 손대지 않는다
-
-    out, prev, k = [], 0, 0
-    for a in seq:
-        out.append(text[prev:a.start()])
-        out.append(new_html[k])
-        k += 1
-        prev = a.end()
+    out, prev = [], 0
+    for s, e, html in sorted(edits):
+        out.append(text[prev:s])
+        out.append(html)
+        prev = e
     out.append(text[prev:])
     return "".join(out)
 
@@ -175,12 +194,13 @@ def process(path: str, dry: bool) -> str:
     ids = [i for i, _ in blocks]
     kind = classify(slug)
     order = plan(kind, ids)
-    if order == ids:
-        return f"same   {slug}  [{kind}]"
 
     body = {i: h for i, h in blocks}
     new_text = text[:start] + "".join(body[i] for i in order) + text[end:]
+    # 섹션이 이미 제자리여도 목차는 확인한다 — 이전 판이 섹션만 옮기고 목차를 흘렸다.
     new_text = reorder_toc(new_text, order, set(ids))
+    if new_text == text:
+        return f"same   {slug}  [{kind}]"
 
     # 손실 검사: 길이가 변하면 안 된다(순서만 바꿨으므로).
     if len(new_text) != len(text):
@@ -189,6 +209,8 @@ def process(path: str, dry: bool) -> str:
     if not dry:
         with open(path, "w", encoding="utf-8", newline="") as f:
             f.write(new_text)
+    if order == ids:
+        return f"toc    {slug}  [{kind}]  섹션은 제자리, 목차만 맞춤"
     return f"moved  {slug}  [{kind}]  {' > '.join(ids)}\n              →  {' > '.join(order)}"
 
 
@@ -205,10 +227,10 @@ def main() -> int:
     changed = 0
     for f in files:
         line = process(os.path.join(a.queue, f), a.dry_run)
-        if line.startswith("moved"):
+        if line.startswith(("moved", "toc")):
             changed += 1
         print(line)
-    print(f"\n{changed}/{len(files)} 편 재배치{' (dry-run)' if a.dry_run else ''}")
+    print(f"\n{changed}/{len(files)} 편 변경{' (dry-run)' if a.dry_run else ''}")
     return 0
 
 
