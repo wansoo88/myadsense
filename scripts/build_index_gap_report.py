@@ -93,14 +93,21 @@ def measure(d: dict) -> dict:
     for p in pages:
         coverage[p.get("coverage") or "(unknown)"] = coverage.get(p.get("coverage") or "(unknown)", 0) + 1
 
-    first_seen = d.get("first_seen") or g.get("first_date")
+    # ⚠️ first_seen 은 **로그의 첫 줄**이지 "검색에 열린 날"이 아니다.
+    #    실콘텐츠 배포는 그 이틀 뒤였고 noindex 해제는 또 며칠 뒤였다.
+    #    "사이트가 X일에 열렸다"고 쓰면 검수기가 잡는다(실제로 잡혔다). 나이는
+    #    Search Console 이 이 속성을 보기 시작한 날부터 센다.
+    first_seen = d.get("first_seen")
+    search_since = g.get("first_date") or first_seen
     today = dt.date.today()
-    age_days = (today - dt.date.fromisoformat(first_seen)).days if first_seen else None
+    age_days = ((today - dt.date.fromisoformat(search_since)).days
+                if search_since else None)
 
     return {
         "gsc": g, "buckets": buckets, "coverage": coverage, "pages": pages,
         "search": search, "direct": direct, "other_refs": other,
-        "summary": s, "first_seen": first_seen, "age_days": age_days,
+        "summary": s, "first_seen": first_seen, "search_since": search_since,
+        "age_days": age_days,
         "today": today.isoformat(),
         "search_total": sum(r["count"] for r in search),
         "generated_at": d.get("generated_at"),
@@ -150,7 +157,10 @@ def build_spec(m: dict):
     sections = [
         {"heading": "What we measured, and how",
          "html": (
-             f"<p>This site went live on <strong>{esc(m['first_seen'])}</strong>"
+             f"<p>The first request in our access log is dated "
+             f"<strong>{esc(m['first_seen'])}</strong>; articles went up in the days that followed, "
+             f"and Search Console has data for this property from "
+             f"<strong>{esc(m['search_since'])}</strong>"
              + (f" — {age} days ago" if age else "") + ". It is a small English-language "
              "technical site with no backlink campaign, no social push, and no paid promotion. "
              "That makes it a clean specimen for one question: what happens to a new site's pages "
@@ -166,13 +176,14 @@ def build_spec(m: dict):
              "not a sample you should generalise from. What it is good for is showing the "
              "<em>shape</em> of a new site's first months, which is rarely published because it is "
              "not flattering.</p>")},
-        {"heading": f"{g.get('total')} URLs known to Google. {g.get('indexed')} indexed.",
+        {"heading": f"{g.get('total')} URLs checked in Search Console. {g.get('indexed')} indexed.",
          "html": (
-             f"<p>Search Console currently knows <strong>{g.get('total')} URLs</strong> for this "
-             f"site. Of those, <strong>{g.get('indexed')}</strong> "
+             f"<p>We inspected all <strong>{g.get('total')} URLs</strong> this site publishes. "
+             f"<strong>{g.get('indexed')}</strong> "
              f"{'is' if (g.get('indexed') or 0) == 1 else 'are'} indexed. "
-             f"<strong>{crawled_now}</strong> have been crawled and deliberately not indexed. "
-             f"<strong>{g.get('unknown')}</strong> have not been processed at all.</p>"
+             f"<strong>{crawled_now}</strong> were crawled and then not indexed. For the remaining "
+             f"<strong>{g.get('unknown')}</strong>, Google's own answer is “URL is unknown to "
+             f"Google” — it has not discovered them at all, despite them being in the sitemap.</p>"
              + (f"<p>The direction of travel is the interesting part. In the previous snapshot the "
                 f"crawled-but-not-indexed bucket held <strong>{crawled_prev}</strong> URL"
                 f"{'' if crawled_prev == 1 else 's'}; it now holds <strong>{crawled_now}</strong>. "
@@ -261,7 +272,7 @@ def build_spec(m: dict):
                "human — so read these as best-effort, not exact.")},
     ]
 
-    dek = (f"Search Console knows {g.get('total')} of our URLs and has indexed {g.get('indexed')}. "
+    dek = (f"We checked all {g.get('total')} of our URLs in Search Console. {g.get('indexed')} is indexed. "
            + (f"Meanwhile {esc(top['name'])} has sent {top['count']:,} visits"
               + (f" to Google's {goog['count']:,}" if goog else "") + "."
               if top else "Here is what that looks like from the inside."))
@@ -286,15 +297,16 @@ def build_spec(m: dict):
             f"already indexed. This one is not. This site launched on "
             f"<strong>{esc(m['first_seen'])}</strong>"
             + (f", {weeks} weeks ago" if weeks else "")
-            + f", and Google Search Console currently reports <strong>{g.get('indexed')} of "
-            f"{g.get('total')} URLs</strong> in its index.</p>"
+            + f". We checked every one of our <strong>{g.get('total')} URLs</strong> in Google Search "
+            f"Console: <strong>{g.get('indexed')}</strong> is in the index.</p>"
             "<p>We are publishing the numbers anyway, because the interesting part is not the "
             "failure — it is what happened around it. The pages <em>were</em> crawled. Search "
             "visitors <em>did</em> arrive. They just did not arrive from where the advice says "
             "they will.</p>"),
         tldr_html=(
-            f"<p>Search Console: <strong>{g.get('total')} URLs known, {g.get('indexed')} indexed, "
-            f"{crawled_now} crawled and not indexed, {g.get('unknown')} not processed</strong>. "
+            f"<p>Search Console, {g.get('total')} URLs checked: <strong>{g.get('indexed')} indexed, "
+            f"{crawled_now} crawled and not indexed, {g.get('unknown')} still unknown to "
+            f"Google</strong>. "
             + (f"Referrers: <strong>{esc(top['name'])} {top['count']:,} visits</strong>"
                + (f" vs Google {goog['count']:,}" if goog else "") + ". " if top else "")
             + (f"Bot requests outnumbered human pageviews by about {bot_ratio}× last week. "
