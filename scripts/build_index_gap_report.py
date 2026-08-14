@@ -45,7 +45,7 @@ SEARCH_HOSTS = {
     "bing.com": ("Bing", "Bing index"),
     "kagi.com": ("Kagi", "Blended, incl. Bing"),
     "search.brave.com": ("Brave Search", "Own index"),
-    "ecosia.org": ("Ecosia", "Bing index"),
+    "ecosia.org": ("Ecosia", "Bing-based results"),
     "startpage.com": ("Startpage", "Google index"),
     "search.marginalia.nu": ("Marginalia", "Own index"),
     "yandex.com": ("Yandex", "Own index"),
@@ -197,11 +197,12 @@ def build_spec(m: dict):
                   if goog and goog["count"] else "")
                + "</p>")
               if top else "<p>No search referrers have been recorded yet.</p>")
-             + f"<p>The mechanism is not mysterious once you look at it. "
-             f"{esc(top['name']) if top else 'Several engines'} and several other engines in the "
-             "table below draw wholly or partly on Bing's index, and Bing indexed this site earlier "
-             "and more completely than Google did. Being absent from one index does not mean being "
-             "absent from search.</p>"
+             + f"<p>The likely mechanism is visible in the table below: "
+             f"{esc(top['name']) if top else 'several engines'} and several of the other referrers "
+             "draw wholly or partly on Bing's index rather than Google's. We cannot see inside "
+             "either index, so we are not claiming Bing indexed more of this site — only that "
+             "these visits arrived through a different index with a different threshold, while "
+             "Google's verdict on the same pages was the one shown above.</p>"
              "<p>It also means the standard framing — <em>get indexed by Google, then traffic "
              "follows</em> — describes only one of several doors. The others are smaller, but on a "
              "new site they open first.</p>")},
@@ -229,9 +230,9 @@ def build_spec(m: dict):
              "<p><strong>Do not measure progress in crawl volume.</strong> This site is crawled "
              "constantly and indexed once. The two numbers are barely related, and only one of them "
              "sends visitors.</p>"
-             "<p><strong>Check the other engines.</strong> Bing-derived engines gave us search "
-             "visitors months before Google did. That is a free channel most new-site advice does "
-             "not mention, and it costs nothing to verify in your own referrer log.</p>"
+             "<p><strong>Check the other engines.</strong> Most of our search visits came from "
+             "engines other than Google. That is a channel most new-site advice does not mention, "
+             "and it costs nothing to verify in your own referrer log.</p>"
              "<p><strong>Publish the shape of your own data.</strong> Everything above came from a "
              "log file and a free Search Console property. The reason this data is rare is not that "
              "it is hard to collect — it is that it looks like failure, so people keep it private.</p>")},
