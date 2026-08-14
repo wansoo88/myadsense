@@ -183,7 +183,9 @@ def build_spec(m: dict):
              f"{'is' if (g.get('indexed') or 0) == 1 else 'are'} indexed. "
              f"<strong>{crawled_now}</strong> were crawled and then not indexed. For the remaining "
              f"<strong>{g.get('unknown')}</strong>, Google's own answer is “URL is unknown to "
-             f"Google” — it has not discovered them at all, despite them being in the sitemap.</p>"
+             f"Google” — it has not reached them yet. They are all in a submitted sitemap; "
+             f"submitting a sitemap asks Google to discover URLs, it does not oblige it to, and "
+             f"working through one takes as long as it takes.</p>"
              + (f"<p>The direction of travel is the interesting part. In the previous snapshot the "
                 f"crawled-but-not-indexed bucket held <strong>{crawled_prev}</strong> URL"
                 f"{'' if crawled_prev == 1 else 's'}; it now holds <strong>{crawled_now}</strong>. "
@@ -294,9 +296,9 @@ def build_spec(m: dict):
         reading_time=7,
         intro_html=(
             f"<p>Almost every article about getting indexed is written by someone whose site is "
-            f"already indexed. This one is not. This site launched on "
-            f"<strong>{esc(m['first_seen'])}</strong>"
-            + (f", {weeks} weeks ago" if weeks else "")
+            f"already indexed. This one is not. This site has been visible to search since "
+            f"<strong>{esc(m['search_since'])}</strong>"
+            + (f" — {age} days, about {weeks} weeks" if age else "")
             + f". We checked every one of our <strong>{g.get('total')} URLs</strong> in Google Search "
             f"Console: <strong>{g.get('indexed')}</strong> is in the index.</p>"
             "<p>We are publishing the numbers anyway, because the interesting part is not the "
