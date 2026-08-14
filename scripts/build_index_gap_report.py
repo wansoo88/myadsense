@@ -188,19 +188,20 @@ def build_spec(m: dict):
         {"heading": ("Our first search visitors came from "
                      + (top["name"] if top else "elsewhere") + ", not Google"),
          "html": (
-             (f"<p>Here is the result we did not expect. Across the life of the site, "
-              f"<strong>{esc(top['name'])}</strong> has sent <strong>{top['count']:,} visits</strong>"
-              + (f", against <strong>{goog['count']:,}</strong> from Google"
-                 if goog else ", while Google has sent none we can attribute")
-              + ". "
-              + (f"That is roughly <strong>{round(top['count'] / goog['count'], 1)}×</strong>. "
-                 if goog and goog["count"] else "")
-              + "</p>")
-             if top else "<p>No search referrers have been recorded yet.</p>")
-             + f"<p>The mechanism is not mysterious once you look at it. {esc(top['name']) if top else 'Several engines'} "
-             "and several other engines in the table below draw wholly or partly on Bing's index, "
-             "and Bing indexed this site earlier and more completely than Google did. Being absent "
-             "from one index does not mean being absent from search.</p>"
+             ((f"<p>Here is the result we did not expect. Across the life of the site, "
+               f"<strong>{esc(top['name'])}</strong> has sent <strong>{top['count']:,} visits</strong>"
+               + (f", against <strong>{goog['count']:,}</strong> from Google"
+                  if goog else ", while Google has sent none we can attribute")
+               + ". "
+               + (f"That is roughly <strong>{round(top['count'] / goog['count'], 1)}×</strong>. "
+                  if goog and goog["count"] else "")
+               + "</p>")
+              if top else "<p>No search referrers have been recorded yet.</p>")
+             + f"<p>The mechanism is not mysterious once you look at it. "
+             f"{esc(top['name']) if top else 'Several engines'} and several other engines in the "
+             "table below draw wholly or partly on Bing's index, and Bing indexed this site earlier "
+             "and more completely than Google did. Being absent from one index does not mean being "
+             "absent from search.</p>"
              "<p>It also means the standard framing — <em>get indexed by Google, then traffic "
              "follows</em> — describes only one of several doors. The others are smaller, but on a "
              "new site they open first.</p>")},
@@ -208,11 +209,11 @@ def build_spec(m: dict):
          "html": search_table},
         {"heading": "The traffic is mostly not human",
          "html": (
-             (f"<p>Over the last seven days this site served <strong>{pv7:,}</strong> human "
-              f"pageviews and <strong>{bots7:,}</strong> requests we classified as bots"
-              + (f" — about <strong>{bot_ratio}×</strong> more machine than human" if bot_ratio else "")
-              + f". Lifetime human pageviews stand at <strong>{pv_all:,}</strong>.</p>")
-             if pv7 else "")
+             ((f"<p>Over the last seven days this site served <strong>{pv7:,}</strong> human "
+               f"pageviews and <strong>{bots7:,}</strong> requests we classified as bots"
+               + (f" — about <strong>{bot_ratio}×</strong> more machine than human" if bot_ratio else "")
+               + f". Lifetime human pageviews stand at <strong>{pv_all:,}</strong>.</p>")
+              if pv7 else "")
              + "<p>We mention it because it is the single easiest way to fool yourself with "
              "analytics. Raw log lines, or any counter with a weak bot filter, will show a new site "
              "growing nicely while the humans stay flat. We learned this the hard way: an earlier "
