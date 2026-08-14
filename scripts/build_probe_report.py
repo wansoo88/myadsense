@@ -116,7 +116,10 @@ def measure() -> dict:
         st = str(d.get("s") or d.get("status") or "")
         status[st] += 1
         methods[(d.get("m") or d.get("method") or "?").upper()] += 1
-        if not st.startswith("4"):
+        # ⚠️ 400 은 요청이 **경로가 파싱되기 전에** 깨진 것이라 경로 분류에 넣으면 안 된다.
+        #    첫 판에서 400 이 통째로 "Everything else" 로 들어가 그 칸을 최대 항목으로 부풀렸다.
+        #    401 은 우리 보호 엔드포인트라 애초에 OURS 로 걸러진다. 경로 탐침은 403/404/410 뿐.
+        if st not in ("403", "404", "410"):
             continue
         path = (d.get("u") or "").split("?")[0]
         if not path or OURS.match(path):
