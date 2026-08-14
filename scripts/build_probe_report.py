@@ -4,7 +4,7 @@
 왜 이 스크립트가 있나 (2026-08-15):
     AdSense "가치가 별로 없는 콘텐츠" 거절 이후, 남은 글 대부분은 공개 문서를 정리한
     비교글이다. 우리만 가진 데이터는 서버 로그뿐이고, 거기에 아무도 공개하지 않는
-    사실이 하나 있다 — **정적 사이트 요청의 3분의 1이 우리가 돌리지도 않는
+    사실이 하나 있다 — **정적 사이트 요청의 4분의 1이 우리가 돌리지도 않는
     소프트웨어를 노린 탐침**이다. WordPress 도 PHP 도 없는데 wp-admin 을 두드린다.
 
     build_crawler_report.py = 누가 기어오는가(합법 크롤러).
@@ -171,9 +171,10 @@ def build_spec(m: dict):
         '<th class="feat">What it was looking for</th><th class="feat">In plain terms</th>'
         '<th class="ctr">Requests</th><th class="ctr">Distinct paths</th>'
         '</tr></thead><tbody>' + "".join(frow(f) for f in fams) + "</tbody></table></div>"
-        f'<p class="footnote">Every 4xx request to this domain between {esc(d0)} and {esc(d1)} '
-        f'({ndays} days), excluding requests for paths this site actually publishes. Classification '
-        f'is a fixed set of path patterns applied identically to every request.</p>')
+        f'<p class="footnote">Every request to this domain between {esc(d0)} and {esc(d1)} '
+        f'({ndays} days) that was answered 404, 403 or 410, excluding paths this site actually '
+        f'publishes. Classification is a fixed set of path patterns applied identically to every '
+        f'request; a path matches the first family it fits.</p>')
 
     def prow(p, c):
         return f'<tr><td class="featc"><code>{esc(p)}</code></td><td class="ctr">{c:,}</td></tr>'
@@ -195,9 +196,11 @@ def build_spec(m: dict):
              f"definition, someone probing for software that is not here.</p>"
              f"<p>We took every log line for this domain from <strong>{esc(d0)}</strong> to "
              f"<strong>{esc(d1)}</strong> ({ndays} days) — <strong>{m['total']:,} requests</strong> "
-             f"— and separated the ones that returned a 4xx. From those we removed requests for "
-             f"paths the site does publish (a handful of articles were retired and still get "
-             f"followed: {m['ours_404']:,} requests). What remains is "
+             f"— and kept the ones where nginx parsed a path and answered not-here (404, plus "
+             f"403 and 410). From those we removed requests for paths the site does publish — a "
+             f"handful of articles were retired and still get followed: {m['ours_404']:,} requests. "
+             f"Malformed requests that nginx rejected with a 400 before any path was parsed are "
+             f"excluded too, and reported separately further down. What remains is "
              f"<strong>{m['probe_hits']:,} requests</strong> for things that never existed here.</p>"
              "<p>Nothing here is a vulnerability report. We are publishing what arrived, not what "
              "worked — a static site has almost no attack surface for any of it, which is rather "
@@ -319,7 +322,7 @@ def build_spec(m: dict):
             f"<code>.env</code> and <code>.git</code> out of the web root.</p>"),
         sections=sections,
         verdict_html=(
-            "<p>The practical conclusion is smaller than the numbers suggest. A third of our "
+            "<p>The practical conclusion is smaller than the numbers suggest. A quarter of our "
             "traffic is hostile in intent and almost none of it is hostile in effect, because "
             "there is nothing on the other side to execute it. If you are choosing between a "
             "static site and a CMS for a small project, this is the security half of that "
