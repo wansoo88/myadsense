@@ -351,7 +351,12 @@ def main() -> int:
         if line.startswith("chart"):
             n += 1
         print(line)
-    print("\n%d/%d 편에 차트%s" % (n, len(files), " (dry-run)" if a.dry_run else ""))
+    # ⚠️ "변경"이지 "차트 있는 글 수"가 아니다. 재실행 시 결과가 같으면 파일을 안 건드리므로
+    #    이 숫자는 0 이 될 수 있다 — 그래도 차트는 그대로 있다. 실제 보유 수는 아래 줄로 센다.
+    print("\n%d/%d 편 변경%s" % (n, len(files), " (dry-run)" if a.dry_run else ""))
+    have = sum(1 for f in files
+               if CHART_RE.search(open(os.path.join(a.queue, f), encoding="utf-8").read()))
+    print("현재 차트 보유: %d/%d 편" % (have, len(files)))
     return 0
 
 
