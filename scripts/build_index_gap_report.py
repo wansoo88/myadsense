@@ -179,7 +179,8 @@ def build_spec(m: dict):
              "not flattering.</p>")},
         {"heading": f"{g.get('total')} URLs checked in Search Console. {g.get('indexed')} indexed.",
          "html": (
-             f"<p>We inspected all <strong>{g.get('total')} URLs</strong> this site publishes. "
+             f"<p>Search Console has <strong>{g.get('total')} URLs</strong> on record for this "
+             f"property — every page we have published, plus a few that have since been retired. "
              f"<strong>{g.get('indexed')}</strong> "
              f"{'is' if (g.get('indexed') or 0) == 1 else 'are'} indexed. "
              f"<strong>{crawled_now}</strong> were crawled and then not indexed. For the remaining "
@@ -275,7 +276,7 @@ def build_spec(m: dict):
                "human — so read these as best-effort, not exact.")},
     ]
 
-    dek = (f"We checked all {g.get('total')} of our URLs in Search Console. {g.get('indexed')} is indexed. "
+    dek = (f"Search Console has {g.get('total')} of our URLs on record. {g.get('indexed')} is indexed. "
            + (f"Meanwhile {esc(top['name'])} has sent {top['count']:,} visits"
               + (f" to Google's {goog['count']:,}" if goog else "") + "."
               if top else "Here is what that looks like from the inside."))
@@ -300,8 +301,8 @@ def build_spec(m: dict):
             f"already indexed. This one is not. This site has been visible to search since "
             f"<strong>{esc(m['search_since'])}</strong>"
             + (f" — {age} days, about {weeks} weeks" if age else "")
-            + f". We checked every one of our <strong>{g.get('total')} URLs</strong> in Google Search "
-            f"Console: <strong>{g.get('indexed')}</strong> is in the index.</p>"
+            + f". Google Search Console has <strong>{g.get('total')} of our URLs</strong> on record: "
+            f"<strong>{g.get('indexed')}</strong> is in the index.</p>"
             "<p>We are publishing the numbers anyway, because the interesting part is not the "
             "failure — it is what happened around it. The pages <em>were</em> crawled. Search "
             "visitors <em>did</em> arrive. They just did not arrive from where the advice says "
