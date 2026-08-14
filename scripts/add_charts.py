@@ -153,7 +153,10 @@ def feature_chart(body: str) -> str | None:
 
 AMT_RE = re.compile(r"(?P<cur>[$€₩£])\s?(?P<amt>\d[\d,]*(?:\.\d+)?)\s*(?P<k>[KkMm])?")
 MONTH_RE = re.compile(r"\b(?:per\s+)?(?:month|mo)\b|/\s*mo\b", re.I)
-YEAR_RE = re.compile(r"\b(?:per\s+)?(?:year|yr|annual(?:ly)?)\b|/\s*yr\b", re.I)
+# ⚠️ "billed annually" 는 **청구 방식**이지 단가 주기가 아니다. 여기에 'annual' 을 넣었더니
+#    '$6 / user / month (billed annually)' 이 "월·연이 섞인 카드"로 판정돼 통째로 빠졌다.
+#    연 단가는 슬래시나 per 로 붙은 형태만 인정한다.
+YEAR_RE = re.compile(r"/\s*(?:yr|years?)\b|\bper\s+years?\b", re.I)
 SEAT_RE = re.compile(r"\b(?:per\s+)?(?:user|seat|member|developer)\b", re.I)
 LEAD_RE = re.compile(r"^(?:from|starting at|starts at|paid|included from)\s+", re.I)
 TRAIL_RE = re.compile(r"\s+(?:from|starting at|starts at)$", re.I)
