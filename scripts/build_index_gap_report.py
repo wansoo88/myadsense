@@ -45,7 +45,7 @@ SEARCH_HOSTS = {
     "bing.com": ("Bing", "Bing index"),
     "kagi.com": ("Kagi", "Blended, incl. Bing"),
     "search.brave.com": ("Brave Search", "Own index"),
-    "ecosia.org": ("Ecosia", "Bing-based results"),
+    "ecosia.org": ("Ecosia", "Mixed sources"),
     "startpage.com": ("Startpage", "Google index"),
     "search.marginalia.nu": ("Marginalia", "Own index"),
     "yandex.com": ("Yandex", "Own index"),
@@ -158,7 +158,8 @@ def build_spec(m: dict):
         {"heading": "What we measured, and how",
          "html": (
              f"<p>The first request in our access log is dated "
-             f"<strong>{esc(m['first_seen'])}</strong>; articles went up in the days that followed, "
+             f"<strong>{esc(m['first_seen'])}</strong> — infrastructure and setup traffic, before "
+             f"any article existed. Content went up in the days that followed, "
              f"and Search Console has data for this property from "
              f"<strong>{esc(m['search_since'])}</strong>"
              + (f" — {age} days ago" if age else "") + ". It is a small English-language "
