@@ -272,15 +272,17 @@ def price_chart(body: str) -> str | None:
         return None
 
     top = max(p["amount"] for p in paid)
-    x0, row_h = 146, 28
-    width = VB_W - x0 - 78
+    # 막대는 최대값이 기준이라 오른쪽이 늘 남는다 — 그 여유를 이름 칸에 준다.
+    # 146 이었을 때 'Cursor — Business /…' 'GitHub Copilot Busin…' 이 잘렸다.
+    x0, row_h = 186, 28
+    width = VB_W - x0 - 74
     height = len(picked) * row_h + 24
 
     aria = "; ".join("%s: %s" % (p["label"], p["disp"]) for p in picked)
     out = [svg_open(height, aria)]
     for n, p in enumerate(picked):
         y = n * row_h + 3
-        out.append(txt(0, y + 14, clip(p["label"], 21), "var(--ink-soft)", "13px"))
+        out.append(txt(0, y + 14, clip(p["label"], 28), "var(--ink-soft)", "13px"))
         w = max((p["amount"] / top) * width if p["amount"] > 0 else 3.0, 3.0)
         fill = "var(--accent)" if p["amount"] > 0 else "var(--line-strong)"
         out.append('<rect x="%d" y="%d" width="%.1f" height="19" rx="3" fill="%s" opacity=".9"/>'
