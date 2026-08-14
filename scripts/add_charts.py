@@ -43,7 +43,9 @@ PN_RE = re.compile(r'<div class="pn">(.*?)</div>', re.S)
 PP_RE = re.compile(r'<div class="pp">(.*?)</div>', re.S)
 SUB_RE = re.compile(r'(<p class="sub">.*?</p>)', re.S)
 H2_RE = re.compile(r"(<h2[^>]*>.*?</h2>)", re.S)
-CHART_RE = re.compile(r'<figure data-chart="[^"]*">.*?</figure>', re.S)
+# ⚠️ `[^>]*` 를 빼먹으면 style 속성이 붙은 실제 마크업과 안 맞아서 **지우지 못하고 덧붙는다**.
+# 첫 실행에서 한 페이지에 차트가 두 벌씩 쌓였다.
+CHART_RE = re.compile(r'<figure data-chart="[^"]*"[^>]*>.*?</figure>', re.S)
 
 # 이 말이 붙은 숫자는 "그 플랜의 확정 가격"이 아니다 — 축에 세우지 않는다.
 # ⚠️ "from $7.53" 은 여기 없다. 그건 벤더가 공표한 **하한**이라 검증 가능하고,
