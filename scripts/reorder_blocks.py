@@ -48,10 +48,36 @@ def classify(slug: str) -> str:
     return "comparison"
 
 
+FEATURE_WORDS = ("feature", "side-by-side")
+PRICE_WORDS = ("pricing", "price", "cost", "value")
+
+
+def _anchor(prose: list[str], words: tuple[str, ...], default: int) -> int:
+    """표를 끼워 넣을 자리 — 그 표를 설명하는 산문 **바로 앞**이 가장 자연스럽다."""
+    for n, pid in enumerate(prose):
+        if any(w in pid for w in words):
+            return n
+    return default
+
+
+def _head_end(prose: list[str]) -> int:
+    """비교글에서 표 앞에 둘 산문 개수. 기본 2개지만 짝을 갈라놓지는 않는다.
+
+    'what-notion-does' 와 'what-obsidian-does', 'best-for-A' 와 'best-for-B' 처럼
+    같은 첫 토큰으로 시작하는 연속 섹션은 한 덩어리다. 그 사이에 표가 끼면
+    독자는 한쪽만 읽다 만 채로 표를 만난다.
+    """
+    k = min(2, len(prose))
+    while 0 < k < len(prose) and prose[k].split("-")[0] == prose[k - 1].split("-")[0]:
+        k += 1
+    return k
+
+
 def plan(kind: str, ids: list[str]) -> list[str]:
     """현재 블록 id 목록 → 새 순서. 없는 블록은 알아서 빠진다."""
     prose = [i for i in ids if i not in GENERATED]
     have = set(ids)
+    n = len(prose)
 
     def g(name: str) -> list[str]:
         return [name] if name in have else []
@@ -59,23 +85,28 @@ def plan(kind: str, ids: list[str]) -> list[str]:
     if kind == "guide":
         # 가이드는 "무엇이 필요한가"부터 읽어야 한다. 가격은 첫 산문 직후 —
         # 자체 호스팅 글의 첫 문단은 대개 "직접 vs 관리형" 판단이라 가격이 붙어야 산다.
-        head = prose[:1]
-        rest = prose[1:]
-        order = g("summary") + head + g("pricing") + rest + g("proscons")
+        fi = _anchor(prose, FEATURE_WORDS, n)
+        pi = _anchor(prose, PRICE_WORDS, min(1, n))
+        front, back = g("summary"), g("proscons")
     elif kind == "listicle":
         # 목록글은 "무엇을 볼 것인가" → 비교표 → 각 후보 → 가격 순이 자연스럽다.
-        head = prose[:1]
-        rest = prose[1:]
-        order = g("summary") + head + g("features") + rest + g("pricing") + g("proscons")
+        fi = _anchor(prose, FEATURE_WORDS, min(1, n))
+        pi = _anchor(prose, PRICE_WORDS, n)
+        front, back = g("summary"), g("proscons")
     else:
-        # 비교글: 요약 → 정면 비교 → 산문 2개 → 기능표 → 나머지 산문 → 가격 → 장단점.
+        # 비교글: 요약 → 정면 비교 → 산문 → 기능표 → 산문 → 가격 → 장단점.
         # 표가 산문 사이에 끼면서 "표 4개 먼저, 글은 나중" 인상이 사라진다.
-        head = prose[:2]
-        rest = prose[2:]
-        order = (g("summary") + g("comparison") + head + g("features")
-                 + rest + g("pricing") + g("proscons"))
+        fi = _anchor(prose, FEATURE_WORDS, _head_end(prose))
+        pi = _anchor(prose, PRICE_WORDS, max(n - 1, 0))
+        front, back = g("summary") + g("comparison"), g("proscons")
 
-    order += g("verdict") + g("faq")
+    seq = list(prose)
+    # 뒤쪽부터 끼워 넣어야 앞선 삽입이 뒤 인덱스를 밀지 않는다.
+    for idx, name in sorted(((pi, "pricing"), (fi, "features")), reverse=True):
+        if name in have:
+            seq.insert(idx, name)
+
+    order = front + seq + back + g("verdict") + g("faq")
 
     # 안전망: 계획에서 누락된 블록이 있으면 원래 자리 순서대로 뒤에 붙인다(정보 손실 0).
     missing = [i for i in ids if i not in order]
