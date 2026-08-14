@@ -45,12 +45,6 @@ SUB_RE = re.compile(r'(<p class="sub">.*?</p>)', re.S)
 H2_RE = re.compile(r"(<h2[^>]*>.*?</h2>)", re.S)
 CHART_RE = re.compile(r'<figure data-chart="[^"]*">.*?</figure>', re.S)
 
-PRICE_RE = re.compile(
-    r"^(?P<cur>[$€₩£])\s?(?P<amt>\d[\d,]*(?:\.\d+)?)\s*"
-    r"(?:/\s*(?P<seat>user|seat|member)\s*)?"
-    r"/\s*(?P<period>month|mo|year|yr)\b",
-    re.I,
-)
 # 이 단어가 있으면 그 카드의 숫자는 "그 플랜의 확정 가격"이 아니다 — 축에 세우지 않는다.
 VAGUE = ("confirm", "custom", "contact", "usage", "from ", "starts", "varies", "quote")
 
@@ -151,78 +145,124 @@ def feature_chart(body: str) -> str | None:
 
 # ─────────────────────────────────────────────── 가격
 
-def parse_price(raw: str) -> dict | None:
+AMT_RE = re.compile(r"(?P<cur>[$€₩£])\s?(?P<amt>\d[\d,]*(?:\.\d+)?)\s*(?P<k>[KkMm])?")
+MONTH_RE = re.compile(r"\b(?:per\s+)?(?:month|mo)\b|/\s*mo\b", re.I)
+YEAR_RE = re.compile(r"\b(?:per\s+)?(?:year|yr|annual(?:ly)?)\b|/\s*yr\b", re.I)
+SEAT_RE = re.compile(r"\b(?:per\s+)?(?:user|seat|member|developer)\b", re.I)
+LEAD_RE = re.compile(r"^(?:from|starting at|starts at|paid|included from)\s+", re.I)
+TRAIL_RE = re.compile(r"\s+(?:from|starting at|starts at)$", re.I)
+
+
+def vendor_of(card_name: str) -> str:
+    """'Postman — Paid (Basic / Pro)' → 'Postman'. 복합 카드의 조각에 붙일 접두사."""
+    return re.split(r"\s*[—–-]\s+", card_name, 1)[0].strip()
+
+
+def parse_card(card_name: str, raw: str) -> list[dict]:
+    """가격 카드 하나 → 축에 세울 수 있는 점들. 못 세우면 빈 목록.
+
+    `pp` 는 한 값만 있는 게 아니다. 'Basic $10 · Business $16 per user/mo' 처럼
+    한 카드가 여러 플랜을 담는 경우가 절반쯤 된다 — 가운뎃점으로 쪼개 각각 세운다.
+    """
     text = " ".join(strip_tags(raw).split())
     low = text.lower()
-    if low in ("free", "free forever", "$0", "free tier", "free plan"):
-        return {"amount": 0.0, "cur": None, "period": None, "seat": False, "label": "Free"}
     if any(v in low for v in VAGUE):
-        return None
-    m = PRICE_RE.match(text)
-    if not m:
-        return None
-    period = m.group("period").lower()
-    return {
-        "amount": float(m.group("amt").replace(",", "")),
-        "cur": m.group("cur"),
-        "period": "year" if period in ("year", "yr") else "month",
-        "seat": bool(m.group("seat")),
-        "label": text,
-    }
+        return []  # 'around $20 … confirm' 류 — 확정값이 아니니 축에 세우지 않는다
+
+    period = "month" if MONTH_RE.search(text) else "year" if YEAR_RE.search(text) else None
+    seat = bool(SEAT_RE.search(text))
+
+    if not AMT_RE.search(text):
+        # 숫자가 아예 없다 — 'Free …' 로 시작할 때만 0 으로 인정한다.
+        return ([{"label": card_name, "amount": 0.0, "cur": None, "period": None,
+                  "seat": False, "disp": "Free"}] if low.startswith("free") else [])
+    if period is None:
+        return []  # 금액은 있는데 청구주기를 모른다 — 같은 축에 세울 수 없다
+
+    segs = [s.strip() for s in re.split(r"·|;", text) if s.strip()]
+    if len(segs) > 4:
+        return []
+    vendor = vendor_of(card_name)
+    pts = []
+    for seg in segs:
+        m = AMT_RE.search(seg)
+        if not m:
+            if seg.lower().startswith("free"):
+                pts.append({"label": card_name if len(segs) == 1 else "%s Free" % vendor,
+                            "amount": 0.0, "cur": None, "period": None,
+                            "seat": False, "disp": "Free"})
+            continue
+        amt = float(m.group("amt").replace(",", ""))
+        if m.group("k"):
+            amt *= 1000 if m.group("k").lower() == "k" else 1_000_000
+        if not (0 < amt < 1_000_000):
+            continue
+        name = TRAIL_RE.sub("", LEAD_RE.sub("", seg[: m.start()].strip(" ([")).strip()).strip()
+        label = card_name if len(segs) == 1 or not name else "%s %s" % (vendor, name)
+        pts.append({"label": label, "amount": amt, "cur": m.group("cur"), "period": period,
+                    "seat": seat, "disp": m.group(0).strip()})
+    return pts
 
 
 def price_chart(body: str) -> str | None:
-    cards = []
+    cards, points = 0, []
     for c in body.split('<div class="price-card">')[1:]:
         pn, pp = PN_RE.search(c), PP_RE.search(c)
-        if pn and pp:
-            cards.append((strip_tags(pn.group(1)), parse_price(pp.group(1))))
-    if len(cards) < 3:
+        if not (pn and pp):
+            continue
+        cards += 1
+        points.append(parse_card(strip_tags(pn.group(1)), pp.group(1)))
+    if cards < 3:
         return None
 
     # 통화·주기가 같은 무리 중 가장 큰 것만 그린다. Free 는 어느 무리에나 0 으로 얹힌다.
+    flat = [p for ps in points for p in ps]
     groups: dict[tuple[str, str], int] = {}
-    for _n, p in cards:
-        if p and p["cur"]:
+    for p in flat:
+        if p["cur"]:
             groups[(p["cur"], p["period"])] = groups.get((p["cur"], p["period"]), 0) + 1
     if not groups:
         return None
     cur, period = max(groups, key=lambda k: groups[k])
 
-    picked = [(n, p) for n, p in cards
-              if p and (p["cur"] is None or (p["cur"] == cur and p["period"] == period))]
-    paid = [p["amount"] for _n, p in picked if p["amount"] > 0]
-    if len(picked) < 3 or len(set(paid)) < 2:
+    picked, skipped = [], 0
+    for ps in points:
+        keep = [p for p in ps if p["cur"] is None or (p["cur"] == cur and p["period"] == period)]
+        if keep:
+            picked.extend(keep)
+        else:
+            skipped += 1
+    paid = [p["amount"] for p in picked if p["amount"] > 0]
+    if len(picked) < 3 or len(set(paid)) < 2 or len(picked) > 12:
         return None
 
-    dropped = len(cards) - len(picked)
+    dropped = skipped
     top = max(paid)
     x0, row_h = 146, 28
     width = VB_W - x0 - 78
     height = len(picked) * row_h + 24
 
-    aria = "; ".join("%s: %s" % (n, p["label"]) for n, p in picked)
+    aria = "; ".join("%s: %s" % (p["label"], p["disp"]) for p in picked)
     out = [svg_open(height, aria)]
-    for n, (name, p) in enumerate(picked):
+    for n, p in enumerate(picked):
         y = n * row_h + 3
-        out.append(txt(0, y + 14, clip(name, 21), "var(--ink-soft)", "13px"))
-        w = (p["amount"] / top) * width if p["amount"] > 0 else 3.0
+        out.append(txt(0, y + 14, clip(p["label"], 21), "var(--ink-soft)", "13px"))
+        w = max((p["amount"] / top) * width if p["amount"] > 0 else 3.0, 3.0)
         fill = "var(--accent)" if p["amount"] > 0 else "var(--line-strong)"
         out.append('<rect x="%d" y="%d" width="%.1f" height="19" rx="3" fill="%s" opacity=".9"/>'
-                   % (x0, y, max(w, 3.0), fill))
-        short = re.sub(r"\s*/\s*(month|year|mo|yr)\b", "", p["label"], flags=re.I)
-        out.append(txt(x0 + max(w, 3.0) + 6, y + 14, clip(short, 12), "var(--ink)", "600 12px"))
+                   % (x0, y, w, fill))
+        out.append(txt(x0 + w + 6, y + 14, clip(p["disp"], 12), "var(--ink)", "600 12px"))
 
     unit = "per year" if period == "year" else "per month"
     axis = "%s, %s" % (CUR_NAME.get(cur, cur), unit)
-    if any(p["seat"] for _n, p in picked):
+    if any(p["seat"] for p in picked):
         axis += " — some tiers are per user"
     out.append(txt(0, height - 5, axis, "var(--muted)", "12px"))
     out.append("</svg>")
 
     cap = "Plans on one axis — only tiers billed in %s %s are plotted." % (CUR_NAME.get(cur, cur), unit)
     if dropped:
-        cap += (" %d other plan%s on this page (different billing period, or no published number) "
+        cap += (" %d other card%s on this page (different billing period, or no published number) "
                 "%s not plotted." % (dropped, "s" if dropped > 1 else "",
                                      "are" if dropped > 1 else "is"))
     return wrap("pricing", "".join(out), cap)

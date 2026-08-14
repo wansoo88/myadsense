@@ -307,3 +307,27 @@ cards:
     price: "Enterprise only — from $16K"
     note: "Sourcegraph's public pricing page now lists only an Enterprise tier; the standalone Cody free/individual plans are no longer sold there."
     source: https://sourcegraph.com/pricing
+
+  # ── 3차 보강 (2026-08-15) ──────────────────────────────────
+  # cursor-vs-github-copilot 은 1·2차 패치 대상 목록에 아예 없었다.
+  # 그래서 "around $20/user per month — confirm" 같은 카드가 4개 그대로 남았다.
+  # 이 슬러그는 ai-coding 카테고리에서 트래픽이 나오는 축이라 방치할 수 없다.
+  # 값은 위 github-copilot-vs-codeium · cursor-vs-windsurf 항목과 동일 출처·동일 관측일.
+  - slug: cursor-vs-github-copilot-which-ai-coding-tool-should-you-use-in-2026
+    plan: "Cursor — Pro"
+    price: "$20 / month"
+    source: https://cursor.com/pricing
+  - slug: cursor-vs-github-copilot-which-ai-coding-tool-should-you-use-in-2026
+    plan: "Cursor — Business / Teams"
+    price: "$40 / user / month"
+    note: "Teams tier; Enterprise is custom-quoted"
+    source: https://cursor.com/pricing
+  - slug: cursor-vs-github-copilot-which-ai-coding-tool-should-you-use-in-2026
+    plan: "GitHub Copilot — Pro"
+    price: "$10 / user / month"
+    note: "Pro+ is $39 per user/mo and a $100/mo Max tier also exists"
+    source: https://github.com/features/copilot/plans
+  - slug: cursor-vs-github-copilot-which-ai-coding-tool-should-you-use-in-2026
+    plan: "GitHub Copilot — Business / Enterprise"
+    price: "Business $19 · Enterprise $39 per seat / month"
+    source: https://docs.github.com/en/copilot/about-github-copilot/plans-for-github-copilot
