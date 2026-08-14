@@ -290,7 +290,7 @@ def build_spec(m: dict):
 
     return generator.ContentSpec(
         slug=SLUG,
-        title=f"{share}% of the Requests to Our New Site Were Attacks on Software We Do Not Run",
+        title=f"{share}% of Requests to Our New Site Probed for Software and Files We Do Not Have",
         dek=(f"We logged {m['total']:,} requests to a static site over {ndays} days. "
              f"{m['probe_hits']:,} of them asked for WordPress, .env files and PHP shells that "
              f"have never existed here."),
@@ -323,7 +323,7 @@ def build_spec(m: dict):
         sections=sections,
         verdict_html=(
             "<p>The practical conclusion is smaller than the numbers suggest. A quarter of our "
-            "traffic is hostile in intent and almost none of it is hostile in effect, because "
+            "traffic is looking for a way in and almost none of it has any effect, because "
             "there is nothing on the other side to execute it. If you are choosing between a "
             "static site and a CMS for a small project, this is the security half of that "
             "trade-off made concrete.</p>"
