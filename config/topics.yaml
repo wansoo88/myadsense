@@ -319,6 +319,136 @@ trend_axis:
         - name: "CCManager"
         - name: "happy"
 
+    # ── 시계열 축 추가분 (2026-08-15) — 후보 8/8 소진으로 생성이 0편이 된 뒤 보충 ─────────
+    # 전부 실호출로 확인했다: repo 200 · participation 52주 · 13주 4구간에서 값이 갈린다.
+    # 시간축은 등가 kind 를 요구하지 않지만, 집합이 뭉쳐 있어야 글이 성립하므로
+    # **사이트에 이미 있는 카테고리** 단위로 묶었다(내부 링크가 붙는다).
+    - keyword: "which terminal agent managers are still moving"
+      shape: timeline
+      cluster: ai-coding-tools
+      why: >-
+        코딩 에이전트를 터미널에서 굴리는 도구 다섯을 같은 52주 창으로 편다. 2026-08-15 실측 구간합이
+        서로 완전히 다르다 — herdr 0→0→431→978, happy 514→430→573→147, agentapi 50→26→13→3.
+        같은 분야에서 하나는 폭발하고 하나는 멎는 그림은 개별 소개글로는 안 보인다.
+      entities:
+        - name: "CCManager"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/kbwo/ccmanager#readme"
+          github: kbwo/ccmanager
+          why: "the project's own repository"
+        - name: "herdr"
+          kind: terminal-agent-manager
+          official_url: "https://herdr.dev/"
+          github: herdrdev/herdr
+          why: "the project's own repository"
+        - name: "Claude Squad"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/smtg-ai/claude-squad#readme"
+          github: smtg-ai/claude-squad
+          why: "the project's own repository"
+        - name: "happy"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/slopus/happy#readme"
+          github: slopus/happy
+          why: "the project's own repository"
+        - name: "AgentAPI"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/coder/agentapi#readme"
+          github: coder/agentapi
+          why: "Coder's own repository for the project"
+
+    - keyword: "how much are open source api clients still being built"
+      shape: timeline
+      cluster: dev-saas-compare
+      why: >-
+        오픈소스 API 클라이언트 넷을 같은 창으로 잰다. 2026-08-15 실측에서 httpie/cli 는
+        52주 커밋이 **0**이고 마지막 푸시가 2024-12-17 이다 — 나머지 셋은 분기당 수백 커밋이다.
+        "이 도구 아직 살아 있나"는 이 분야에서 실제로 자주 묻는 질문인데 답이 공개돼 있지 않다.
+      entities:
+        - name: "Bruno"
+          kind: api-client
+          official_url: "https://github.com/usebruno/bruno#readme"
+          github: usebruno/bruno
+          why: "the project's own repository"
+        - name: "Insomnia"
+          kind: api-client
+          official_url: "https://github.com/Kong/insomnia#readme"
+          github: Kong/insomnia
+          why: "Kong's own repository for the project"
+        - name: "Hoppscotch"
+          kind: api-client
+          official_url: "https://github.com/hoppscotch/hoppscotch#readme"
+          github: hoppscotch/hoppscotch
+          why: "the project's own repository"
+        - name: "HTTPie"
+          kind: api-client
+          official_url: "https://github.com/httpie/cli#readme"
+          github: httpie/cli
+          why: "the project's own repository"
+
+    - keyword: "how actively are self hosted analytics tools maintained"
+      shape: timeline
+      cluster: hosting-selfhost
+      why: >-
+        자체 호스팅 분석 도구 넷. 자체 호스팅은 **유지보수가 곧 비용**이라 활동량이 실제 선택 기준이 된다.
+        2026-08-15 실측에서 규모 차가 크다(PostHog 3455→13232 vs Plausible 189→137) — 그래서 글이
+        '많을수록 좋다'로 읽히지 않게 각주가 그 오독을 먼저 막는다(모노레포·의존성 범프 포함).
+      entities:
+        - name: "Plausible"
+          kind: self-hosted-analytics
+          official_url: "https://github.com/plausible/analytics#readme"
+          github: plausible/analytics
+          why: "the project's own repository"
+        - name: "Umami"
+          kind: self-hosted-analytics
+          official_url: "https://github.com/umami-software/umami#readme"
+          github: umami-software/umami
+          why: "the project's own repository"
+        - name: "Matomo"
+          kind: self-hosted-analytics
+          official_url: "https://github.com/matomo-org/matomo#readme"
+          github: matomo-org/matomo
+          why: "the project's own repository"
+        - name: "PostHog"
+          kind: self-hosted-analytics
+          official_url: "https://github.com/PostHog/posthog#readme"
+          github: PostHog/posthog
+          why: "the project's own repository"
+
+    - keyword: "which open source notion alternatives are actually being developed"
+      shape: timeline
+      cluster: hosting-selfhost
+      why: >-
+        사이트에 이미 있는 'best self-hosted alternatives to Notion'(현재 3위 글)의 **후속 축**이다.
+        그 글은 무엇이 있는지를 다뤘고 이 글은 그것들이 지금도 만들어지고 있는지를 잰다.
+        2026-08-15 실측: AppFlowy 10→1→1→1 · SiYuan 1127→3776 — 같은 목록 안에서 방향이 반대다.
+      entities:
+        - name: "AppFlowy"
+          kind: self-hosted-workspace
+          official_url: "https://github.com/AppFlowy-IO/AppFlowy#readme"
+          github: AppFlowy-IO/AppFlowy
+          why: "the project's own repository"
+        - name: "AFFiNE"
+          kind: self-hosted-workspace
+          official_url: "https://github.com/toeverything/AFFiNE#readme"
+          github: toeverything/AFFiNE
+          why: "the project's own repository"
+        - name: "Outline"
+          kind: self-hosted-workspace
+          official_url: "https://github.com/outline/outline#readme"
+          github: outline/outline
+          why: "the project's own repository"
+        - name: "Docmost"
+          kind: self-hosted-workspace
+          official_url: "https://github.com/docmost/docmost#readme"
+          github: docmost/docmost
+          why: "the project's own repository"
+        - name: "SiYuan"
+          kind: self-hosted-workspace
+          official_url: "https://github.com/siyuan-note/siyuan#readme"
+          github: siyuan-note/siyuan
+          why: "the project's own repository"
+
 clusters:
   # ── P1: AI 코딩/개발 도구 (트렌딩·고의도·E-E-A-T 적합) ──
   - id: ai-coding-tools
