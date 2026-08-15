@@ -504,8 +504,27 @@ def _observed_read_urls(spec) -> set:
     obs = getattr(spec, "observed", None)
     out = set()
     for c in ((obs or {}).get("calls") or []):
-        if isinstance(c, dict) and c.get("status") == 200 and c.get("url"):
-            out.add(_norm_url(c["url"]))
+        if not (isinstance(c, dict) and c.get("status") == 200 and c.get("url")):
+            continue
+        url = c["url"]
+        out.add(_norm_url(url))
+        # 🔴 **읽은 자원의 사람용 페이지**도 같이 연다 (2026-08-15 실측으로 드러난 기존 결함).
+        #    우리가 부른 건 `api.github.com/repos/O/R` 인데 독자에게 내미는 링크는
+        #    `github.com/O/R…` 다. 그 둘을 잇지 않으면 `observed.source_links()` 가 만든 링크가
+        #    **항상** 잘린다 — 짝비교에서도 내내 잘리고 있었고(시계열 시범 run 에서 5건 잘림),
+        #    그라운딩 URL 이 우연히 겹칠 때만 인용이 남았다. 지형도 축은 그 우연이 없어
+        #    "인용 0건 → eeat 출처 없음"으로 게이트에 걸려 이 결함이 드러났다.
+        #    ⚠️ 여는 범위는 **같은 자원**뿐이다: 우리가 읽은 그 저장소·그 패키지의 페이지.
+        #       아무 URL 이나 열어주는 게 아니므로 인용 무결성은 유지된다.
+        m = re.search(r"api\.github\.com/repos/([^/?#]+)/([^/?#]+)", url)
+        if m:
+            out.add(_norm_url(f"https://github.com/{m.group(1)}/{m.group(2)}"))
+            for sub in ("releases", "graphs/commit-activity", "commits", "tags"):
+                out.add(_norm_url(f"https://github.com/{m.group(1)}/{m.group(2)}/{sub}"))
+            continue
+        m = re.search(r"registry\.npmjs\.org/([^/?#]+)", url)
+        if m:
+            out.add(_norm_url(f"https://www.npmjs.com/package/{m.group(1)}"))
     return out
 
 

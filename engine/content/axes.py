@@ -273,7 +273,14 @@ class _Timeline:
                 "- Do NOT treat commit volume as quality, progress, popularity, or team size. A quiet "
                 "repository may be stable; a busy one may be churning.\n"
                 "- Do NOT compare one product's window against another product's different window. "
-                "Every column covers the same 52 weeks for every row.\n")
+                "Every column covers the same 52 weeks for every row.\n"
+                # 🔴 실측 반려(2026-08-15 시범 1회차): 모델이 "공개 저장소가 없는 호스티드 툴" 단락을
+                #    지어내고 그 예로 Sculptor 를 들었다 — 같은 글의 표가 Sculptor 의 커밋을 세고 있는데.
+                #    검수기가 factual+coherence high 로 잡았다. 집합의 성질을 프롬프트에 못 박는다.
+                "- EVERY product in the table above has a public GitHub repository — that is how these "
+                "numbers were obtained. Do NOT describe any of them as closed-source, hosted-only, or "
+                "lacking a public repository, and do NOT use any of them to illustrate such a case.\n"
+                "- Do NOT introduce products that are not in the table above.\n")
 
     @staticmethod
     def source_links(result: dict, *, max_links: int = 6) -> list:
