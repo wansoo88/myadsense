@@ -449,21 +449,33 @@ class _Landscape:
         rows = result.get("rows") or []
         if not rows:
             return ""
+        # 같은 대상이 원장에 두 번 이상 있으면(예: 정지 → 부활) **행이 늘어난다.**
+        # 그걸 밝히지 않으면 "표 13행 vs 호출 12건"이 이중계상처럼 읽힌다(2026-08-15 검수 지적).
+        seen = {}
+        for r in rows:
+            seen[r["target"]] = seen.get(r["target"], 0) + 1
+        repeats = {k for k, n in seen.items() if n > 1}
         body = []
         for r in rows:
             mark = "" if r["agrees"] else ' <span class="mk-warn">≠</span>'
-            body.append(f'<tr><td class="featc">{_esc(r["entity"])}</td>'
+            again = (' <span class="mk-warn">↻</span>' if r["target"] in repeats else "")
+            body.append(f'<tr><td class="featc">{_esc(r["entity"])}{again}</td>'
                         f'<td><code>{_esc(r["target"])}</code></td>'
                         f'<td>{_esc(r["recorded"])}</td>'
                         f'<td>{_esc(r["live"])}{mark}</td></tr>')
+        legend = ('<p class="footnote">≠ marks a row where today\'s check no longer matches what we '
+                  'recorded. Those rows are not errors in the record — they are the record working. '
+                  '↻ marks a project we logged more than once, at different moments; '
+                  '<strong>each row is one log entry, not one request</strong>, so a project that '
+                  'changed state appears on more than one row while still being a single repository.'
+                  '</p>')
         table = ('<div class="tablewrap"><table class="tbl"><thead><tr>'
                  '<th class="feat">Project</th><th class="feat">What we watched</th>'
                  '<th class="feat">What we recorded, and when</th>'
                  f'<th class="feat">Same check on {_esc(result.get("observed_date"))}</th>'
-                 '</tr></thead><tbody>' + "".join(body) + "</tbody></table></div>"
-                 '<p class="footnote">≠ marks a row where today\'s check no longer matches what we '
-                 'recorded. Those rows are not errors in the record — they are the record working.</p>')
+                 '</tr></thead><tbody>' + "".join(body) + "</tbody></table></div>" + legend)
         note = _method_note(result, (
+            f"{len(rows)} log entries covering {len(seen)} distinct repositories and packages. "
             "The middle column is our own log: what the GitHub REST API and the npm registry returned "
             "when we called them on the date shown, while checking candidates for other articles. The "
             "right column is the same call repeated for this article. A 404 does not distinguish a "
@@ -509,7 +521,17 @@ class _Landscape:
                 "whether a repository was deleted or made private. Say what was returned, not what "
                 "someone intended.\n"
                 "- Do NOT describe any project as abandoned, dead, or failing. Report the dates.\n"
-                "- Do NOT imply any maintainer acted in bad faith, including for reused package names.\n")
+                "- Do NOT imply any maintainer acted in bad faith, including for reused package names.\n"
+                # 🔴 실측 보류(2026-08-15 시범): 모델이 "According to GitHub's documentation" /
+                #    "Per npm's documentation" 으로 플랫폼 동작을 설명했는데 그 문서는 소스에 없었다.
+                #    인용 필터가 그 링크를 잘라내므로 **출처 없는 귀속**만 남는다 → factual 지적.
+                "- You were NOT given GitHub's or npm's documentation. Do NOT write 'according to "
+                "GitHub's documentation', 'per npm's docs', or any similar attribution. If you explain "
+                "how a platform feature behaves, state it plainly as general knowledge without citing "
+                "a document you were not shown.\n"
+                "- The table counts LOG ENTRIES, not API requests. One project can occupy more than "
+                "one row because we logged it at more than one moment. Do not present the row count "
+                "as a request count.\n")
 
     @staticmethod
     def source_links(result: dict, *, max_links: int = 8) -> list:
