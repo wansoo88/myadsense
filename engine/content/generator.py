@@ -14,7 +14,7 @@ import os
 import re
 import time
 
-from content import observed, renderer, source_fetch
+from content import axes, observed, renderer, source_fetch
 from content.quality_gate import Page
 
 
@@ -115,14 +115,15 @@ def _resolve_provider(topic: str, content_cfg: dict, force_fixture: bool,
     if provider not in ("api", "claude_cli"):
         return _fixture(topic)
     obs = _observe(topic, content_cfg, hints)   # 제3자 공개 API 관측(원저 데이터). 실패 시 None
-    obs_block = observed.prompt_block(obs) if obs else ""      # 생성 프롬프트용(사실 + 사용 지시)
+    ax = axes.renderer_for(obs)                 # 이 결과를 만든 축의 렌더러(기본 observed = 짝비교)
+    obs_block = ax.prompt_block(obs) if obs else ""            # 생성 프롬프트용(사실 + 사용 지시)
     # 자가검수·검수기가 보는 근거 = 벤더 소스 + 우리 관측 **수치만**(`data_block`).
     #   · 지시문을 빼는 이유: grounding_context 는 reviewer.review() 의 입력이기도 하다. 지시문까지 주면
     #     검수기가 '우리 지시를 이행했는가'를 판정 사유로 삼는다(파일럿 실측 — observed.data_block 주석).
     #   · 관측 블록을 **앞에** 붙이는 이유: `_split_grounding` 은 '[SOURCE n] <url>' 마커로 잘라 뒤쪽
     #     텍스트를 그 소스의 본문으로 본다 → 뒤에 붙이면 우리 수치가 마지막 벤더 페이지 내용인 것처럼
     #     인용에 붙는다(허위 인용).
-    obs_data = observed.data_block(obs) if obs else ""
+    obs_data = ax.data_block(obs) if obs else ""
     evidence_text = (obs_data + "\n\n" + grounding_text).strip() if obs_data else grounding_text
 
     def _one(fb):
@@ -194,6 +195,12 @@ def _observe(topic: str, cfg: dict, hints: dict | None = None):
     o = (cfg.get("observed_data") or {})
     if not o.get("enabled"):
         return None
+    # 🔴 축 분기 — `pair`(기본)가 아니면 그 축 모듈이 수집까지 담당한다.
+    #    아래 기존 경로는 **손대지 않는다**: 짝비교의 등가성·행 수·창 겹침 규칙이 전부 여기 있고
+    #    그 규칙은 반려 사고에서 하나씩 나온 것이다. 새 축은 자기 규칙을 자기가 들고 온다.
+    axis = str((hints or {}).get("axis") or "pair")
+    if axis != "pair":
+        return axes.observe(axis, topic, cfg, hints)
     t0 = time.time()
     try:
         max_entities = int(o.get("max_entities", 5))
@@ -325,10 +332,15 @@ def _ensure_takeaway(spec: ContentSpec, result: dict, cfg: dict) -> bool:
     #    "표 없음 → 트렌드 글 폐기" 경로를 타고 **완성된 초안 3개가 통째로 버려졌다.**
     #    값싼 보조 스캐너에 글 전체의 생사를 맡긴 것이 설계 오류였다 — 판정은 reviewer.py 소관이고,
     #    실제로 원 결함도 reviewer.py 가 잡아냈다.
+    ax = axes.renderer_for(result)
     def _why_bad(text: str):
-        if not observed.takeaway_ok(result, text):
+        if not ax.takeaway_ok(result, text):
             return ("It did not quote at least two of the specific figures with the observation date "
                     f"{result.get('observed_date')}.", True)
+        # ⚠️ 교차지표 검사는 **짝비교 전용**이다 — "A의 릴리스 vs B의 커밋"을 잡는 스캐너라
+        #    행이 시간·사건인 축에서는 대상이 없다. 억지로 돌리면 없는 결함을 만든다.
+        if result.get("axis"):
+            return ("", False)
         hits = _cross_metric_hits(_strip(text), result)
         return ((f"It compared unlike measurements: {hits[0][1]}.", False) if hits else ("", False))
 
@@ -342,7 +354,7 @@ def _ensure_takeaway(spec: ContentSpec, result: dict, cfg: dict) -> bool:
     # 버려졌다(생성 비용 전액 손실). 재요청 비용(≤700토큰)이 초안 하나를 버리는 것보다 압도적으로 싸다.
     for attempt in (1, 2):
         try:
-            req = observed.takeaway_request(result)
+            req = ax.takeaway_request(result)
             if attempt > 1 or had:
                 req += ("\n\nYour previous attempt was rejected. What was wrong with it: " + bad +
                         " Write a new paragraph that fixes exactly that. When you set the two products "
@@ -385,7 +397,8 @@ def _attach_observed(spec: ContentSpec, result: dict, cfg: dict) -> None:
     try:
         if not _ensure_takeaway(spec, result, cfg):
             return
-        sec = observed.section(result, takeaway_html=(spec.observation_takeaway or ""))
+        ax = axes.renderer_for(result)
+        sec = ax.section(result, takeaway_html=(spec.observation_takeaway or ""))
         if not sec:
             spec.observation_takeaway = None     # 표가 안 붙으면 해석 단락도 렌더되지 않는다(유령 산문 방지)
             return
@@ -394,7 +407,7 @@ def _attach_observed(spec: ContentSpec, result: dict, cfg: dict) -> None:
         spec.sections = [sec] + list(spec.sections or [])
         spec.observed = result
         have = {_norm_url(s.get("url")) for s in (spec.sources or [])}
-        for link in observed.source_links(result):
+        for link in ax.source_links(result):
             if _norm_url(link["url"]) not in have:
                 spec.sources.append(link)
                 have.add(_norm_url(link["url"]))
@@ -465,8 +478,35 @@ def _url_title(u: str) -> str:
 
 
 def _norm_url(u: str) -> str:
-    """인용 중복 판정용 정규화 — scheme·www·트레일링 슬래시·대소문자 차이를 흡수."""
-    return re.sub(r"^https?://(www\.)?", "", (u or "").strip()).rstrip("/").lower()
+    """URL 동일 페이지 판정용 정규화 (51-review R1).
+
+    흡수(같은 페이지로 본다): scheme(`http`/`https`) · `www.` · 후행 슬래시 · 대소문자 ·
+      **프래그먼트(`#readme`, `#pricing`)** ← 51-review 신설
+    유지(다른 페이지로 본다): **쿼리스트링**(`?per_page=15` 등 — 내용이 달라진다) · 경로
+
+    🔴 프래그먼트 제거가 왜 필수인가: 이게 없으면 `…/claude-squad` 와 `…/claude-squad#readme` 를
+    **다른 페이지로 보고 정당한 인용을 잘라낸다**(오탈락). 우리는 `#readme` 형태로 페치해 놓고
+    모델은 프래그먼트 없이 인용하는 일이 실제로 있었다(run8 실물, 51-review §1-1).
+    ⚠️ 이 변경은 중복 판정에도 함께 적용된다 — **의도한 부수효과**다: run8 Sources 8개 중
+    2개(`…/claude-squad` 와 `…/claude-squad#readme`)가 같은 페이지였는데 독자에겐 8개로 보였다.
+    """
+    s = re.sub(r"#.*$", "", (u or "").strip())          # 프래그먼트 제거(쿼리는 남긴다)
+    return re.sub(r"^https?://(www\.)?", "", s).rstrip("/").lower()
+
+
+def _observed_read_urls(spec) -> set:
+    """관측(자체 측정)으로 **실제 호출해 200 을 받은** 엔드포인트의 정규화 URL 집합 (51-review R4).
+
+    R0 은 "읽었는가"를 묻지 "HTML 로 페치했는가"를 묻지 않는다. `api.github.com/...` 처럼 우리가
+    직접 부른 관측 엔드포인트는 `fetched`(HTML 페치) 집합에 없지만 **우리가 실제로 읽은 것이 맞다** —
+    31-content 가 요구한 자체 측정의 본체이므로 R1/R2 로 잘라내면 안 된다.
+    """
+    obs = getattr(spec, "observed", None)
+    out = set()
+    for c in ((obs or {}).get("calls") or []):
+        if isinstance(c, dict) and c.get("status") == 200 and c.get("url"):
+            out.add(_norm_url(c["url"]))
+    return out
 
 
 def _split_grounding(grounding_text: str) -> dict:
@@ -521,12 +561,35 @@ def _finalize_sources(spec: ContentSpec, cfg: dict, fetched: list, grounding_tex
     2026-07-25-16-content P2: 예전 판은 페치한 URL 을 **전부 무조건** sources 에 넣었다.
     본문이 쓰지 않은 페이지가 출처로 붙는 것은 E-E-A-T 상 허위 인용이고, 실제로 검수 반려를 만들었다
     (14-content ③-1: DO droplets 가격 페이지가 인용에만 있고 본문에 근거 없음 → [coherence]).
+    🔴 2026-08-01 (51-review R0·R2·R4): 위 마지막 줄은 **더 이상 참이 아니다.**
+    예전 판은 모델이 적은 인용에 `url_ok`(200 생존 확인)만 걸었다 → **한 번도 읽지 않은 페이지가
+    출처로 남았다**(50-review §4 가 관측한 결함의 생성 경로). 인용은 *"이 페이지에 이 사실이 있다"* 는
+    약속이고(F10 Trust), **읽지 않았으면 그 약속을 할 수 없다** — 이 원칙은 **누가 적었는지와 무관**하다.
+    → `spec.sources` 도 **"우리가 읽은 페이지" 집합**(HTML 페치분 ∪ 관측 API 호출분)과 대조해 없으면 제거한다.
+      이 검사는 `validate_source_urls`(생존 확인) **앞에** 선다.
+
+    ⛔ **사후 페치 성공을 인용 자격으로 인정하지 않는다**(R2 — PM 원안보다 엄격, REVIEW 판정):
+      이 함수는 **초안이 다 쓰인 뒤** 돈다. `fetched` 에 없었다는 건 모델이 그 페이지를 **본 적이 없다**는
+      뜻이고, 사후에 200 이 나와도 **본문은 그 페이지 없이 쓰였다**. 사후 페치를 자격으로 인정하면
+      지금 `url_ok` 가 하던 일과 실질적으로 같아진다 = 완화다. 제거된 URL 은 **다음 회차 그라운딩
+      후보로 로그만** 남긴다(이번 글의 근거 아님).
     """
     g = (cfg.get("grounding") or {})
     try:
         spec.grounding_context = grounding_text or ""
     except Exception:
         pass
+    # ── R0/R2/R4: 읽은 페이지 집합과 대조 (생존 확인보다 먼저) ──────────────────────────────
+    read = {_norm_url(u) for u in (fetched or []) if u} | _observed_read_urls(spec)
+    if spec.sources:
+        kept, cut = [], []
+        for s in spec.sources:
+            (kept if _norm_url((s or {}).get("url")) in read else cut).append(s)
+        if cut:
+            spec.sources = kept
+            urls = [(c or {}).get("url") for c in cut]
+            print(f"generate: 인용 제거 {len(cut)}개(모델이 적었으나 우리가 읽지 않은 페이지) — {urls}")
+            print(f"generate: ↳ 다음 회차 그라운딩 후보로 기록(이번 글의 인용 자격 아님) — {urls}")
     if g.get("validate_source_urls") and spec.sources:
         try:
             good, dropped = source_fetch.validate_sources(spec.sources, timeout=int(g.get("fetch_timeout", 12)))
@@ -555,9 +618,15 @@ def _finalize_sources(spec: ContentSpec, cfg: dict, fetched: list, grounding_tex
         print(f"generate: 인용 추가 {len(added)}개(본문에 근거 등장) — " + ", ".join(f"{u} [{w}]" for u, w in added))
     if skipped:
         print(f"generate: 인용 제외 {len(skipped)}개(페치했으나 본문 미사용) — {skipped}")
-    if not spec.sources and fetched:               # E-E-A-T 게이트(출처 필수)까지 비우지는 않는다
-        print("generate: ⚠️ 인용 0건 — 페치 소스 1개를 최소 인용으로 복원")
-        spec.sources = [{"title": _url_title(fetched[0]), "url": fetched[0]}]
+    # 🔴 R3 (51-review): 예전의 "인용 0건이면 페치 소스 1개를 최소 인용으로 복원" 폴백을 **삭제했다.**
+    #   그 폴백이 복원하던 `fetched[0]` 은 방금 `_source_used_in` 을 통과하지 못해 제외된 페이지다
+    #   (통과했다면 이미 `added` 로 들어가 sources 가 비어 있지 않다) = **본문이 쓰지 않은 페이지를
+    #   인용으로 붙이는 행위**이고, 이 함수 docstring 이 스스로 "E-E-A-T 상 허위 인용"이라 금지한 그것이다.
+    #   ⚠️ R2 와 **한 묶음**이다: R3 없이 R2 만 넣으면 모델 인용을 잘라낸 뒤 폴백이 대신 붙어
+    #   결함의 이름만 '틀린 귀속' → '무출처 단정' 으로 바뀌고 규칙이 무력화된다.
+    #   → 인용 0건 초안은 `require_sources` 게이트에서 떨어져 **재생성 대상**이 된다(게이트의 원래 역할).
+    if not spec.sources:
+        print("generate: ⚠️ 인용 0건 — 폴백 없이 그대로 둔다(require_sources 게이트에서 반려 → 재생성 대상)")
 
 
 def _claude_cli_available() -> bool:

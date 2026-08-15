@@ -56,6 +56,9 @@ title_policy:
 #     식별자는 값이지 상식이 아니다 — 바뀌면 여기를 고친다.
 #     ⚠️ 휴면 저장소 실측 제외 (2026-08-01): `devflowinc/uzi` **2025-06-04 이후 커밋 0** ·
 #     `omnara-ai/omnara` 2026-01-19 이후 커밋 0. 두 저장소가 낀 짝 4개(uzi×2 · omnara×2)는 3기준
+#     ⚠️ **omnara 판정은 2026-08-15 재호출에서 무효가 됐다** — 마지막 푸시가 2026-08-15 다(되살아났다).
+#        uzi 는 여전히 2025-06-04 로 멈춰 있다. 한 번 관측한 상태를 영구 사실로 굳히지 말 것.
+#        원장: config/observed_history.yaml (`omnara-revived`).
 #     (docs 200 · 공개 저장소 · 심층 비교글 부재)을 **전부 통과했지만 후보에서 뺐다** — 관측표가
 #     `min_rows` 를 못 넘어 파이프라인이 어차피 버리고(실측), 무엇보다 1년 넘게 멈춘 도구를
 #     현역처럼 비교하는 글은 Roo Code(2026-05-15 개발 중단)를 반려한 것과 같은 사유로 부적합하다.
@@ -241,6 +244,70 @@ trend_axis:
           github: herdrdev/herdr
           # 내부 메모(렌더 금지): 2026-08-01 확인 — ogulcancelik/herdr 에서 herdrdev/herdr 로 이전(301)
           why: "the project's own repository, where its releases are published"
+
+    # ═══════════════════════════════════════════════════════════════════════════════════
+    # 🔵 2026-08-15 — 짝비교가 **아닌** 축 두 개 (사람 승인: B+C 구축)
+    # ═══════════════════════════════════════════════════════════════════════════════════
+    # 왜: 2026-08-11 AdSense 거절 사유 하나가 "발행분 전부가 X vs Y 한 포맷"이었다. 그런데 이 축은
+    #     짝비교만 만들 수 있었다 — 관측표가 `min_entities: 2` + 값이 갈리는 행을 요구했기 때문이다.
+    #     즉 **짝짓기는 목적이 아니라 표를 세우려던 수단**이었다(engine/content/axes.py 참조).
+    # `shape` 키가 없으면 `pair` = 기존 동작. 아래 둘만 새 축을 탄다.
+
+    - keyword: "how active are agent sandbox tools 52 weeks of commits"
+      shape: timeline                # 열 = 시간. 짝이 필요 없다.
+      cluster: ai-coding-tools
+      why: >-
+        같은 52주 창으로 이 분야 다섯 저장소의 주간 커밋을 나란히 편다. 개별 소개글은 있어도
+        "이 분야가 1년 동안 어떻게 움직였나"를 같은 창으로 잰 글이 없다. 창이 모든 저장소에 대해
+        동일하므로(항상 '지금까지의 52주') 짝비교에서 났던 1년 시차 사고가 구조적으로 불가능하다.
+      # 2026-08-15 전부 실호출 200 확인(마지막 푸시 병기). kind 는 표시용이며 시간축은 등가성을
+      # 요구하지 않는다 — 대신 "무엇을 모은 집합인가"를 글이 밝혀야 한다.
+      entities:
+        - name: "clawk"            # 2026-08-13
+          kind: isolated-agent-workspace
+          official_url: "https://github.com/clawkwork/clawk#readme"
+          github: clawkwork/clawk
+          why: "the project's own repository"
+        - name: "Sculptor"         # 2026-08-14
+          kind: isolated-agent-workspace
+          official_url: "https://imbue.com/product/sculptor"
+          github: imbue-ai/sculptor
+          why: "Imbue's own repository for the project"
+        - name: "Container Use"    # 2026-08-12
+          kind: isolated-agent-workspace
+          official_url: "https://container-use.com/introduction"
+          github: dagger/container-use
+          why: "Dagger's own repository for the project"
+        - name: "herdr"            # 2026-08-15
+          kind: isolated-agent-workspace
+          official_url: "https://herdr.dev/"
+          github: herdrdev/herdr
+          why: "the project's own repository"
+        - name: "CCManager"        # 2026-08-10
+          kind: isolated-agent-workspace
+          official_url: "https://github.com/kbwo/ccmanager#readme"
+          github: kbwo/ccmanager
+          why: "the project's own repository"
+
+    - keyword: "what happens to small dev tool repositories we watched for six weeks"
+      shape: landscape             # 열 = 우리 기록 vs 오늘 재확인. 소재가 공개 문서가 아니다.
+      cluster: ai-coding-tools
+      why: >-
+        후보를 매일 검증하며 부딪힌 소멸·이전·정지·이름 도용을 `config/observed_history.yaml` 에
+        원장으로 옮겼다. 저장소가 사라진 날은 그날 호출해 본 사람만 안다 — 검색으로는 안 나온다.
+        기록은 과거이고 대조는 현재라, 글을 만들 때마다 같은 호출을 다시 해서 나란히 놓는다.
+      # ⚠️ `entities` 는 **범위 지정**이다(비우면 원장 전체). 이름은 원장의 `entity` 와 맞춰야 한다.
+      #    식별자·URL 은 여기 적지 않는다 — 원장이 들고 있다.
+      entities:
+        - name: "catnip"
+        - name: "uzi"
+        - name: "omnara"
+        - name: "herdr"
+        - name: "goose"
+        - name: "paneflow"
+        - name: "Sculptor"
+        - name: "CCManager"
+        - name: "happy"
 
 clusters:
   # ── P1: AI 코딩/개발 도구 (트렌딩·고의도·E-E-A-T 적합) ──

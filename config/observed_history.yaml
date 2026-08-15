@@ -1,0 +1,141 @@
+# observed_history.yaml — 우리가 **직접 관측해 기록한** 엔티티 사실 (축 C 지형도의 원장)
+#
+# 왜 이 파일이 생겼나 (2026-08-15):
+#   2026-08-11 AdSense "가치가 별로 없는 콘텐츠" 거절의 근본 원인은 글 대부분이 공개 문서를
+#   재편집한 것이라 **남이 못 쓰는 내용이 없다**는 점이었다. 그런데 우리에겐 하나 있다 —
+#   trend_axis 후보를 매일 검증하며 부딪힌 **소멸·이전·정지·이름 도용 기록**이다.
+#   이건 검색해도 안 나온다. 저장소가 사라진 날은 그날 호출해 본 사람만 안다.
+#   그때까지 이 기록은 topics.yaml **주석**으로만 남아 있었다 = 기계가 못 읽는다 = 글이 못 된다.
+#
+# 규칙:
+#   ① **관측한 것만** 적는다. 추측·전언·기억은 적지 않는다. `evidence` 는 무엇을 어떻게 봤는지다.
+#   ② 각 항목은 `as_of`(관측일)를 반드시 갖는다. 날짜 없는 관측은 관측이 아니다.
+#   ③ 기록은 **지우지 않는다.** 사실이 바뀌면 `superseded_by` 로 다음 관측을 잇는다 —
+#      "우리가 틀렸던 것"도 이 원장의 내용이다(실제로 omnara 가 그랬다, 아래 참조).
+#   ④ 글을 만들 때 `axis_landscape.py` 가 **오늘 다시 호출해** 대조한다. 기록은 과거, 대조는 현재다.
+#      기록만으로 단정하지 않는다 — 그게 "낡은 가격"과 같은 실패다.
+
+meta:
+  purpose: "우리가 직접 관측한 신생 개발도구 엔티티의 상태 변화 원장"
+  method: >-
+    GitHub REST API(repos·stats/participation) 와 npm registry 를 직접 호출해 응답을 기록했다.
+    저장소 이전은 urllib 이 301 을 자동으로 따라가므로 응답의 full_name 과 요청 경로를 대조해 잡는다.
+  last_verified: 2026-08-15
+
+records:
+  # ── 소멸 ────────────────────────────────────────────────────────────────
+  - entity: catnip
+    github: wandb/catnip
+    kind: isolated-agent-workspace
+    event: gone
+    as_of: 2026-08-06
+    evidence: >-
+      2026-08-04 에는 저장소가 200 으로 응답해 관측표가 성립했고(후보로 등록돼 있었다),
+      2026-08-06 호출에서 404 가 됐다. 삭제인지 비공개 전환인지는 API 로 구분되지 않는다.
+    consequence: >-
+      이 저장소가 낀 후보 2개("sculptor vs catnip" · "container use vs catnip")를 폐기했다.
+      남겨두면 파이프라인이 매일 관측을 시도하고 매일 버린다.
+
+  # ── 정지 ────────────────────────────────────────────────────────────────
+  - entity: uzi
+    github: devflowinc/uzi
+    kind: terminal-agent-manager
+    event: dormant
+    as_of: 2026-08-01
+    evidence: "마지막 푸시 2025-06-04 이후 커밋 0. 저장소는 공개·정상 응답이며 archived 플래그는 false 다."
+    consequence: >-
+      후보 3기준(문서량·공개 저장소·심층 비교글 부재)을 전부 통과했지만 후보에서 뺐다.
+      1년 넘게 멈춘 도구를 현역처럼 비교하는 글은 부적합하다.
+
+  - entity: omnara
+    github: omnara-ai/omnara
+    kind: terminal-agent-manager
+    event: dormant
+    as_of: 2026-08-01
+    evidence: "관측 시점 마지막 푸시 2026-01-19 이후 커밋 0."
+    superseded_by: omnara-revived
+    consequence: "uzi 와 같은 사유로 후보에서 뺐다."
+
+  - id: omnara-revived
+    entity: omnara
+    github: omnara-ai/omnara
+    kind: terminal-agent-manager
+    event: revived
+    as_of: 2026-08-15
+    evidence: "재호출 결과 마지막 푸시가 2026-08-15 다. 6개월 반 멈춰 있던 저장소가 다시 움직인다."
+    consequence: >-
+      우리의 2026-08-01 '정지' 판정은 그 시점에는 맞았고 지금은 틀리다.
+      한 번 관측한 상태를 영구 사실로 굳히면 안 된다는 실례다.
+
+  # ── 이전 (301 리다이렉트 — 조용해서 아무도 모른다) ──────────────────────
+  - entity: herdr
+    github: ogulcancelik/herdr
+    moved_to: herdrdev/herdr
+    kind: terminal-agent-manager
+    event: moved
+    as_of: 2026-08-01
+    evidence: "config 경로로 호출했는데 응답의 full_name 이 herdrdev/herdr 였다. 데이터는 정상 확보된다."
+    consequence: >-
+      리다이렉트가 자동이라 **아무 오류도 나지 않는다.** 진짜 위험은 원 소유자가 같은 이름으로
+      새 저장소를 만드는 경우다 — 그 순간 리다이렉트가 끊기고 같은 경로가 다른 프로젝트를 가리킨다.
+
+  - entity: goose
+    github: block/goose
+    moved_to: aaif-goose/goose
+    kind: agent-framework
+    event: moved
+    as_of: 2026-08-01
+    evidence: "요청 경로 block/goose · 응답 full_name aaif-goose/goose."
+
+  - entity: paneflow
+    github: ArthurDEV44/paneflow
+    moved_to: arthjean/paneflow
+    kind: terminal-agent-manager
+    event: moved
+    as_of: 2026-08-01
+    evidence: "요청 경로 ArthurDEV44/paneflow · 응답 full_name arthjean/paneflow."
+
+  # ── 이름 도용 (npm) ─────────────────────────────────────────────────────
+  # 도구 이름과 같은 npm 패키지가 **그 도구가 아닌** 경우. 식별자를 이름으로 추측하면 조용히
+  # 엉뚱한 프로젝트를 측정하게 된다. 그래서 npm 은 소유가 확인된 것만 config 에 적는다.
+  - entity: catnip
+    npm: catnip
+    event: name_taken
+    as_of: 2026-08-01
+    actual_owner: alextewpin/catnip
+    evidence: "registry.npmjs.org/catnip 의 repository 필드가 github.com/alextewpin/catnip 이다."
+  - entity: uzi
+    npm: uzi
+    event: name_taken
+    as_of: 2026-08-01
+    actual_owner: icholy/uzi
+    evidence: "registry.npmjs.org/uzi 의 repository 필드가 github.com/icholy/uzi 이다."
+  - entity: Sculptor
+    npm: sculptor
+    event: name_taken
+    as_of: 2026-08-01
+    actual_owner: twolfson/sculptor
+    evidence: "registry.npmjs.org/sculptor 의 repository 필드가 github.com/twolfson/sculptor 이다."
+  - entity: omnara
+    npm: omnara
+    event: name_taken
+    as_of: 2026-08-01
+    actual_owner: omnara/omnara-voice
+    evidence: >-
+      registry.npmjs.org/omnara 의 repository 필드가 github.com/omnara/omnara-voice 다.
+      같은 조직명이지만 저장소가 다르다 — 이름이 겹친다고 그 제품이 아니다.
+
+  # ── 대조군: 이름과 소유가 실제로 일치하는 것 ────────────────────────────
+  # 도용 사례만 나열하면 "npm 은 다 못 믿는다"는 잘못된 인상을 준다. 확인해서 맞았던 것도 적는다.
+  - entity: CCManager
+    npm: ccmanager
+    event: name_verified
+    as_of: 2026-08-01
+    actual_owner: kbwo/ccmanager
+    evidence: "repository 필드가 config 의 github 값과 일치한다."
+  - entity: happy
+    npm: happy
+    event: name_verified
+    as_of: 2026-08-01
+    actual_owner: slopus/happy
+    evidence: "repository 필드가 config 의 github 값과 일치한다."
