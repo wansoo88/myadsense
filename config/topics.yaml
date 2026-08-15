@@ -289,7 +289,10 @@ trend_axis:
           github: kbwo/ccmanager
           why: "the project's own repository"
 
-    - keyword: "what happens to small dev tool repositories we watched for six weeks"
+    # ⚠️ 키워드에 **기간을 박지 않는다**. 첫 판은 "...we watched for six weeks" 였는데 원장 기록이
+    #    2026-08-01~08-15(2주)라 검수기가 "6주 서사 vs 2주 데이터" 불일치를 지적했다(sev low).
+    #    기간은 원장이 자라면 저절로 늘어나는 값이므로 제목이 아니라 **본문이 날짜로 말하게** 둔다.
+    - keyword: "what happened to the small dev tool repositories we tracked"
       shape: landscape             # 열 = 우리 기록 vs 오늘 재확인. 소재가 공개 문서가 아니다.
       cluster: ai-coding-tools
       why: >-
