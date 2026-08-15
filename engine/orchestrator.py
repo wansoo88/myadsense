@@ -365,6 +365,13 @@ def _trend_hints(cand: dict) -> dict:
         for p in per_entity:
             if i < len(p) and p[i] not in urls:
                 urls.append(p[i])
+    # 후보 단위 추가 소스 — 엔티티에 붙지 않는 배경 문서(플랫폼 동작 설명 등).
+    # 🔴 왜 필요한가 (2026-08-15 실측): 지형도 글이 "According to GitHub's documentation" 이라고
+    #    썼는데 그 문서를 준 적이 없어 인용 필터가 링크를 잘라냈다 → **출처 없는 귀속**만 남았다.
+    #    프롬프트로 금지해도 모델이 다시 썼다. 금지하는 대신 **실제로 읽게 해서** 인용 자격을 준다.
+    for u in (cand.get("extra_source_urls") or []):
+        if u and u not in urls:
+            urls.append(u)
     # `shape` 가 곧 생성 축이다. 키가 없으면 `pair` = 기존 짝비교 → 동작이 한 바이트도 안 바뀐다.
     return {"targets": targets, "source_urls": urls,
             "axis": str(cand.get("shape") or "pair")}

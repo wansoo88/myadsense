@@ -299,6 +299,13 @@ trend_axis:
         후보를 매일 검증하며 부딪힌 소멸·이전·정지·이름 도용을 `config/observed_history.yaml` 에
         원장으로 옮겼다. 저장소가 사라진 날은 그날 호출해 본 사람만 안다 — 검색으로는 안 나온다.
         기록은 과거이고 대조는 현재라, 글을 만들 때마다 같은 호출을 다시 해서 나란히 놓는다.
+      # 배경 문서 — 엔티티가 아니라 **플랫폼 동작**을 설명하는 소스. 이걸 안 주면 모델이
+      # "According to GitHub's documentation" 이라고 쓰고 인용 필터가 그 링크를 잘라
+      # 출처 없는 귀속만 남는다(2026-08-15 실측). 금지하는 대신 실제로 읽혀 인용 자격을 준다.
+      extra_source_urls:
+        - "https://docs.github.com/en/repositories/archiving-a-github-repository/archiving-repositories"
+        - "https://docs.github.com/en/repositories/creating-and-managing-repositories/transferring-a-repository"
+        - "https://docs.npmjs.com/deprecating-and-undeprecating-packages-or-package-versions"
       # ⚠️ `entities` 는 **범위 지정**이다(비우면 원장 전체). 이름은 원장의 `entity` 와 맞춰야 한다.
       #    식별자·URL 은 여기 적지 않는다 — 원장이 들고 있다.
       entities:
