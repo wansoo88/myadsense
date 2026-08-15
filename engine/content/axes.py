@@ -139,13 +139,20 @@ class _Timeline:
         if len(targets) < _Timeline.MIN_ENTITIES:
             print(f"generate[timeline]: 식별자 {len(targets)}개 — 최소 {_Timeline.MIN_ENTITIES}개 필요. 표 없이 계속")
             return None
+        # ⚠️ `sources` 는 **식별자 키**다(github·npm·statuspage·dockerhub). 계열 라벨('repo')을
+        #    넘기면 `_COLLECTORS` 에서 걸러져 아무것도 수집되지 않는다 — 2026-08-15 실측으로 겪었다.
+        # ⚠️ `max_entities` 는 config 기본이 4 인데 시간축은 분야 스냅숏이라 후보를 다 써야 한다.
+        #    호출 수는 엔티티당 3개(repo·participation·releases)뿐이라 6까지는 부담이 없다.
         res = observed.collect(targets, timeout=int(o.get("timeout", 10)),
-                               max_entities=int(o.get("max_entities", 5)), sources=["repo"])
+                               max_entities=min(len(targets), 6), sources=["github"])
         rows = []
         for e in (res.get("entities") or []):
             weekly = (e.get("metrics") or {}).get("commit_weekly")
-            if not isinstance(weekly, list) or len(weekly) != _Timeline.WEEKS:
-                continue                        # 주별 원자료가 없으면 이 엔티티는 시간축에 못 세운다
+            # participation 은 52주를 준다. 그보다 짧게 오면 시간축에 못 세운다(잘라 쓰지 않는다 —
+            # 창이 엔티티마다 달라지는 순간 이 축의 유일한 장점인 '동일 창'이 사라진다).
+            if not isinstance(weekly, list) or len(weekly) < _Timeline.WEEKS:
+                continue
+            weekly = weekly[-_Timeline.WEEKS:]
             b = [sum(weekly[i:i + _Timeline.BUCKET])
                  for i in range(0, _Timeline.WEEKS, _Timeline.BUCKET)]
             rows.append({"name": e.get("name"), "ids": e.get("ids") or {}, "weekly": weekly,

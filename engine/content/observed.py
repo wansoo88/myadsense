@@ -246,7 +246,10 @@ def _github(repo: str, timeout: int, calls: list, now, ctx: dict | None = None) 
             # 다시 물을 수 없다(축 B 시계열이 이걸 쓴다). 응답은 이미 받았으므로 호출은 0개도 안 는다.
             # ⚠️ 이 키는 `_ROWS` 에 없다 = **표·프롬프트·토큰 검사 어디에도 실리지 않는다.**
             #    (live_rows·data_block·figure_tokens 는 전부 _ROWS 만 순회한다 — 확인 후 추가했다.)
-            out["commit_weekly"] = window
+            # 🔴 `window` 가 아니라 **응답 전체**를 남긴다. `_COMMIT_WEEKS` 는 12 라서 window 는
+            #    최근 12주뿐인데, participation 응답은 52주다. window 를 남겼다가 시계열 축이
+            #    "52주 원자료 0건"으로 전부 떨어졌다(2026-08-15 실측). 자르는 건 소비자가 한다.
+            out["commit_weekly"] = [int(w) for w in weeks if isinstance(w, (int, float))]
     rels = _get_json(f"{api}/repos/{urllib.parse.quote(repo)}/releases?per_page=15", timeout, calls)
     if isinstance(rels, list) and rels:
         dates, tags = [], []
