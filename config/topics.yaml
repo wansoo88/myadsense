@@ -415,6 +415,48 @@ trend_axis:
           github: PostHog/posthog
           why: "the project's own repository"
 
+    # 🔑 **축 재설계가 후보 고갈을 푸는 방식** (2026-08-15 실측으로 확인):
+    #    trend_scout 가 이날 찾은 짝은 **전부 탈락**했다 — 사유는 "산문 비대칭 1.5배 초과" 와
+    #    "릴리스 없음 → 관측표 min_rows 3 미달". 그런데 그 둘은 **짝비교 전용 제약**이다:
+    #      · 비대칭 — 두 열을 나란히 놓기 때문에 생기는 요구. 시간축은 열이 시간이라 해당 없음.
+    #      · min_rows — 여러 엔티티의 **교집합** 지표라서 생기는 요구. 시간축은 participation 하나면 선다.
+    #    즉 **짝으로 못 쓰는 것을 시간축은 쓸 수 있다.** 스카우트 수확량이 실질적으로 몇 배가 된다.
+    #    후보가 마를 때 제일 먼저 할 일은 스카우트 탈락 목록을 시간축으로 다시 보는 것이다.
+    - keyword: "the ai coding agents that did not exist three months ago"
+      shape: timeline
+      cluster: ai-coding-tools
+      why: >-
+        2026-08-15 trend_scout 가 찾았으나 짝 기준(비대칭·릴리스)에서 전부 탈락한 것들을 시간축으로 세운다.
+        실측 구간합이 한 가지를 말한다 — DeepSeek-Reasonix 0,0,0,5463(⭐34,592) · Kun 0,0,0,1817(⭐6,126)
+        은 **직전 분기에 처음 생겼는데** claude-squad 는 2,3,13,9 로 1년 내내 작고 꾸준한데 ⭐8,315 다.
+        별 개수와 프로젝트 나이가 분리돼 있다는 건 별을 신호로 쓰는 독자에게 실제로 쓸모가 있다.
+      entities:
+        - name: "DeepSeek-Reasonix"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/esengine/DeepSeek-Reasonix#readme"
+          github: esengine/DeepSeek-Reasonix
+          why: "the project's own repository"
+        - name: "Kun"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/KunAgent/Kun#readme"
+          github: KunAgent/Kun
+          why: "the project's own repository"
+        - name: "ante"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/AntigmaLabs/ante#readme"
+          github: AntigmaLabs/ante
+          why: "the project's own repository"
+        - name: "49Agents"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/alpbahadur/49Agents#readme"
+          github: alpbahadur/49Agents
+          why: "the project's own repository"
+        - name: "Claude Squad"
+          kind: terminal-agent-manager
+          official_url: "https://github.com/smtg-ai/claude-squad#readme"
+          github: smtg-ai/claude-squad
+          why: "the project's own repository"
+
     - keyword: "which open source notion alternatives are actually being developed"
       shape: timeline
       cluster: hosting-selfhost
