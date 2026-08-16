@@ -103,6 +103,25 @@ def _takeaway_ok(result: dict, takeaway_html: str, *, min_figures: int = 2) -> b
     return len(hits) >= min_figures
 
 
+# 🔴 두 새 축이 **같은 실패**를 냈다 (2026-08-16 첫 자동 운전 실측):
+#    모델이 "그 페이지에는 없었다"는 **부재 단정**을 쓰는데, 우리가 준 소스에 실제로는 있었다.
+#      · "herdr 는 스타 수를 안 적는다" → herdr.dev 는 '28,941 github stars' 를 크게 띄운다 (sev high 반려)
+#      · "Insomnia 라이선스는 우리가 읽은 페이지에 없었다" → README 에 Apache-2.0 이 두 번 (medium 보류)
+#    왜 이 축에서 잦은가: 표가 커밋 수 하나뿐이라 모델이 다른 '신호'(스타·라이선스·릴리스)를
+#    찾아 나서고, 관측에 없으니 "없더라"로 메운다. 우리는 그 페이지를 **줬는데도** 그렇다.
+#    그래서 지시를 부정형이 아니라 **대체 행동**으로 준다 — 없으면 쓰지 말라고.
+_NO_ABSENCE = (
+    "- NEVER write that something is absent, missing, not listed, not published, or not covered on "
+    "a page. You were given those pages in the source material; if you did not find a detail, the "
+    "correct move is to say nothing about it, not to assert it is not there. An absence claim that "
+    "the sources contradict is the single most common way these articles fail review.\n"
+    "- Stick to what the table measures. Do not turn this into a feature, popularity or licensing "
+    "comparison — those are different articles with different evidence.\n"
+    "- Do NOT produce a two-column head-to-head or feature table. This article covers more than two "
+    "products and a two-column table cannot hold them.\n"
+)
+
+
 def _method_note(result: dict, what: str) -> str:
     """표 각주 — 관측일·엔드포인트·**무엇을 재지 않았는가**를 표와 같은 자리에 둔다(F10·F14).
     observed.py 가 지표마다 '자기 자신을 방어하는 문장'을 데리고 다니는 것과 같은 규칙이다."""
@@ -280,7 +299,8 @@ class _Timeline:
                 "- EVERY product in the table above has a public GitHub repository — that is how these "
                 "numbers were obtained. Do NOT describe any of them as closed-source, hosted-only, or "
                 "lacking a public repository, and do NOT use any of them to illustrate such a case.\n"
-                "- Do NOT introduce products that are not in the table above.\n")
+                "- Do NOT introduce products that are not in the table above.\n"
+                + _NO_ABSENCE)
 
     @staticmethod
     def source_links(result: dict, *, max_links: int = 6) -> list:
@@ -531,7 +551,8 @@ class _Landscape:
                 "a document you were not shown.\n"
                 "- The table counts LOG ENTRIES, not API requests. One project can occupy more than "
                 "one row because we logged it at more than one moment. Do not present the row count "
-                "as a request count.\n")
+                "as a request count.\n"
+                + _NO_ABSENCE)
 
     @staticmethod
     def source_links(result: dict, *, max_links: int = 8) -> list:

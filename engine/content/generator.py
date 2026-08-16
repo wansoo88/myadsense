@@ -398,6 +398,18 @@ def _attach_observed(spec: ContentSpec, result: dict, cfg: dict) -> None:
         if not _ensure_takeaway(spec, result, cfg):
             return
         ax = axes.renderer_for(result)
+        # 🔴 짝비교가 아닌 축에서는 **2열 표를 지운다**(2026-08-16 실측으로 드러난 결함).
+        #    `comparison`·`feature_matrix` 는 둘 다 a/b 두 열 구조인데 시간축 글은 제품이 4~5개다.
+        #    스키마가 `comparison` 을 필수로 요구하므로 모델은 억지로 8행짜리 표를 만들고 5행을 비웠고,
+        #    품질게이트의 「한쪽 열 공백 과다(62% > 40%)」가 발화해 **후보가 통째로 버려졌다.**
+        #    표를 살릴 방법이 없다 — 5개를 2열에 넣을 수는 없다. 축의 모양이 아니므로 버린다.
+        #    (프롬프트로도 만들지 말라고 하지만, 지시만으로는 안 지켜지는 걸 이미 겪었다.)
+        if result.get("axis"):
+            if spec.comparison or spec.feature_matrix:
+                print(f"generate[{result['axis']}]: 2열 표 제거(comparison/feature_matrix) — "
+                      f"이 축은 제품이 2개가 아니다")
+            spec.comparison = None
+            spec.feature_matrix = None
         sec = ax.section(result, takeaway_html=(spec.observation_takeaway or ""))
         if not sec:
             spec.observation_takeaway = None     # 표가 안 붙으면 해석 단락도 렌더되지 않는다(유령 산문 방지)
