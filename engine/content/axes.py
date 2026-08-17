@@ -111,10 +111,16 @@ def _takeaway_ok(result: dict, takeaway_html: str, *, min_figures: int = 2) -> b
 #    찾아 나서고, 관측에 없으니 "없더라"로 메운다. 우리는 그 페이지를 **줬는데도** 그렇다.
 #    그래서 지시를 부정형이 아니라 **대체 행동**으로 준다 — 없으면 쓰지 말라고.
 _NO_ABSENCE = (
-    "- NEVER write that something is absent, missing, not listed, not published, or not covered on "
-    "a page. You were given those pages in the source material; if you did not find a detail, the "
-    "correct move is to say nothing about it, not to assert it is not there. An absence claim that "
-    "the sources contradict is the single most common way these articles fail review.\n"
+    "- NEVER write that something is absent, missing, not listed, not published, not covered, "
+    "limited, sparse, thin, or hard to find on a page. You were given those pages in the source "
+    "material; if you did not find a detail, the correct move is to say nothing about it, not to "
+    "characterise the page as lacking it. This includes soft forms: 'carries limited detail on X', "
+    "'says little about X', 'does not go into X'. An absence claim the sources contradict is the "
+    "single most common way these articles fail review.\n"
+    # 🔴 2026-08-17 실측: 위 문장의 첫 판은 '없다'만 금지했더니 모델이 '정보가 부족하다'로 우회했다
+    #    — herdr.dev 는 Apache 2.0 을 두 번 적고 지원 에이전트 20개를 나열하는데도. 그래서 완곡형까지 막는다.
+    "- When you describe what a page shows, describe only what you can quote from it. If you cannot "
+    "quote it, do not characterise it.\n"
     "- Stick to what the table measures. Do not turn this into a feature, popularity or licensing "
     "comparison — those are different articles with different evidence.\n"
     "- Do NOT produce a two-column head-to-head or feature table. This article covers more than two "
@@ -300,6 +306,16 @@ class _Timeline:
                 "numbers were obtained. Do NOT describe any of them as closed-source, hosted-only, or "
                 "lacking a public repository, and do NOT use any of them to illustrate such a case.\n"
                 "- Do NOT introduce products that are not in the table above.\n"
+                # 🔴 실측 보류(2026-08-17): 글의 논지가 "최근 커밋으로 판단하라"인데 정작
+                #    CCManager 를 '가장 활발'로 지목했다 — 같은 글의 표는 149→148→92→28 로
+                #    그 제품이 가장 가파르게 줄고 있다고 보여준다. 독자가 표를 보면 결론과 반대다.
+                #    이 축은 **활동의 방향**을 재는 것이지 무엇이 더 나은지를 재지 않는다.
+                "- Do NOT crown a winner, a recommendation, or a 'most active' pick. This table "
+                "measures direction of activity, not which tool is better, and it cannot support a "
+                "recommendation. Describe who is speeding up, slowing down, steady or stopped.\n"
+                "- If you do single out any product for any reason, the numbers in ITS OWN ROW must "
+                "support what you say about it. Never praise the activity of a row whose windows are "
+                "declining, and never call a rising row inactive.\n"
                 + _NO_ABSENCE)
 
     @staticmethod
