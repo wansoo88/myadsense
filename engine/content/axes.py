@@ -121,6 +121,15 @@ _NO_ABSENCE = (
     #    — herdr.dev 는 Apache 2.0 을 두 번 적고 지원 에이전트 20개를 나열하는데도. 그래서 완곡형까지 막는다.
     "- When you describe what a page shows, describe only what you can quote from it. If you cannot "
     "quote it, do not characterise it.\n"
+    # 🔴 2026-08-18, 세 번째 같은 실패. 표현을 막으면 다른 표현으로 샌다:
+    #    '없다'(08-16) → '정보가 부족하다'(08-17) → 'could not determine'(08-18).
+    #    전부 Insomnia 라이선스·herdr 스타수처럼 **소스에 있는 사실**에 대한 것이었다.
+    #    금지 목록은 지는 싸움이다 → 표현이 아니라 **주제 범위**를 막는다.
+    #    이 축이 잰 것은 커밋 시계열뿐이고, 라이선스·스타·가격·기능은 잰 적이 없다.
+    "- SCOPE: the only thing measured here is commit activity over time. Do NOT state, hedge "
+    "about, or comment on any product's licence, star count, pricing, feature set, popularity "
+    "or maturity — not even to say you are unsure. Those were not measured and belong in a "
+    "different article. If a draft sentence is about any of them, delete the sentence.\n"
     "- Stick to what the table measures. Do not turn this into a feature, popularity or licensing "
     "comparison — those are different articles with different evidence.\n"
     "- Do NOT produce a two-column head-to-head or feature table. This article covers more than two "
