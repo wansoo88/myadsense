@@ -570,13 +570,24 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
             pass
     if review_on:
         seeds = [s for s in seeds if s[0] not in published]
-    if trend_on and not seeds:
-        # 🔴 후보 소진 = **0편으로 끝낸다**. 백로그 폴백 금지(ORDER 45 ①).
+    if trend_on:
+        # 🔴 기본은 후보 소진 = **0편으로 끝낸다**(ORDER 45 ①).
         # ⚠️ `fallback_to_backlog` 는 **실제로 동작하는 값**이다(기본 false). 코드가 읽지 않는 config 키는
         #    "값을 바꿔도 동작이 안 바뀌는 장식"이 되고, 이 저장소는 그 사고를 이미 겪었다(title_policy rev1).
+        #
+        # 🔴 폴백은 **시드 목록에 잇는다** — "seeds 가 비었을 때만" 검사하면 안 된다.
+        #    2026-08-29 실측: 미발행 트렌드 후보가 1개 남아 있어 폴백 조건(`not seeds`)이 거짓이었는데,
+        #    그 1개가 루프 안에서 관측표 미충족으로 **드롭**돼 결국 0편이 됐다. 드롭은 발행이 아니라서
+        #    다음 날도 같은 후보가 남고 같은 드롭이 반복된다 = 폴백을 켜도 영원히 0편.
+        #    뒤에 이어 붙이면 트렌드 후보를 먼저 다 시도하고(순서 보존), 전부 드롭돼도 백로그로 이어진다.
         if _trend_axis(cfg).get("fallback_to_backlog"):
-            print("generate: ⚠️ trend_axis.fallback_to_backlog=true — 사람이 명시적으로 켠 폴백. 백로그로 내려간다")
-            seeds = _backlog_seeds(cfg, published if review_on else None)
+            have = {k for k, _ in seeds}
+            extra = [x for x in _backlog_seeds(cfg, published if review_on else None) if x[0] not in have]
+            if extra:
+                print(f"generate: ⚠️ trend_axis.fallback_to_backlog=true — 사람이 명시적으로 켠 폴백. "
+                      f"트렌드 후보 {len(seeds)}개 뒤에 백로그 시드 {len(extra)}개를 잇는다"
+                      f"(트렌드가 전부 드롭돼도 0편으로 끝나지 않는다)")
+                seeds = seeds + extra
         if not seeds:
             print("generate: 트렌드 후보 소진(미발행 후보 0) — "
                   + ("폴백 백로그에도 미발행 시드가 없다" if _trend_axis(cfg).get("fallback_to_backlog")
