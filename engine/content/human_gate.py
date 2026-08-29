@@ -34,7 +34,24 @@ def _reason_path(slug: str) -> str:
     return os.path.join(PENDING_DIR, f"{slug}{REASON_SUFFIX}")
 
 
-def unpublish(slug: str) -> str | None:
+def _keyword_from_reason(path: str) -> str | None:
+    """보류 사유 파일에서 키워드를 읽는다 — `orchestrator._hold_notice` 가 적는 `키워드: <kw> · slug: <slug>`.
+
+    왜 파일에서 읽나: slug 만으로는 키워드를 되찾을 수 없는 글이 있다(아래 unpublish 주석 참조).
+    사유 파일은 보류 시점에 **키워드를 그대로** 적어 두므로 추론이 아니라 기록을 쓴다.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("키워드:"):
+                    kw = line.split("키워드:", 1)[1].split("· slug:")[0].strip()
+                    return kw or None
+    except OSError:
+        pass
+    return None
+
+
+def unpublish(slug: str, keyword: str | None = None) -> str | None:
     """거부된 글의 키워드를 `published.json` 에서 뺀다. 뺀 키워드(해당 없으면 None).
 
     왜 필요한가(실측 2026-08-05): `orchestrator.stage_generate` 는 보류(hold)든 큐든 **가리지 않고**
@@ -56,6 +73,21 @@ def unpublish(slug: str) -> str | None:
             kws = json.load(f)
         if not isinstance(kws, list):
             return None
+        # 🔴 2026-08-29 실측: 아래 접두 규칙이 **트렌드 축 글에서는 절대 맞지 않는다**.
+        #    그 축은 slug 를 키워드가 아니라 **제목**에서 만든다 —
+        #      키워드 'the ai coding agents that did not exist three months ago'
+        #        → 'the-ai-coding-agents-that-did-not-exist-three-months-ago'
+        #      실제 slug 'the-new-ai-coding-agents-reasonix-vs-kun-compared'  (접두 불일치)
+        #    그래서 reject() 가 조용히 아무것도 되돌리지 못했고, 이 docstring 이 막겠다던 바로 그 상태
+        #    ('그 주제는 영구히 건너뛰어진다')가 그대로 벌어졌다. 재생성하려고 거부했는데 생성 루프가
+        #    그 주제를 계속 '발행됨'으로 보고 건너뛴다 — 실패가 **조용해서** 더 나쁘다.
+        #    → 호출부가 아는 키워드를 받으면 추론하지 않고 그것을 쓴다(기록 > 추론).
+        if keyword and keyword in kws:
+            payload = json.dumps(sorted(k for k in kws if k != keyword),
+                                 ensure_ascii=False, indent=2)
+            with open(PUBLISHED_PATH, "w", encoding="utf-8") as f:
+                f.write(payload)
+            return keyword
         # slug 는 '<키워드 slug>-<제목 꼬리>' 형태다 → **가장 긴** 접두 일치를 고른다
         # (regen.resolve_keyword 와 같은 규칙: 'cursor vs github copilot' 과 'cursor vs windsurf' 를 가른다).
         best, best_kw = "", None
@@ -148,13 +180,20 @@ def reject(slug: str) -> str:
         raise FileNotFoundError(f"승인 대기 중 아님: {src}")
     os.makedirs(REJECTED_DIR, exist_ok=True)
     dst = os.path.join(REJECTED_DIR, f"{slug}.human-rejected.html")
+    # 사유 파일을 옮기기 **전에** 키워드를 읽는다 — slug 접두 추론이 안 통하는 축이 있다(unpublish 주석).
+    kw_recorded = _keyword_from_reason(_reason_path(slug))
     shutil.move(src, dst)
     try:
         os.replace(_reason_path(slug), os.path.join(REJECTED_DIR, f"{slug}.human-rejected.reason.txt"))
     except OSError:
         pass
-    kw = unpublish(slug)
+    kw = unpublish(slug, keyword=kw_recorded)
     if kw:
         print(f"  published.json 정정 — '{kw}' 제거(발행되지 않았다). "
               f"⚠️ 이 주제는 다시 생성 대상이 된다 — 원치 않으면 config/topics.yaml 에서 후보를 빼라.")
+    else:
+        # 조용히 지나가면 안 된다: '거부했으니 다시 쓸 수 있다'고 믿은 채로 생성 루프는 계속 건너뛴다.
+        print(f"  ⚠️ published.json 에서 이 글의 키워드를 찾지 못했다(slug={slug!r}, "
+              f"사유파일 키워드={kw_recorded!r}). 거부 자체는 유효하지만 **이 주제는 여전히 "
+              f"'발행됨'으로 남아 생성에서 건너뛰어질 수 있다** — 재생성하려면 직접 확인하라.")
     return dst

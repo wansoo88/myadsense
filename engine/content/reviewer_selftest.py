@@ -901,6 +901,37 @@ def test_hold_medium() -> None:
               "거부 → 발행하지 않고 dist/review 로 보존", os.path.basename(dst), "s2.human-rejected.html")
         check(not os.path.exists(os.path.join(HG.QUEUE_DIR, "s2.html")),
               "거부된 글은 큐에 **들어가지 않는다**", "-", "not queued")
+
+        # (h) 🔴 2026-08-29: 거부가 **키워드를 되돌리지 못하고 조용히 성공**했다.
+        #     unpublish 는 slug 가 '<키워드 slug>-…' 로 시작한다고 가정하는데, 트렌드 축은 slug 를
+        #     제목에서 만든다 → 접두가 안 맞아 아무것도 못 지운다. 그러면 '거부했으니 다시 쓸 수 있다'고
+        #     믿은 채로 생성 루프는 그 주제를 영구히 건너뛴다(그 docstring 이 막겠다던 바로 그 상태).
+        #     아래는 실제 사고 값 그대로다.
+        pub0 = HG.PUBLISHED_PATH
+        try:
+            HG.PUBLISHED_PATH = os.path.join(tmp, "published.json")
+            kw_real = "the ai coding agents that did not exist three months ago"
+            slug_real = "the-new-ai-coding-agents-reasonix-vs-kun-compared"
+            with open(HG.PUBLISHED_PATH, "w", encoding="utf-8") as f:
+                json.dump([kw_real, "cheap vps"], f, ensure_ascii=False)
+            check(HG.unpublish(slug_real) is None,
+                  "(재현) slug 접두 추론만으로는 트렌드 축 키워드를 못 찾는다", "-", "None(결함 재현)")
+            HG.hold(slug_real, "<html>doc3</html>",
+                    reason=O._hold_notice(slug_real, kw_real, rv("medium", 2), ["트렌드 축 factual"]))
+            HG.reject(slug_real)
+            with open(HG.PUBLISHED_PATH, encoding="utf-8") as f:
+                left = json.load(f)
+            check(kw_real not in left,
+                  "거부하면 사유 파일의 키워드로 published.json 을 정정한다(재생성 가능해진다)",
+                  left, "['cheap vps']")
+            check("cheap vps" in left, "다른 키워드는 건드리지 않는다", left, "['cheap vps']")
+            # 옛 경로(접두 일치) 회귀 — 키워드 인자가 없어도 종전대로 동작해야 한다.
+            with open(HG.PUBLISHED_PATH, "w", encoding="utf-8") as f:
+                json.dump(["cheap vps"], f, ensure_ascii=False)
+            check(HG.unpublish("cheap-vps-in-2026") == "cheap vps",
+                  "접두 일치 경로는 그대로 동작한다(회귀)", "-", "cheap vps")
+        finally:
+            HG.PUBLISHED_PATH = pub0
     finally:
         HG.PENDING_DIR, HG.QUEUE_DIR, HG.REJECTED_DIR = p0, q0, r0
         shutil.rmtree(tmp, ignore_errors=True)
