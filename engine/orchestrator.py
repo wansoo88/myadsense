@@ -491,14 +491,25 @@ def _note_sources_zero(kw: str, slug: str, reasons, cfg, attempt: int) -> None:
         print(f"  (인용0건 계측 건너뜀 — 파이프라인은 계속) {type(e).__name__}: {e}")
 
 
-def _backlog_seeds(cfg) -> list:
-    """기존 경로의 시드 — research 백로그 상위 10, 없으면 P1 코너스톤. (트렌드 모드에서는 쓰지 않는다.)"""
+def _backlog_seeds(cfg, published: set | None = None, top: int = 10) -> list:
+    """기존 경로의 시드 — research 백로그 상위 10, 없으면 P1 코너스톤. (트렌드 모드에서는 쓰지 않는다.)
+
+    🔴 `published` 를 주면 **거른 뒤에 자른다**. 순서가 반대면(자르고 거르면) 상위 10이 전부
+       발행 완료인 순간 항상 0개가 되고, 11위 이하의 미발행 시드는 코드가 영영 보지 않는다.
+       2026-08-29 실측: 상위10 발행 10/10 · 미발행 14건은 전부 11위 이하 → 폴백을 켜도 0편이었다.
+    """
     import json
     if os.path.exists("dist/research/backlog.json"):
         with open("dist/research/backlog.json", encoding="utf-8") as f:
             ranked = json.load(f)
-        seeds = [(e["keyword"], e["cluster"]) for e in ranked[:10]]
-        print(f"generate: research 백로그 상위 {len(seeds)}개 사용")
+        pool = [(e["keyword"], e["cluster"]) for e in ranked]
+        total = len(pool)
+        if published is not None:
+            pool = [s for s in pool if s[0] not in published]
+        seeds = pool[:top]
+        print(f"generate: research 백로그 {total}건 중 미발행 {len(pool)}건 → 상위 {len(seeds)}개 사용"
+              if published is not None else
+              f"generate: research 백로그 상위 {len(seeds)}개 사용")
         return seeds
     seeds = []
     for c in cfg["topics"]["clusters"]:
@@ -519,6 +530,13 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
     """
     import json
     from content import generator, human_gate, quality_gate
+    # 🔴 시드 선정보다 **먼저** 확정한다 — `_backlog_seeds` 가 발행분을 거른 뒤 상위 N 을 자르려면
+    #    이 시점에 published 가 있어야 한다(아래 폴백 경로 포함).
+    # 실콘텐츠(fixture 아님)는 발행 전 항상 검수(adsense-review 루브릭 — 사용자 방침)
+    review_on = os.environ.get("ADSENSE_FIXTURE") != "1" and (
+        bool(os.environ.get("ANTHROPIC_API_KEY")) or generator._claude_cli_available())
+    pub_path = "engine/store/published.json"
+    published = set(json.load(open(pub_path, encoding="utf-8"))) if os.path.exists(pub_path) else set()
     trend_on = bool(_trend_axis(cfg).get("enabled"))
     trend_by_kw = {}
     if trend_on:                                         # 🔴 트렌드 전용: trend_axis 후보만 시드가 된다
@@ -526,18 +544,13 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
         print(f"generate: 트렌드 전용 축 ON — 후보 {len(seeds)}개만 시드로 사용"
               f"(백로그 미사용{'' if not os.path.exists('dist/research/backlog.json') else ' — backlog.json 존재하나 읽지 않는다'})")
     else:
-        seeds = _backlog_seeds(cfg)
+        seeds = _backlog_seeds(cfg, published if review_on else None)
     if only:
         seeds = [s for s in seeds if s[0] == only]
         if not seeds:
             print(f"generate: 지정 키워드 '{only}' 가 시드에 없다 — 0편")
     os.makedirs("dist/queue", exist_ok=True)
-    # 실콘텐츠(fixture 아님)는 발행 전 항상 검수(adsense-review 루브릭 — 사용자 방침)
-    review_on = os.environ.get("ADSENSE_FIXTURE") != "1" and (
-        bool(os.environ.get("ANTHROPIC_API_KEY")) or generator._claude_cli_available())
     # 일일 카덴스: 실콘텐츠는 이미 발행한 키워드 제외 + 하루 신규 상한(daily_generate)
-    pub_path = "engine/store/published.json"
-    published = set(json.load(open(pub_path, encoding="utf-8"))) if os.path.exists(pub_path) else set()
     daily = (cfg["guardrails"].get("rollout", {}) or {}).get("daily_generate", 4)
     if limit is not None:                                # 시범 생성(--trend-pilot) — 상한 **하나만** 대체한다
         print(f"generate: ⚠️ 일일 상한을 이번 실행에 한해 {daily} → {limit} 로 대체(시범 생성). "
@@ -563,7 +576,7 @@ def stage_generate(cfg, *, limit: int | None = None, only: str | None = None):
         #    "값을 바꿔도 동작이 안 바뀌는 장식"이 되고, 이 저장소는 그 사고를 이미 겪었다(title_policy rev1).
         if _trend_axis(cfg).get("fallback_to_backlog"):
             print("generate: ⚠️ trend_axis.fallback_to_backlog=true — 사람이 명시적으로 켠 폴백. 백로그로 내려간다")
-            seeds = [s for s in _backlog_seeds(cfg) if not review_on or s[0] not in published]
+            seeds = _backlog_seeds(cfg, published if review_on else None)
         if not seeds:
             print("generate: 트렌드 후보 소진(미발행 후보 0) — "
                   + ("폴백 백로그에도 미발행 시드가 없다" if _trend_axis(cfg).get("fallback_to_backlog")

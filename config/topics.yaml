@@ -39,7 +39,11 @@ title_policy:
 # 규칙 (orchestrator.stage_generate 가 실제로 강제한다 — 장식 아님):
 #   ① 트렌드 모드에서는 **여기 있는 후보만** 시드가 된다. 백로그(clusters.seeds ·
 #      sequencing.next_batch_priority)는 읽지 않는다.
-#   ② 후보가 소진되면 **폴백하지 않고 0편**으로 끝낸다(`fallback_to_backlog: false`).
+#   ② 후보가 소진되면 백로그로 내려간다(`fallback_to_backlog: true` — 2026-08-29 사람이 켰다).
+#      원래는 false 로 "0편으로 끝낸다"였다. 08-22~08-29 8일 연속 0편을 겪고 뒤집었다.
+#      ⚠️ 폴백 시드는 트렌드 글이 아니다 — `is_trend=False` 라 trend_preflight(관측표·등가성)를
+#         타지 않고, ORDER 45 의 근거("경쟁 문서가 없는 신생 엔티티만 이길 수 있다")도 적용되지
+#         않는다. 즉 성격이 다른 글이다. 트렌드 후보가 보충되면 다시 false 로 되돌리는 게 원칙.
 #      0편은 정지 사유가 아니다 — guardrails.zero_generation_alert_days 는 알림만 낸다.
 #   ③ 식별자는 **사람이 미리 확정**한다(아래 official_url·github·npm·kind·why).
 #      07-08 반려 루프의 직접 원인은 "신생 툴이라서"가 아니라 **공식 URL 자동 발견 실패**였다 →
@@ -64,7 +68,11 @@ title_policy:
 #     현역처럼 비교하는 글은 Roo Code(2026-05-15 개발 중단)를 반려한 것과 같은 사유로 부적합하다.
 trend_axis:
   enabled: true                  # false 로 두면 기존 백로그 경로로 즉시 되돌아간다(코드 수정 불필요)
-  fallback_to_backlog: false     # 🔴 후보 소진 시 백로그로 내려가지 않는다 → 그날은 0편
+  fallback_to_backlog: true      # 🔴 2026-08-29 사람 결정으로 켬 — 후보 소진 시 백로그로 내려간다.
+                                 #    ⚠️ 이 값만으로는 부족했다: `_backlog_seeds` 가 상위10을 **자른 뒤**
+                                 #    발행분을 걸러서, 상위10이 전부 발행 완료면 폴백해도 0편이었다
+                                 #    (실측 10/10 발행 · 미발행 14건은 전부 11위 이하). 같은 날
+                                 #    orchestrator 에서 거른 뒤 자르도록 순서를 고쳤다.
   # 검증일 2026-08-01. 3기준 전부 실호출로 확인한 것만 올렸다:
   #   (1) official_url 200  (2) GitHub 공개 저장소 + observed 표 성립  (3) 심층 비교글 부재(검색 확인)
   # 순서 = 우선순위. 같은 엔티티가 연속되지 않게 배치했다(연속 생성 시 근접중복 위험 완화).
