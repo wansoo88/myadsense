@@ -132,6 +132,23 @@ _NO_ABSENCE = (
     "different article. If a draft sentence is about any of them, delete the sentence.\n"
     "- Stick to what the table measures. Do not turn this into a feature, popularity or licensing "
     "comparison — those are different articles with different evidence.\n"
+    # 🔴 2026-08-29, 네 번째 같은 실패 — 이번엔 **왜 세 번이나 샜는지**가 나왔다.
+    #    금지가 약해서가 아니라 같은 프롬프트에 **반대 지시**가 있다: generator.py VOLATILE FACTS 블록이
+    #    "the correct move is to say what the pages you read did and did not list" 라고 못 박는다.
+    #    모델은 그 '올바른 행동'을 그대로 실행했다 — "did not detail its packaging formats"(08-29 실측).
+    #    일반 글에서는 그 지시가 옳다(가격 페이지·날짜를 명시하는 형태). 이 축에서만 아니다.
+    #    그러니 표현을 하나 더 금지하는 대신 **어느 지시가 이기는지**를 명시한다.
+    "- PRECEDENCE: this block OVERRIDES the general instruction elsewhere in this prompt that says the "
+    "correct move is to state what the pages you read did and did not list. On this axis it is not. "
+    "Saying nothing about the topic is the correct move here, and an absence sentence is a defect even "
+    "when it is honest, hedged, dated and correctly attributed.\n"
+    # 🔴 같은 08-29 실측: 산문의 부재 단정은 검수기가 잡았는데 **Cons 항목의 같은 문장은 통과**했다
+    #    (reviewer._flatten 이 pros_cons 를 안 넘겼다 — 그쪽도 같이 고쳤다). 프롬프트에서도 모델이
+    #    'sentence' 를 산문으로만 읽은 정황이 있다(라이선스·스타 수가 Pros/Cons 에만 남았다) → 면을 못 박는다.
+    "- EVERY RULE IN THIS BLOCK APPLIES TO EVERY SURFACE, not just the prose sections: `dek`, "
+    "`tldr_html`, the intro, `verdict_html`, comparison and feature-matrix cells, **every pros/cons "
+    "bullet**, and faq answers. A pros/cons bullet counts as a sentence for these rules. A licence, "
+    "star count or absence claim is exactly as wrong in a Cons bullet as in a paragraph.\n"
     "- Do NOT produce a two-column head-to-head or feature table. This article covers more than two "
     "products and a two-column table cannot hold them.\n"
 )

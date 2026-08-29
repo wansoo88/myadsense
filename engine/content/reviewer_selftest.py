@@ -1100,6 +1100,57 @@ def test_ownership_meta_not_ad_serving() -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_flatten_surfaces() -> None:
+    """_flatten 이 **독자가 읽는 면**을 빠짐없이 검수기에 넘기는가 (2026-08-29 결함).
+
+    실제 사고: `the-new-ai-coding-agents-reasonix-vs-kun-compared` 에서 같은 부재 단정이 산문과
+    Cons 에 각각 있었는데 pros_cons 가 검수 입력에 없어서 **Cons 사본만 무사통과**했다.
+    축 밖 주제(라이선스·스타 수)도 같은 경로로 샜다. 아래 문자열은 그 글에서 그대로 가져왔다.
+    """
+    import types
+    spec = _dummy_spec()
+    spec.pros_cons = [
+        {"name": "Kun",
+         "pros": ["Desktop GUI paired with a terminal TUI"],
+         "cons": ["The repository page we read did not detail packaging or install commands",
+                  "PolyForm Noncommercial License 1.0.0 requires separate written authorization",
+                  "Smaller GitHub following than Reasonix (~6.3k vs ~35.2k stars)"]},
+    ]
+    flat = R._flatten(spec)
+    for needle in ("did not detail packaging", "PolyForm Noncommercial", "6.3k vs ~35.2k",
+                   "Desktop GUI paired"):
+        check(needle in flat, f"flatten: pros_cons 가 검수 입력에 실린다 — {needle!r}")
+
+    # 손상 입력에도 죽지 않아야 한다(검수는 발행 게이트다 — 예외 = 그날 글 전체 정지).
+    spec.pros_cons = [None, "junk", {"name": "X"}, {"pros": ["p"], "cons": None}]
+    try:
+        R._flatten(spec)
+        check(True, "flatten: 손상된 pros_cons 행에도 예외 없음")
+    except Exception as e:
+        check(False, "flatten: 손상된 pros_cons 행에도 예외 없음", got=repr(e))
+
+    # pros_cons 자체가 없는 옛 spec 도 그대로 동작해야 한다(회귀).
+    check("PROS/CONS" not in R._flatten(_dummy_spec()),
+          "flatten: pros_cons 없는 spec 은 그 블록을 만들지 않는다")
+
+    # SOURCES 는 절대 잘리지 않는다 — 상한을 넘겨도 꼬리가 살아남는가.
+    # (구 상한 12,000 이 SOURCES 를 14편에서 잘라 '출처 없음' 오판을 낸 사고의 재발 방지.)
+    big = _dummy_spec()
+    big.sections = [{"heading": "H", "html": "<p>" + ("x " * 40000) + "</p>"}]
+    big.sources = [{"title": "s", "url": "https://example.com/one-very-distinctive-source-url"}]
+    flat_big = R._flatten(big)
+    check(flat_big.rstrip().endswith("https://example.com/one-very-distinctive-source-url"),
+          "flatten: 본문이 상한을 넘어도 SOURCES 는 잘리지 않는다",
+          got=flat_big[-90:])
+    check("CUT BY THE REVIEW TOOL" in flat_big,
+          "flatten: 실제로 잘렸을 때는 절단 표식이 붙는다(검수기 오인 방지)")
+    check(flat_big.count("SOURCES: ") == 1, "flatten: SOURCES 줄은 정확히 한 번")
+
+    # 잘리지 않는 보통 글에는 절단 표식이 없어야 한다(오탐 방지).
+    check("CUT BY THE REVIEW TOOL" not in R._flatten(_dummy_spec()),
+          "flatten: 짧은 글에는 절단 표식이 붙지 않는다")
+
+
 def main(argv: list[str]) -> int:
     print("reviewer_selftest — 고지 처리 회귀 테스트 (LLM 미호출) · 불변식: 판정 불변")
     test_classify()
@@ -1116,6 +1167,7 @@ def main(argv: list[str]) -> int:
     test_feedback_annotation()
     test_hold_medium()
     test_ownership_meta_not_ad_serving()
+    test_flatten_surfaces()
     print(f"\n결과: {'ALL PASS' if not _fails else str(len(_fails)) + ' FAILED'}"
           f"{f' · WARN {len(_warns)}' if _warns else ''}")
     for f in _fails:

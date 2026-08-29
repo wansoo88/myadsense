@@ -487,10 +487,31 @@ def _flatten(spec) -> str:
     for s in spec.sections:
         parts.append(f"## {_text(s['heading'])}\n{_text(s['html'])}")
     parts.append(f"VERDICT: {_text(spec.verdict_html)}")
+    # 🔴 2026-08-29: pros_cons 가 이 목록에 없어서 검수기가 그 블록을 **한 번도 본 적이 없다**.
+    #    렌더러는 페이지에 그대로 찍는다(renderer.py:634) — 독자가 읽는 텍스트인데 게이트만 못 봤다.
+    #    실측(the-new-ai-coding-agents-reasonix-vs-kun-compared, 08-29): 같은 부재 단정이 산문과 Cons 에
+    #    각각 있었는데 **산문본만 지적**됐고, Cons 사본("did not detail packaging or install commands")과
+    #    축 밖 주제(PolyForm 라이선스·스타 수 ~6.3k vs ~35.2k)는 무사통과했다. 그 부재 단정은 우리가
+    #    모델에 준 Kun README 가 직접 반박한다(`npm ci`·`npm run dist:mac/win/linux`, 중국어 구간).
+    #    = axes._NO_ABSENCE 가 08-16·17·18 세 번 막은 그 결함이 **검수기 사각지대로 새 나간 네 번째**다.
+    for row in (getattr(spec, "pros_cons", None) or []):
+        if not isinstance(row, dict):
+            continue
+        name = _text(str(row.get("name", "") or ""))
+        pros = "; ".join(_text(str(p)) for p in (row.get("pros") or []))
+        cons = "; ".join(_text(str(c)) for c in (row.get("cons") or []))
+        parts.append(f"PROS/CONS ({name})\nPROS: {pros}\nCONS: {cons}")
     for f in (getattr(spec, "faq", None) or []):
         parts.append(f"FAQ Q: {_text(f.get('q', ''))}\nFAQ A: {_text(f.get('a', ''))}")
-    parts.append("SOURCES: " + "; ".join(s.get("url", "") for s in (spec.sources or [])))
-    return _clip("\n\n".join(parts), _MAX_REVIEW_CHARS, "article")
+    # SOURCES 는 **절대 잘리지 않는다** — 자리를 먼저 떼고 남은 예산으로 본문을 자른다.
+    # 왜: 위 상한 주석이 경고하는 과거 사고(구 상한 12,000 이 SOURCES 를 14편에서 통째로 잘라
+    #     검수기가 "출처 없음"을 오판)가 **다시 임박했다**. 그때 9,969~15,417자였던 글이 지금은
+    #     36,228~37,369자다(2026-08-29 실측, dist/review/*.input.txt) — 상한 40,000 과의 여유가 3천자뿐이고
+    #     여기서 pros_cons 를 더하면 가장 긴 글부터 꼬리가 잘린다. 출처 목록은 인용 검증의 근거라
+    #     본문 꼬리보다 먼저 지킬 것이고, 길이도 수백 자라 예산을 거의 쓰지 않는다.
+    sources_line = "SOURCES: " + "; ".join(s.get("url", "") for s in (spec.sources or []))
+    body = _clip("\n\n".join(parts), max(_MAX_REVIEW_CHARS - len(sources_line) - 2, 0), "article")
+    return body + "\n\n" + sources_line
 
 
 def _dump_input(spec, text: str) -> None:
