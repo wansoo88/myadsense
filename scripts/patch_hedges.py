@@ -179,9 +179,9 @@ def apply(slug: str, pairs, *, dry: bool) -> tuple[int, list[str]]:
             # new 의 아포스트로피 표기는 매치된 변형을 따른다(같은 문장 안에서 표기가 섞이지 않게)
             rep = new if v == old else new.replace("'", v[v.find("&#"):v.find(";") + 1] if "&#" in v else "'")
             if dry:
-                print(f"  [{slug[:40]}] §{_heading_before(doc, doc.find(v))!r} ×{n}
-     - {v[:110]}
-     + {rep[:110]}")
+                print(f"  [{slug[:40]}] §{_heading_before(doc, doc.find(v))!r} ×{n}")
+                print("     - " + v[:110])
+                print("     + " + rep[:110])
             doc = doc.replace(v, rep)
             done += n
     if errors:
