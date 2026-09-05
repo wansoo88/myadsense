@@ -41,7 +41,7 @@ rollout:
   #      high 반려, 지형도 2회 반려 + 1회 보류 → 고친 뒤 통과).
   #   ⚠️ **재신청 자체는 사람만 한다**(API 없음). 이 값은 생성 카덴스일 뿐 신청과 무관하다.
   #   후보가 마르면 0편이 되고 zero_generation_alert_days 가 알린다 — 조용히 멈추지 않는다.
-  daily_generate: 1            # 하루 1편. 이전 값 0(2026-08-11 거절 대응 중단)
+  daily_generate: 0            # 2026-09-06 사람 승인 — 승인 재심사 통과 전까지 정지(reports/adsense-승인연구-2026-09-06.html §6). 이전 1(08-15 재개)
   daily_publish_cap: 20        # 발행 큐→사이트 점진 발행 상한 (생성과 별개)
   ramp_up_factor: 1.5          # 배치 정상 시 cap 증가율
   ramp_up_max: 200             # cap 상한
