@@ -47,6 +47,69 @@ EDITOR_BYLINE = f"The {SITE_NAME} editors"
 # 구 주소(LEGACY_SITE_URLS)와 같은 원리 — 주소만 고치고 이름을 안 고쳐 남은 구멍이었다.
 LEGACY_EDITOR_BYLINES = ("The stack. editors",)
 
+# 실명 저자 — config/sites.yaml `author:` 를 빌드(site_builder.build)가 set_author() 로 주입한다.
+# 2026-09-06 사람 결정(reports/adsense-승인연구-2026-09-06.html §6 1단계): 익명 편집팀 별칭은 허용되지만
+# 다른 신뢰 신호가 전부 0인 상태에선 남는 게 없다(F10 Trust). 비어 있으면 아래 전부 무동작 = 기존 산출물과 동일.
+# 바이라인·저자 박스·Article JSON-LD author 는 빌드 시 refresh_chrome → _refresh_author_byline 이 소급한다
+# (큐 문서는 생성 시점 별칭이 구워져 있다 — LEGACY_EDITOR_BYLINES 와 같은 원리).
+AUTHOR: dict = {}
+
+
+def set_author(cfg) -> dict:
+    """`author:` 블록 주입. name 이 비면 {} (무동작). photo 는 사이트 내 절대 경로(/author.jpg) — 복사는 site_builder."""
+    global AUTHOR
+    a = dict(cfg or {})
+    name = str(a.get("name") or "").strip()
+    if not name:
+        AUTHOR = {}
+        return AUTHOR
+    AUTHOR = {
+        "name": name,
+        "title": str(a.get("title") or "").strip(),
+        "bio": str(a.get("bio") or "").strip(),
+        "photo": str(a.get("photo") or "").strip(),
+        "links": [u for u in (a.get("links") or []) if isinstance(u, str) and u.startswith("http")],
+        "url": SITE_URL + ABOUT_URL + "#author",
+    }
+    return AUTHOR
+
+
+def author_name() -> str:
+    return AUTHOR.get("name") or EDITOR_BYLINE
+
+
+def author_jsonld(fallback_name: str = "") -> dict:
+    """Article.author / About 의 Person. 실명 저자가 없으면 기존과 동일한 Organization+/about/."""
+    if not AUTHOR:
+        return {"@type": "Organization", "name": fallback_name or SITE_NAME, "url": SITE_URL + ABOUT_URL}
+    p = {"@type": "Person", "name": AUTHOR["name"], "url": AUTHOR["url"]}
+    if AUTHOR["title"]:
+        p["jobTitle"] = AUTHOR["title"]
+    if AUTHOR["photo"]:
+        p["image"] = SITE_URL + AUTHOR["photo"]
+    if AUTHOR["links"]:
+        p["sameAs"] = AUTHOR["links"]
+    p["worksFor"] = {"@type": "Organization", "name": SITE_NAME, "url": SITE_URL}
+    return p
+
+
+# 헤더·푸터 카테고리 내비 — 빌드가 **실제로 글이 있는 허브만** set_nav_cats() 로 넣는다.
+# 2026-09-06 실측: 정리(13편 내림) 뒤 AI Tools 허브가 비어 생성되지 않았는데 링크는 하드코딩이라 전 페이지 404.
+NAV_CATS: list = [("/ai-coding/", "AI Coding"), ("/hosting/", "Hosting"),
+                  ("/dev-tools/", "Dev Tools"), ("/ai-tools/", "AI Tools")]
+
+
+def set_nav_cats(items) -> list:
+    global NAV_CATS
+    items = [(str(u), str(n)) for u, n in (items or []) if u and n]
+    if items:
+        NAV_CATS = items
+    return NAV_CATS
+
+
+def _nav_links() -> str:
+    return "".join(f'<a href="{esc(u)}">{esc(n)}</a>' for u, n in NAV_CATS)
+
 # 브랜드 마크(배지·파비콘·og 카드의 한 글자)와 헤더 주소 표기 — 전부 위 상수에서 파생.
 # 마크를 되돌리려면 BRAND_MARK 한 줄만 고치면 된다(파비콘 글리프는 site_builder._inside_mark).
 BRAND_MARK = SITE_NAME[0].upper()
@@ -194,7 +257,8 @@ h1{font-size:33px;line-height:1.2;letter-spacing:-.02em;margin:10px 0 0;font-wei
 .metabar{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:20px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}
 .metabar .who{display:flex;align-items:center;gap:9px}.metabar strong{color:var(--ink);font-weight:600}.metabar .sep{opacity:.4}
 .av{display:inline-flex;border-radius:50%;background:var(--surface-2);color:var(--ink-soft);align-items:center;justify-content:center;font-weight:700}
-.av.sm{width:30px;height:30px;font-size:13px}.av.lg{width:46px;height:46px;font-size:17px;flex:none}
+.av.sm{width:30px;height:30px;font-size:13px}.av.lg{width:46px;height:46px;font-size:17px;flex:none}img.av{object-fit:cover;border:1px solid var(--line)}
+.author-card{display:flex;gap:18px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:18px 20px;background:var(--surface);margin:8px 0 20px}.author-card img{width:96px;height:96px;border-radius:50%;object-fit:cover;flex:none;border:1px solid var(--line)}.author-card p{margin:0 0 8px}.author-card .links a{margin-right:14px}.author-card .muted{color:var(--muted);font-weight:400}
 /* mobile toc */
 .tocm{margin-top:24px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:6px 16px}
 .tocm summary{cursor:pointer;font-weight:600;font-size:14px;padding:10px 0;color:var(--ink-soft)}
@@ -423,8 +487,7 @@ def _header():
     return ('<header class="site"><div class="bar">'
             f'<a class="brand" href="/"><span class="badge">{BRAND_MARK}</span>'
             f'<span>{_BRAND_HEAD}<span class="tld">{_BRAND_TLD}</span></span></a>'
-            '<nav class="cats hide-sm"><a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
-            '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
+            f'<nav class="cats hide-sm">{_nav_links()}</nav>'
             '<div class="right">'
             '<form class="searchpill hide-sm" action="/search/" method="get" role="search">'
             + _ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 15, "var(--muted)")
@@ -439,8 +502,7 @@ def _footer():
             f'<span class="fb">{SITE_DOMAIN}</span>'
             '<nav><a href="/about/">About</a><a href="/contact/">Contact</a>'
             '<a class="priv" href="/privacy/">Privacy Policy</a>'
-            '<a href="/ai-coding/">AI Coding</a><a href="/hosting/">Hosting</a>'
-            '<a href="/dev-tools/">Dev Tools</a><a href="/ai-tools/">AI Tools</a></nav>'
+            f'{_nav_links()}</nav>'
             f'<span class="cp">© 2026 {SITE_DOMAIN}</span>'
             '</div></footer>')
 
@@ -540,7 +602,7 @@ def _jsonld(spec):
     blocks = [{
         "@context": "https://schema.org", "@type": "Article",
         "headline": spec.title, "description": spec.dek,
-        "author": {"@type": "Organization", "name": spec.author, "url": SITE_URL + ABOUT_URL},
+        "author": author_jsonld(spec.author),
         "publisher": org,
         "datePublished": spec.published_at, "dateModified": spec.updated_at or spec.published_at,
         "mainEntityOfPage": spec.canonical or "",
@@ -766,6 +828,32 @@ def refresh_chrome(doc: str) -> str:
     for old in LEGACY_EDITOR_BYLINES:
         if old != EDITOR_BYLINE:
             doc = doc.replace(old, EDITOR_BYLINE)
+    return _refresh_author_byline(doc)
+
+
+def _author_avatar(size: str) -> str:
+    name = author_name()
+    if AUTHOR.get("photo"):
+        px = 46 if size == "lg" else 30
+        return (f'<img class="av {size}" src="{esc(AUTHOR["photo"])}" alt="{esc(name)}" '
+                f'width="{px}" height="{px}" loading="lazy">')
+    return f'<span class="av {size}">{esc(name[:1].upper())}</span>'
+
+
+def _refresh_author_byline(doc: str) -> str:
+    """빌드 시 메타바 바이라인·저자 박스를 실명 저자(AUTHOR)로 교정. AUTHOR 가 비면 무동작(기존 산출물 동일).
+    본문(article 산문)은 건드리지 않는다 — 구조가 고정된 두 블록만 정확히 바꾼다. 멱등."""
+    if not AUTHOR:
+        return doc
+    name = AUTHOR["name"]
+    who = (f'<span class="who">{_author_avatar("sm")}'
+           f'<span><a href="{ABOUT_URL}"><strong>{esc(name)}</strong></a> · reviews</span></span>')
+    doc = re.sub(r'<span class="who">.*?</span></span>', lambda m: who, doc, count=1, flags=re.S)
+    bio = AUTHOR.get("bio") or ""
+    box = (f'<div class="authorbox">{_author_avatar("lg")}<div>'
+           f'<div class="nm"><a href="{ABOUT_URL}">{esc(name)}</a></div>'
+           f'<div class="bio">{esc(bio)} <a href="{ABOUT_URL}">Who writes this site &rarr;</a></div>')
+    doc = re.sub(r'<div class="authorbox">.*?<div class="bio">.*?</div>', lambda m: box, doc, count=1, flags=re.S)
     return doc
 
 
@@ -782,7 +870,7 @@ def _refresh_article_jsonld(doc: str) -> str:
             return m.group(0)
         prev = data.get("author")
         name = prev.get("name") if isinstance(prev, dict) else (prev if isinstance(prev, str) else SITE_NAME)
-        data["author"] = {"@type": "Organization", "name": name or SITE_NAME, "url": SITE_URL + ABOUT_URL}
+        data["author"] = author_jsonld(name or SITE_NAME)
         data["publisher"] = {"@type": "Organization", "name": SITE_NAME, "url": SITE_URL}
         return '<script type="application/ld+json">' + json.dumps(data, ensure_ascii=False) + "</script>"
     return re.sub(r'<script type="application/ld\+json">(.*?)</script>', repl, doc, flags=re.S)
@@ -822,12 +910,13 @@ def refresh_internal_links(doc: str, *, crumb_items=None, related_items=None) ->
     return doc
 
 
-def render_static_page(title: str, body_html: str, *, description: str = "", canonical: str = "") -> str:
-    """필수/정적 페이지(Privacy·About·Contact·index) — 동일 셸, 광고 없음."""
+def render_static_page(title: str, body_html: str, *, description: str = "", canonical: str = "",
+                       extra_head: str = "") -> str:
+    """필수/정적 페이지(Privacy·About·Contact·index) — 동일 셸, 광고 없음. extra_head: 추가 <head> 조각(JSON-LD 등)."""
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head(title, description or title, canonical, "website")}
+{_head(title, description or title, canonical, "website", extra_head)}
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>

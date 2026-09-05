@@ -329,6 +329,50 @@ def _privacy_body(domain: str, email: str, mon: dict) -> str:
 esc = html.escape
 
 
+def _link_label(url: str) -> str:
+    host = re.sub(r"^https?://(www\.)?", "", url).split("/")[0].lower()
+    return {"github.com": "GitHub", "linkedin.com": "LinkedIn", "dev.to": "dev.to", "x.com": "X",
+            "twitter.com": "X", "medium.com": "Medium"}.get(host, host)
+
+
+def _who_block(email: str) -> str:
+    """About 의 '누가 책임지는가' — 실명 저자(renderer.AUTHOR)가 있으면 사람, 없으면 편집팀 별칭(기존 문구 그대로)."""
+    a = renderer.AUTHOR
+    if not a:
+        return f"""<h3>Who is responsible for this site</h3>
+<p>Content is researched, written, and maintained by <strong>{esc(renderer.EDITOR_BYLINE)}</strong>, the editorial
+team that operates this site. We are solely responsible for what is published here. Questions, corrections,
+and feedback reach us directly at <a href="mailto:{esc(email)}">{esc(email)}</a> or via our
+<a href="/contact/">contact page</a>.</p>"""
+    photo = (f'<img src="{esc(a["photo"])}" alt="{esc(a["name"])}" width="96" height="96">' if a.get("photo") else "")
+    title = f' <span class="muted">· {esc(a["title"])}</span>' if a.get("title") else ""
+    links = "".join(f'<a href="{esc(u)}" rel="me noopener" target="_blank">{esc(_link_label(u))}</a>'
+                    for u in (a.get("links") or []))
+    links_p = f'<p class="links">{links}</p>' if links else ""
+    first = esc(a["name"].split()[0])
+    return f"""<h3 id="author">Who is responsible for this site</h3>
+<div class="author-card">{photo}<div><p><strong>{esc(a["name"])}</strong>{title}</p>
+<p>{esc(a["bio"])}</p>
+{links_p}</div></div>
+<p>{esc(a["name"])} researches, writes, and maintains the content on this site and is solely responsible for
+what is published here. Questions, corrections, and feedback reach {first} directly at
+<a href="mailto:{esc(email)}">{esc(email)}</a> or via our <a href="/contact/">contact page</a>.</p>"""
+
+
+def _author_cfg(cfg) -> dict:
+    """config/sites.yaml `author:` → renderer.set_author 입력. photo_file(리포 내 경로)이 있으면
+    사이트 경로 /author.<ext> 로 바꾸고 원본 경로를 _photo_src 에 남긴다(복사는 build 가 SITE_DIR 생성 후)."""
+    a = dict(((cfg.get("sites") or {}).get("author")) or {})
+    src = str(a.pop("photo_file", "") or "").strip()
+    if src and os.path.isfile(src):
+        ext = os.path.splitext(src)[1].lower() or ".jpg"
+        a["photo"] = "/author" + ext
+        a["_photo_src"] = src
+    elif src:
+        print(f"build: 경고 — author.photo_file 없음: {src} (사진 없이 진행)")
+    return a
+
+
 def _about_body(domain: str, email: str, mon: dict) -> str:
     # E-E-A-T(F: SQRG "누가 책임지고 누가 작성했는지 명확히" + helpful-content who/how/why):
     # 사실만 기술 — 허위 저자·경험 주장 금지(reviewer 루브릭). 편집팀 별칭은 Google 상 허용.
@@ -349,11 +393,7 @@ in-depth comparisons and buying guides for SaaS, developer, and AI tools. Our go
 answer to "which of these tools should I choose, and why" — backed by documented features and public data,
 not marketing copy.</p>
 
-<h3>Who is responsible for this site</h3>
-<p>Content is researched, written, and maintained by <strong>{esc(renderer.EDITOR_BYLINE)}</strong>, the editorial
-team that operates this site. We are solely responsible for what is published here. Questions, corrections,
-and feedback reach us directly at <a href="mailto:{esc(email)}">{esc(email)}</a> or via our
-<a href="/contact/">contact page</a>.</p>
+{_who_block(email)}
 
 <h3>How we compare tools (methodology)</h3>
 <ul>
@@ -488,6 +528,9 @@ def build(cfg) -> str:
     # AdSense 소유권 확인 — 렌더 시작 **전에** 주입해야 모든 페이지 head 에 실린다(빈 값이면 무동작).
     pub_id = _adsense_publisher_id(cfg)
     renderer.set_adsense_publisher_id(pub_id)
+    # 실명 저자(config/sites.yaml `author:`) — 렌더 시작 **전에** 주입. 비어 있으면 별칭 그대로(무동작).
+    author = _author_cfg(cfg)
+    renderer.set_author(author)
     # 수익화 관측(/privacy/·/about/ 문구가 여기에 연동된다) — ⚠️ dist/site 를 지우기 **전에** 해야
     # 직전 빌드 산출물까지 스캔 대상에 들어간다(_monetization_observed docstring ②).
     mon = _monetization_observed(cfg)
@@ -508,6 +551,9 @@ def build(cfg) -> str:
         else:
             shutil.rmtree(SITE_DIR, ignore_errors=True)   # 최후: 가능한 만큼 제거(빌드가 덮어씀)
     os.makedirs(SITE_DIR, exist_ok=True)
+    if author.get("_photo_src"):                  # 저자 사진 → /author.<ext> (photo 경로는 set_author 가 받은 값)
+        import shutil
+        shutil.copyfile(author["_photo_src"], os.path.join(SITE_DIR, author["photo"].lstrip("/")))
 
     # 1) 콘텐츠 페이지 (dist/queue → /compare/<slug>/)
     #    큐 문서는 생성 시점 디자인이 구워져 있음 → 빌드마다 chrome(CSS·헤더·푸터·JS)을 현행화.
@@ -518,12 +564,19 @@ def build(cfg) -> str:
     for qf in sorted(glob.glob(os.path.join(QUEUE_DIR, "*.html"))):
         slug = os.path.splitext(os.path.basename(qf))[0]
         with open(qf, encoding="utf-8") as f:
-            doc = renderer.refresh_chrome(f.read())
+            doc = f.read()                        # chrome 현행화는 내비 확정 뒤 일괄(아래) — 헤더가 허브 집합에 의존
         built.append((slug, doc))
         pages.append({"slug": slug, "title": _title_of(doc, slug),
                       "url": f"/compare/{slug}/", **_meta_of(doc)})
     # 홈 '이번 주'·Latest가 실제 최신이 되도록 갱신일 내림차순(동률은 슬러그순 유지)
     pages.sort(key=lambda p: p.get("updated") or "", reverse=True)
+
+    # 헤더·푸터 내비 = 실제로 글이 있는 허브만. 빈 허브는 아래 3) 에서 만들지 않으므로 링크도 만들면 안 된다
+    # (2026-09-06 실측: 정리 뒤 /ai-tools/ 허브가 사라졌는데 하드코딩 링크가 전 페이지에 404 로 남았다).
+    active_nav = [(f"/{slug}/", name) for slug, name, _dek, cluster_ids in CATEGORIES
+                  if any(p.get("cluster") in cluster_ids for p in pages)]
+    renderer.set_nav_cats(active_nav)
+    built = [(slug, renderer.refresh_chrome(doc)) for slug, doc in built]
 
     # 1.5) 내부 링크 교정 pass — 실제 페이지 집합(pages) 기준으로 Related·브레드크럼 재작성 후 기록
     related_n = int(((cfg.get("content") or {}).get("internal_links") or {}).get("related_count", 6))
@@ -546,9 +599,15 @@ def build(cfg) -> str:
         "contact": ("Contact", f'<p>Reach us at <a href="mailto:{esc(email)}">{esc(email)}</a>. '
                     f'Spot an error or an out-of-date price? Tell us and we will correct it.</p>'),
     }
+    person_ld = ""
+    if renderer.AUTHOR:                           # /about/ 에 Person 을 기계가독으로(Article.author.url 이 여기를 가리킨다)
+        person_ld = ('<script type="application/ld+json">'
+                     + json.dumps({"@context": "https://schema.org", **renderer.author_jsonld()}, ensure_ascii=False)
+                     + "</script>")
     for path, (title, body) in static_pages.items():
         _write(os.path.join(SITE_DIR, path, "index.html"),
-               renderer.render_static_page(title, body, description=f"{title} — {domain}"))
+               renderer.render_static_page(title, body, description=f"{title} — {domain}",
+                                           extra_head=person_ld if path == "about" else ""))
 
     # 3) 카테고리 허브 — 콘텐츠 1편 이상인 카테고리만 생성·링크·sitemap (빈 '공사중' 페이지 방지)
     cat_urls = []
