@@ -1,0 +1,79 @@
+{
+ "suite": "registry",
+ "host": {
+  "role": "windows-laptop",
+  "os": "Windows 11 (10.0.26200)",
+  "cpu": "AMD Ryzen 5 5625U with Radeon Graphics",
+  "ram_gb": 15.3,
+  "cores": 12,
+  "python": "3.12.10",
+  "measured_at": "2026-09-05T23:28:58Z",
+  "date": "2026-09-06",
+  "description": "Windows 11 laptop (AMD Ryzen 5 5625U, 6 cores, 16 GB RAM) — the editor's workstation"
+ },
+ "rows": [
+  {
+   "key": "nextcloud",
+   "label": "Nextcloud",
+   "ref": "docker.io/library/nextcloud:latest",
+   "compressed_bytes": 555518499,
+   "last_pushed": "2026-09-02",
+   "digest": "sha256:6db41df8956d",
+   "compressed_mb": 556.0
+  },
+  {
+   "key": "appflowy_cloud",
+   "label": "AppFlowy Cloud",
+   "ref": "docker.io/appflowyinc/appflowy_cloud:latest",
+   "compressed_bytes": 98957429,
+   "last_pushed": "2026-09-03",
+   "digest": "sha256:c713907c4c13",
+   "compressed_mb": 99.0
+  },
+  {
+   "key": "affine",
+   "label": "AFFiNE",
+   "ref": "ghcr.io/toeverything/affine:stable",
+   "compressed_bytes": 227871331,
+   "last_pushed": null,
+   "digest": "sha256:c312116a1341",
+   "compressed_mb": 228.0
+  },
+  {
+   "key": "outline",
+   "label": "Outline",
+   "ref": "docker.io/outlinewiki/outline:latest",
+   "compressed_bytes": 298813087,
+   "last_pushed": "2026-09-01",
+   "digest": "sha256:aade2a3fcf47",
+   "compressed_mb": 299.0
+  },
+  {
+   "key": "docmost",
+   "label": "Docmost",
+   "ref": "docker.io/docmost/docmost:latest",
+   "compressed_bytes": 207645790,
+   "last_pushed": "2026-07-04",
+   "digest": "sha256:2b0a3f73e579",
+   "compressed_mb": 208.0
+  },
+  {
+   "key": "siyuan",
+   "label": "SiYuan",
+   "ref": "docker.io/b3log/siyuan:latest",
+   "compressed_bytes": 95332127,
+   "last_pushed": "2026-08-30",
+   "digest": "sha256:9b553eb5f6f6",
+   "compressed_mb": 95.0
+  },
+  {
+   "key": "trilium",
+   "label": "TriliumNext",
+   "ref": "docker.io/triliumnext/notes:latest",
+   "compressed_bytes": 107784882,
+   "last_pushed": "2025-06-15",
+   "digest": "sha256:2a74bd52c715",
+   "compressed_mb": 108.0
+  }
+ ]
+}

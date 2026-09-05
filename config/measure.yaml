@@ -1,0 +1,129 @@
+# measure.yaml — 1차 측정 하네스 대상 (engine/measure/* · scripts/measure.py · scripts/add_measurements.py)
+#
+# 왜 있나(reports/adsense-승인연구-2026-09-06.html §5·§6 2단계): Google 의 리뷰 가이드가 요구하는 것은
+# "your own experience 의 증거(visuals)"와 "quantitative measurements" 다. 벤더 문서 재요약을 자동화한 게 문제였지,
+# 측정을 자동화하는 건 Google 이 정당하다고 명시한 자동화(sports scores·weather)와 같은 부류다.
+#
+# 원칙
+# - 숫자는 전부 우리가 직접 잰 값이고, 잰 환경(호스트 역할·OS·CPU·RAM)과 날짜가 값 옆에 붙는다.
+# - 본문에 하드코딩하지 않는다: data/measurements/*.json 이 단일 출처, add_measurements.py 가 빌드 전에 주입(멱등).
+# - 못 잰 것은 못 잰 것으로 남긴다(null). 지어내지 않는다.
+
+hosts:
+  seoul-vps:     "Ubuntu 22.04 VPS in Seoul (1 vCPU, 1 GB RAM, iwinv) — the server that runs this site"
+  windows-laptop: "Windows 11 laptop (AMD Ryzen 5 5625U, 6 cores, 16 GB RAM) — the editor's workstation"
+
+netprobe:
+  rounds: 5             # TCP connect / TTFB 표본 수 (중앙값 보고)
+  throughput_rounds: 3  # 다운로드 표본 수
+  throughput_bytes: 10485760   # 10 MB (Range 요청)
+  targets:
+    # DigitalOcean — speedtest-<region>.digitalocean.com 은 2026-09-06 현재 NXDOMAIN. 리전별 Spaces 엔드포인트로 지연만 잰다.
+    - {provider: DigitalOcean, region: "New York (nyc3)", host: nyc3.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "San Francisco (sfo3)", host: sfo3.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "Singapore (sgp1)", host: sgp1.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "Bangalore (blr1)", host: blr1.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "Amsterdam (ams3)", host: ams3.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "Frankfurt (fra1)", host: fra1.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "London (lon1)", host: lon1.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "Toronto (tor1)", host: tor1.digitaloceanspaces.com}
+    - {provider: DigitalOcean, region: "Sydney (syd1)", host: syd1.digitaloceanspaces.com}
+    # Vultr — <region>-ping.vultr.com 이 100MB 테스트 파일을 준다(지연 + 다운로드 둘 다).
+    - {provider: Vultr, region: "New Jersey (ewr)", host: nj-us-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Los Angeles (lax)", host: lax-ca-us-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Singapore (sgp)", host: sgp-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Tokyo (hnd)", host: hnd-jp-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Amsterdam (ams)", host: ams-nl-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Frankfurt (fra)", host: fra-de-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "London (lhr)", host: lon-gb-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Toronto (yto)", host: tor-ca-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Sydney (syd)", host: syd-au-ping.vultr.com, file: /vultr.com.100MB.bin}
+    - {provider: Vultr, region: "Bangalore (blr)", host: blr-in-ping.vultr.com, file: /vultr.com.100MB.bin}
+
+registry:
+  images:
+    - {key: nextcloud, label: "Nextcloud", ref: "docker.io/library/nextcloud:latest"}
+    - {key: appflowy_cloud, label: "AppFlowy Cloud", ref: "docker.io/appflowyinc/appflowy_cloud:latest"}
+    - {key: affine, label: "AFFiNE", ref: "ghcr.io/toeverything/affine:stable"}
+    - {key: outline, label: "Outline", ref: "docker.io/outlinewiki/outline:latest"}
+    - {key: docmost, label: "Docmost", ref: "docker.io/docmost/docmost:latest"}
+    - {key: siyuan, label: "SiYuan", ref: "docker.io/b3log/siyuan:latest"}
+    - {key: trilium, label: "TriliumNext", ref: "docker.io/triliumnext/notes:latest"}
+
+releases:
+  apps:
+    - {key: obsidian, label: "Obsidian", github: "obsidianmd/obsidian-releases", asset: "^Obsidian-[\\d.]+\\.exe$"}
+    - {key: bruno, label: "Bruno", github: "usebruno/bruno", asset: "^bruno_[\\d.]+_x64_win\\.exe$"}
+    - {key: bitwarden, label: "Bitwarden (desktop)", github: "bitwarden/clients", asset: "^Bitwarden-Installer-[\\d.]+\\.exe$", tag_prefix: "desktop-v"}
+    - {key: bitwarden_portable, label: "Bitwarden (portable exe)", github: "bitwarden/clients", asset: "^Bitwarden-Portable-[\\d.]+\\.exe$", tag_prefix: "desktop-v"}
+    - {key: postman, label: "Postman", url: "https://dl.pstmn.io/download/latest/win64"}
+    - {key: onepassword, label: "1Password", url: "https://downloads.1password.com/win/1PasswordSetup-latest.exe"}
+    - {key: notion, label: "Notion", url: "https://www.notion.so/desktop/windows/download"}
+    - {key: aider, label: "aider (PyPI aider-chat)", pypi: "aider-chat"}
+
+desktop:
+  settle_seconds: 25     # 창이 뜬 뒤 유휴 메모리 표본까지 대기
+  apps:
+    - {key: notion, label: "Notion", exe: "%LOCALAPPDATA%\\Programs\\Notion\\Notion.exe"}
+    - {key: obsidian, label: "Obsidian", exe: "%LOCALAPPDATA%\\Obsidian\\Obsidian.exe"}
+    - {key: cursor, label: "Cursor", exe: "%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe"}
+    - {key: windsurf, label: "Windsurf", exe: "%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe"}
+    - {key: bruno, label: "Bruno", exe: "%LOCALAPPDATA%\\Programs\\bruno\\Bruno.exe"}
+    - {key: postman, label: "Postman", exe: "%LOCALAPPDATA%\\Postman\\Postman.exe"}
+    - {key: bitwarden, label: "Bitwarden", exe: "%LOCALAPPDATA%\\Programs\\Bitwarden\\Bitwarden.exe"}
+    - {key: onepassword, label: "1Password", exe: "%LOCALAPPDATA%\\1Password\\app\\8\\1Password.exe"}
+  cli:
+    - {key: herdr, label: "herdr", exe: "%LOCALAPPDATA%\\Programs\\Herdr\\bin\\herdr.exe", args: ["--version"], dir: "%LOCALAPPDATA%\\Programs\\Herdr"}
+
+docker_run:
+  settle_seconds: 45
+  targets:
+    - {key: nextcloud, label: "Nextcloud", image: "nextcloud:latest", port: 80, health: "/status.php"}
+    - {key: siyuan, label: "SiYuan", image: "b3log/siyuan:latest", port: 6806, health: "/", args: ["--workspace=/siyuan/workspace", "--accessAuthCode=measure"]}
+    - {key: trilium, label: "TriliumNext", image: "triliumnext/notes:latest", port: 8080, health: "/"}
+
+# 글 ↔ 측정 매핑: add_measurements.py 가 이 순서대로 섹션을 만든다. 표는 있는 데이터만 그린다(없으면 그 표를 생략).
+articles:
+  cheap-vps-in-2026-digitalocean-and-vultr-compared-with-our-value-picks:
+    title: "What we measured: latency to each region from Seoul"
+    blocks:
+      - {suite: netprobe, kind: latency_table, providers: [DigitalOcean, Vultr]}
+      - {suite: netprobe, kind: throughput_table, providers: [Vultr]}
+  best-self-hosted-alternatives-to-notion-8-open-source-picks:
+    title: "What we measured: image size and a cold start"
+    blocks:
+      - {suite: registry, kind: image_table, keys: [appflowy_cloud, affine, outline, docmost, siyuan, trilium]}
+      - {suite: docker_run, kind: run_table, keys: [siyuan, trilium]}
+  how-to-self-host-nextcloud-a-complete-setup-guide:
+    title: "What we measured: the official image, pulled and started"
+    blocks:
+      - {suite: registry, kind: image_table, keys: [nextcloud]}
+      - {suite: docker_run, kind: run_table, keys: [nextcloud]}
+  bruno-vs-postman-git-native-client-vs-cloud-platform-2026:
+    title: "What we measured: installer size, footprint, cold start"
+    blocks:
+      - {suite: releases, kind: release_table, keys: [bruno, postman]}
+      - {suite: desktop, kind: desktop_table, keys: [bruno, postman]}
+  bitwarden-vs-1password-which-password-manager-should-you-use:
+    title: "What we measured: installer size, footprint, cold start"
+    blocks:
+      - {suite: releases, kind: release_table, keys: [bitwarden, bitwarden_portable, onepassword]}
+      - {suite: desktop, kind: desktop_table, keys: [bitwarden, onepassword]}
+  notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026:
+    title: "What we measured: installer size, footprint, cold start"
+    blocks:
+      - {suite: releases, kind: release_table, keys: [notion, obsidian]}
+      - {suite: desktop, kind: desktop_table, keys: [notion, obsidian]}
+  cursor-vs-windsurf-which-ai-code-editor-should-you-use-in-2026:
+    title: "What we measured: footprint and cold start on our laptop"
+    blocks:
+      - {suite: desktop, kind: desktop_table, keys: [cursor, windsurf]}
+  aider-vs-cursor-terminal-ai-coding-vs-the-ai-ide:
+    title: "What we measured: package size and footprint"
+    blocks:
+      - {suite: releases, kind: release_table, keys: [aider]}
+      - {suite: desktop, kind: desktop_table, keys: [cursor]}
+  orca-vs-herdr-agent-ide-or-terminal-multiplexer-for-coding-agents:
+    title: "What we measured: herdr on our own machine"
+    blocks:
+      - {suite: desktop, kind: cli_table, keys: [herdr]}

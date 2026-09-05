@@ -555,6 +555,11 @@ def build(cfg) -> str:
         import shutil
         shutil.copyfile(author["_photo_src"], os.path.join(SITE_DIR, author["photo"].lstrip("/")))
 
+    # 0.5) 측정 스크린샷·정적 자산 — assets/measure/ → /measure/ (scripts/add_measurements.py 가 이 경로를 가리킨다)
+    if os.path.isdir("assets/measure"):
+        import shutil
+        shutil.copytree("assets/measure", os.path.join(SITE_DIR, "measure"), dirs_exist_ok=True)
+
     # 1) 콘텐츠 페이지 (dist/queue → /compare/<slug>/)
     #    큐 문서는 생성 시점 디자인이 구워져 있음 → 빌드마다 chrome(CSS·헤더·푸터·JS)을 현행화.
     #    ⚠️ 2-pass: 먼저 실제 발행 페이지 집합을 확정한 뒤, 내부 링크(Related·브레드크럼)를

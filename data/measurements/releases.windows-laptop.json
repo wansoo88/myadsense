@@ -1,0 +1,96 @@
+{
+ "suite": "releases",
+ "host": {
+  "role": "windows-laptop",
+  "os": "Windows 11 (10.0.26200)",
+  "cpu": "AMD Ryzen 5 5625U with Radeon Graphics",
+  "ram_gb": 15.3,
+  "cores": 12,
+  "python": "3.12.10",
+  "measured_at": "2026-09-05T23:34:56Z",
+  "date": "2026-09-06",
+  "description": "Windows 11 laptop (AMD Ryzen 5 5625U, 6 cores, 16 GB RAM) — the editor's workstation"
+ },
+ "rows": [
+  {
+   "key": "obsidian",
+   "label": "Obsidian",
+   "version": "v1.13.7",
+   "published": "2026-08-12",
+   "asset": "Obsidian-1.13.7.exe",
+   "bytes": 331012528,
+   "source": "https://github.com/obsidianmd/obsidian-releases/releases/tag/v1.13.7",
+   "mb": 331.0
+  },
+  {
+   "key": "bruno",
+   "label": "Bruno",
+   "version": "v4.1.0",
+   "published": "2026-08-20",
+   "asset": "bruno_4.1.0_x64_win.exe",
+   "bytes": 121934416,
+   "source": "https://github.com/usebruno/bruno/releases/tag/v4.1.0",
+   "mb": 122.0
+  },
+  {
+   "key": "bitwarden",
+   "label": "Bitwarden (desktop)",
+   "version": "desktop-v2026.8.0",
+   "published": "2026-08-20",
+   "asset": "Bitwarden-Installer-2026.8.0.exe",
+   "bytes": 734264,
+   "source": "https://github.com/bitwarden/clients/releases/tag/desktop-v2026.8.0",
+   "mb": 0.7
+  },
+  {
+   "key": "bitwarden_portable",
+   "label": "Bitwarden (portable exe)",
+   "version": "desktop-v2026.8.0",
+   "published": "2026-08-20",
+   "asset": "Bitwarden-Portable-2026.8.0.exe",
+   "bytes": 329865296,
+   "source": "https://github.com/bitwarden/clients/releases/tag/desktop-v2026.8.0",
+   "mb": 330.0
+  },
+  {
+   "key": "postman",
+   "label": "Postman",
+   "bytes": 206184056,
+   "asset": "win64",
+   "version": null,
+   "source": "https://dl.pstmn.io/download/latest/win64",
+   "final_url": "https://dl.pstmn.io/download/latest/win64",
+   "mb": 206.0
+  },
+  {
+   "key": "onepassword",
+   "label": "1Password",
+   "bytes": 193555920,
+   "asset": "1PasswordSetup-latest.exe",
+   "version": null,
+   "source": "https://downloads.1password.com/win/1PasswordSetup-latest.exe",
+   "final_url": "https://downloads.1password.com/win/1PasswordSetup-latest.exe",
+   "mb": 194.0
+  },
+  {
+   "key": "notion",
+   "label": "Notion",
+   "bytes": 108563576,
+   "asset": "Notion Setup 7.32.1.exe",
+   "version": "7.32.1",
+   "source": "https://www.notion.so/desktop/windows/download",
+   "final_url": "https://desktop-release.notion-static.com/Notion%20Setup%207.32.1.exe",
+   "mb": 109.0
+  },
+  {
+   "key": "aider",
+   "label": "aider (PyPI aider-chat)",
+   "version": "0.86.2",
+   "published": "2026-02-12",
+   "asset": "aider_chat-0.86.2-py3-none-any.whl",
+   "bytes": 377009,
+   "source": "https://pypi.org/project/aider-chat/0.86.2/",
+   "mb": 0.4
+  }
+ ]
+}
