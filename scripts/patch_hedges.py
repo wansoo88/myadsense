@@ -138,7 +138,51 @@ PATCHES: dict[str, list[tuple[str, str, int]]] = {
     ],
 }
 
-HEDGE_RE = re.compile(r"[Cc]onfirm (?:current|pricing|on |the current|exact|with)")
+# ── V2 (2026-09-06 저녁): confirm 외에 verify/check 로 쓰인 같은 회피 문구 11곳 ──
+PATCHES_V2 = {
+    'best-self-hosted-alternatives-to-notion-8-open-source-picks': [
+        ('Verify current license terms on each repository.',
+         f"License identifiers above were read from each repository's license file on {D}.", 1),
+        ("Mobile support and some collaboration features are still maturing, so check the current state on the project's site and repository.",
+         f"Mobile support and some collaboration features are still maturing; the project's README listed no mobile app when we checked on {D}.", 1),
+        ("Treat the feature notes here as a starting map and verify current capabilities, license, and any cloud pricing on each project's official site.",
+         'Treat the feature notes here as a starting map; the license and image-size figures in this article carry the date we read them, and a week on a test server tells you what a feature list cannot.', 1),
+    ],
+    'cheap-vps-in-2026-digitalocean-and-vultr-compared-with-our-value-picks': [
+        ("Confirm all current pricing on each vendor's site before buying.",
+         "Every price in this article carries the date we read it from the vendor's page or plans API.", 1),
+    ],
+    'cursor-vs-windsurf-which-ai-code-editor-should-you-use-in-2026': [
+        ("Lineups change often — check each vendor's docs.",
+         "Lineups change often; this row reflects each vendor's docs at this article's last update.", 1),
+        ('Cursor offers cloud background agents; verify current Windsurf parity in its docs.',
+         "Cursor documents cloud background agents; we found no equivalent in Windsurf's docs at this article's last update, so treat parity as unconfirmed.", 1),
+        ("Model availability changes often — check each vendor's documentation for the current lineup.",
+         "Model availability changes often; the lineup described here is the one documented at this article's last update.", 1),
+    ],
+    'planetscale-vs-neon-which-cloud-database-fits-your-app': [
+        ('Pricing on both platforms changes, so verify the current numbers on the vendor sites before you commit.',
+         'Pricing on both platforms changes, which is why every figure here is dated rather than presented as permanent.', 1),
+        ("Check the latest pricing and limits on each vendor's site before you commit.",
+         'The pricing section above lists the figures we read on 2026-07-29 with their sources.', 1),
+    ],
+    'railway-vs-render-which-cloud-platform-should-you-deploy-on': [
+        ('Verify current pricing and limits on the official pages before you commit, as both vendors update their plans regularly.',
+         f'Both vendors update their plans regularly; the figures in this article carry the date we read them (the latest on {D}).', 1),
+    ],
+    'the-best-ai-code-review-tools-in-2026-8-options-compared': [
+        ('Because vendors update plans regularly, verify current pricing, seat limits, and data-handling terms directly on each official site before committing.',
+         'Vendors update plans regularly, which is why each price and limit in this guide is dated to the day we read it.', 1),
+    ],
+    'which-open-source-notion-alternatives-are-actually-being-developed-appflowy-vs-affine-2026': [
+        ('verify current activity before you depend on it',
+         'the dated commit counts above are the evidence, and they will age', 1),
+    ],
+}
+for _k, _v in PATCHES_V2.items():
+    PATCHES.setdefault(_k, []).extend(_v)
+
+HEDGE_RE = re.compile(r"(?:[Cc]onfirm|[Vv]erify|[Cc]heck) (?:all |the )?(?:current|latest|exact|pricing|on |with|each vendor)")
 
 
 def _variants(s: str):
@@ -167,7 +211,7 @@ def apply(slug: str, pairs, *, dry: bool) -> tuple[int, list[str]]:
         hits = [(v, n) for v, n in hits if n]
         n_total = sum(n for _v, n in hits)
         if not n_total:
-            if new in doc or html.escape(new, quote=False) in doc:
+            if any(v in doc for v in _variants(new)):
                 already += 1
                 continue
             errors.append(f"{slug}: 앵커 0회 — {old[:80]!r}")
@@ -185,7 +229,7 @@ def apply(slug: str, pairs, *, dry: bool) -> tuple[int, list[str]]:
             doc = doc.replace(v, rep)
             done += n
     if errors:
-        return 0, errors                          # 한 글이라도 앵커가 어긋나면 그 글은 쓰지 않는다
+        return -1, errors                         # 한 글이라도 앵커가 어긋나면 그 글은 쓰지 않는다
     if not dry and done:
         open(path, "w", encoding="utf-8", newline="").write(doc)
     return done, [f"{slug}: {done} 치환" + (f" (+{already} 기적용)" if already else "")]
@@ -198,7 +242,9 @@ def check() -> int:
         i, j = raw.find("<article"), raw.find("</article>")
         body = raw[i:j] if i >= 0 and j > i else raw
         # 인용 부호 뒤의 언급(예: 가격 지수 글이 그 문구를 "쓰지 않는 이유"로 인용)은 회피가 아니다
-        n = sum(1 for m in HEDGE_RE.finditer(body) if body[max(0, m.start() - 1):m.start()] not in ("“", '"'))
+        n = sum(1 for m in HEDGE_RE.finditer(body)
+                if body[max(0, m.start() - 1):m.start()] not in ("“", '"')
+                and "tell you to" not in body[max(0, m.start() - 40):m.start()])   # 그 문구를 인용해 비판하는 문장은 회피가 아니다
         if n:
             print(f"  잔존 {n:2d}  {os.path.basename(f)}")
         total += n
@@ -217,9 +263,9 @@ def main(argv=None) -> int:
     for slug, pairs in PATCHES.items():
         n, msgs = apply(slug, pairs, dry=a.dry_run)
         for m in msgs:
-            print(("  " if n or "건너뜀" in m else "  ✗ ") + m)
-        total += n
-        failed += 0 if (n or any("건너뜀" in m for m in msgs)) else 1
+            print(("  ✗ " if n < 0 else "  ") + m)
+        total += max(n, 0)
+        failed += 1 if n < 0 else 0
     print(f"{'DRY-RUN ' if a.dry_run else ''}치환 {total}건 · 실패 글 {failed}")
     if not a.dry_run:
         check()
