@@ -127,7 +127,8 @@ def desktop_table(data, blk, per_host):
         if not rows:
             continue
         body = [[esc(r["label"]), esc(r.get("version") or "—"), _fmt(r.get("footprint_mb"), " MB"),
-                 _fmt(r.get("cold_start_s"), " s"), (_fmt(r.get("idle_rss_mb"), " MB") + (f" ({r.get('process_count')} processes)" if r.get("process_count") else ""))]
+                 ("—" if r.get("cold_start_s") is None else f"{r['cold_start_s']:.2f} s"),
+                 (_fmt(r.get("idle_rss_mb"), " MB") + (f" ({r.get('process_count')} processes)" if r.get("process_count") else ""))]
                 for r in rows]
         fresh = [r["label"] for r in rows if r.get("fresh_profile")]
         fresh_s = ("" if not fresh else
