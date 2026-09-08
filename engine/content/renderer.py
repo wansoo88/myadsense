@@ -56,9 +56,10 @@ AUTHOR: dict = {}
 
 
 # 저자 소개 폴백(author_bio 빈값). 2026-09-08 ORDER 54 ②: "공개 문서 재편집" 자기서술을 "직접 돌리고 잰다" 로.
-AUTHOR_BIO_FALLBACK = "We measure the tools we write about from our own machines and publish the numbers."
+AUTHOR_BIO_FALLBACK = "We measure the tools we compare on our own machines and publish the numbers with the date and host."
 # 큐 문서에 구워진 구 폴백 — refresh_chrome 이 **정확 구절만** 치환한다(저자박스 chrome, 본문 아님).
-LEGACY_AUTHOR_BIOS = ("Independent software comparisons from official docs and public data.",)
+LEGACY_AUTHOR_BIOS = ("Independent software comparisons from official docs and public data.",
+                      "We measure the tools we write about from our own machines and publish the numbers.")
 
 
 def set_author(cfg) -> dict:
@@ -1091,7 +1092,7 @@ def render_home(pages, *, domain: str = SITE_DOMAIN, canonical: str = "", active
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head(f"{SITE_NAME} — developer & AI-agent tooling, measured from our own machines", "We measure developer and AI-agent tooling from our own machines and publish the numbers — network latency from two vantage points, installer and container image sizes, release cadence, and checked prices — with comparisons built from those figures.", canonical or base + "/", "website", jsonld)}
+{_head(f"{SITE_NAME} — developer & AI-agent tooling, measured from our own machines", "We measure developer and AI-agent tooling from our own machines and publish the numbers — install size, cold start and idle memory for the desktop tools we compare, network latency from two vantage points, installer and container image sizes, release cadence, and checked prices — with comparisons built from those figures.", canonical or base + "/", "website", jsonld)}
 </head>
 <body>
 <a class="skip" href="#featured">Skip to content</a>
@@ -1099,7 +1100,7 @@ def render_home(pages, *, domain: str = SITE_DOMAIN, canonical: str = "", active
 <section class="hero"><div class="container">
 <span class="pill"><span class="dot"></span>{esc(domain)}</span>
 <h1>Tool choices, backed by <span class="ac">data</span> — not vibes.</h1>
-<p class="dek">We measure developer and AI-agent tooling from our own machines and publish the numbers — network latency from two vantage points, installer and container image sizes, release cadence, and checked prices — with comparisons built from those figures.</p>
+<p class="dek">We measure developer and AI-agent tooling from our own machines and publish the numbers — install size, cold start and idle memory for the desktop tools we compare, network latency from two vantage points, installer and container image sizes, release cadence, and checked prices — with comparisons built from those figures.</p>
 <form class="searchbox" action="/search/" method="get" role="search">
 <div class="field">{_ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 19, "var(--muted)")}
 <input name="q" placeholder="Search tools to compare…  e.g. Cursor, Notion" aria-label="Search tools"></div>

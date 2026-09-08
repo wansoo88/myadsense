@@ -389,20 +389,23 @@ def _about_body(domain: str, email: str, mon: dict) -> str:
         "disclose it. Either way, verdicts are based on what we measure and what vendors document "
         "and are <strong>not</strong> influenced by how the site is funded.</p>")
     # 2026-09-08 ORDER 54 ②: 자기서술 교정 — "공개 문서 재편집" 선언을 "우리가 직접 돌리고 잰 것" 으로.
-    # "every article" 과 설치·구동(desktop suite) 표현은 쓰지 않는다 — 측정 섹션 없는 글이 남아 있고 설치·구동
-    # 측정이 아직 라이브에 없다(56-review A-3, 2026-09-08). 라운드 B 로 올라오면 그때 복원.
+    # 전편을 포괄하는 표현("every article", 우리가 다루는 툴 전체를 쟀다는 식)은 쓰지 않는다(1차 데이터 10편은 설치 대상이 아님).
+    # 설치·구동 문구는 "the desktop tools we compare" 로 한정 — 라운드 B(2026-09-08) 데스크톱 실측 5편 라이브 후 복원.
     return f"""<p><strong>{esc(domain)}</strong> is an independent site about developer and AI-agent tooling
-you run yourself. We measure the tools we write about from our own machines and publish the numbers —
-network latency from two vantage points, installer and container image sizes, release cadence, and checked
-prices — with comparisons built from those figures.</p>
+you run yourself. We measure developer and AI-agent tooling from our own machines and publish the numbers —
+install size, cold start and idle memory for the desktop tools we compare, network latency from two vantage
+points, installer and container image sizes, release cadence, and checked prices — with comparisons built from
+those figures.</p>
 
 {_who_block(email)}
 
 <h3 id="how-we-work">How we work</h3>
-<p><strong>How we work.</strong> We measure the tools we write about from our own machines. Every figure
-labeled "measured" comes from scripts in our own repository and is published with the host profile and the
-date it was taken. Prices are checked against the vendor's own pricing page on the stated date. Where we have
-not measured something — including install size and run-time behaviour — we say so.</p>
+<p><strong>How we work.</strong> We install and run the desktop tools we compare and measure them on our own
+machines — install size, cold start, idle memory — alongside network latency from two vantage points,
+installer and container image sizes, release cadence, and checked prices. Every figure labeled "measured"
+comes from scripts in our own repository and is published with the host profile and the date it was taken.
+Prices are checked against the vendor's own pricing page on the stated date. Where we have not measured
+something, we say so.</p>
 <ul>
 <li><strong>Structured, like-for-like.</strong> Tools are compared on the same dimensions (pricing,
 core features, data ownership, and fit) so the trade-offs are explicit rather than asserted.</li>
