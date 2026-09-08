@@ -306,6 +306,43 @@ def appflowy_affine(doc, slug, data, prices):
     return doc
 
 
+def bruno_postman(doc, slug, data, prices):
+    """55-②: Bruno·Postman 을 이 비교를 위해 설치해 한 번 열고 잰 값(설치 용량·콜드 스타트·유휴 메모리)."""
+    d = _date(data, "desktop")
+    b = _row(data, "desktop", "bruno")
+    pm = _row(data, "desktop", "postman")
+    rb = _row(data, "releases", "bruno")
+    rp = _row(data, "releases", "postman")
+    if not (b.get("installed") and pm.get("installed")):
+        raise Anchor(f"{slug}: bruno/postman desktop rows missing — measure first")
+    bv = f" {esc(b['version'])}" if b.get("version") else ""
+    pv = f" {esc(pm['version'])}" if pm.get("version") else ""
+    s = (f"<p><strong>Measured on our laptop, {esc(d)}, both installed for this comparison and opened once with no account signed in:</strong> "
+         f"Bruno{bv} opened in {_n(b.get('cold_start_s'), ' s', 2)} and idled at {_n(b.get('idle_rss_mb'), ' MB')} of memory across "
+         f"{_n(b.get('process_count'))} processes from a {_n(b.get('footprint_mb'), ' MB')} install ({_n(rb.get('mb'), ' MB')} installer); "
+         f"Postman{pv} opened in {_n(pm.get('cold_start_s'), ' s', 2)} and idled at {_n(pm.get('idle_rss_mb'), ' MB')} across "
+         f"{_n(pm.get('process_count'))} processes from a {_n(pm.get('footprint_mb'), ' MB')} install ({_n(rp.get('mb'), ' MB')} installer) "
+         f"(<a href=\"#measured\">tables below</a>).</p>")
+    doc = put(doc, slug, "summary", s, (before_close(doc, "summary", "</div></section>"), "before"))
+    fp_b, fp_p = b.get("footprint_mb") or 0, pm.get("footprint_mb") or 0
+    rss_b, rss_p = b.get("idle_rss_mb") or 0, pm.get("idle_rss_mb") or 0
+    cs_b, cs_p = b.get("cold_start_s") or 0, pm.get("cold_start_s") or 0
+    smaller = "Bruno" if fp_b < fp_p else "Postman"
+    lighter = "Bruno" if rss_b < rss_p else "Postman"
+    faster = "Bruno" if cs_b < cs_p else "Postman"
+    fp_lo, fp_hi = sorted([fp_b, fp_p])                    # 숫자는 항상 '이긴 쪽 against 진 쪽' 순서로
+    cs_lo, cs_hi = sorted([cs_b, cs_p])
+    v = (f"<p><strong>What our numbers add.</strong> \"Lighter\" is measurable, and on {esc(d)} it was {esc(lighter)}: with no account and nothing loaded, "
+         f"Bruno idled at {_n(rss_b, ' MB')} of resident memory across {_n(b.get('process_count'))} processes and Postman at {_n(rss_p, ' MB')} across "
+         f"{_n(pm.get('process_count'))}, a gap of about {_n(abs(rss_b - rss_p), ' MB')}. On disk {esc(smaller)} is the smaller install "
+         f"({_n(fp_lo, ' MB')} against {_n(fp_hi, ' MB')}), and {esc(faster)} reached its first window sooner ({_n(cs_lo, ' s', 2)} against "
+         f"{_n(cs_hi, ' s', 2)}). These are first-launch numbers for the bare application — a signed-in Postman with synced workspaces, or a Bruno with a large "
+         f"collection open, will use more, and we did not measure either state. <strong>Not measured:</strong> request round-trip time, collection import "
+         f"speed and CLI run time; nothing here about those comes from our own testing.</p>")
+    doc = put(doc, slug, "verdict", v, (before_close(doc, "verdict", "</div></section>"), "before"))
+    return doc
+
+
 def price_index(doc, slug, data, prices):
     """가격 지수 글: 회피 문구를 '비판하며 인용'한 두 곳도 문구 자체가 남지 않게 고쳐 쓴다(어떤 검사 정규식이든 0)."""
     doc = replace_exact(doc, slug,
@@ -323,6 +360,7 @@ PATCHES = {
     "the-best-ai-code-review-tools-in-2026-8-options-compared": code_review,
     "which-open-source-notion-alternatives-are-actually-being-developed-appflowy-vs-affine-2026": appflowy_affine,
     "what-developer-tools-actually-cost-a-checked-price-index": price_index,
+    "bruno-vs-postman-git-native-client-vs-cloud-platform-2026": bruno_postman,          # 55-②
 }
 NO_DATE_BUMP = {"what-developer-tools-actually-cost-a-checked-price-index"}   # 문구 두 곳 — 내용 변화가 아니다
 

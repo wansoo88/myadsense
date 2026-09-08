@@ -7,7 +7,7 @@
   "ram_gb": 15.3,
   "cores": 12,
   "python": "3.12.10",
-  "measured_at": "2026-09-08T13:32:45Z",
+  "measured_at": "2026-09-08T13:55:59Z",
   "date": "2026-09-08",
   "description": "Windows 11 laptop (AMD Ryzen 5 5625U, 6 cores, 16 GB RAM) — the editor's workstation"
  },
@@ -67,6 +67,36 @@
    "screenshot": null,
    "measured_at": "2026-09-08T13:32:45Z",
    "screenshot_note": "discarded: screen-region grab captured whatever was on top of the desktop, not the app window (2026-09-08)"
+  },
+  {
+   "key": "bruno",
+   "label": "Bruno",
+   "exe": "C:\\Users\\kimws\\AppData\\Local\\Programs\\bruno\\Bruno.exe",
+   "installed": true,
+   "footprint_mb": 564.0,
+   "version": "4.1.0.0",
+   "killed_before": 0,
+   "fresh_install": true,
+   "cold_start_s": 5.57,
+   "idle_rss_mb": 849.0,
+   "process_count": 4,
+   "screenshot": null,
+   "measured_at": "2026-09-08T13:54:29Z"
+  },
+  {
+   "key": "postman",
+   "label": "Postman",
+   "exe": "C:\\Users\\kimws\\AppData\\Local\\Postman\\Postman.exe",
+   "installed": true,
+   "footprint_mb": 760.0,
+   "version": "12.27.1",
+   "killed_before": 0,
+   "fresh_install": true,
+   "cold_start_s": 3.79,
+   "idle_rss_mb": 914.0,
+   "process_count": 5,
+   "screenshot": null,
+   "measured_at": "2026-09-08T13:55:59Z"
   }
  ],
  "cli": [

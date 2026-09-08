@@ -77,8 +77,8 @@ desktop:
     - {key: cursor, label: "Cursor", exe: "%LOCALAPPDATA%/Programs/cursor/Cursor.exe", args: ["--user-data-dir=%TEMP%/measure-profile-cursor", "--extensions-dir=%TEMP%/measure-ext-cursor"], fresh_profile: true}
     - {key: windsurf, label: "Windsurf (installs as Devin)", exe: "%LOCALAPPDATA%/Programs/Devin/Devin.exe", args: ["--user-data-dir=%TEMP%/measure-profile-windsurf", "--extensions-dir=%TEMP%/measure-ext-windsurf"], fresh_profile: true}   # 3.8.20 설치본은 폴더·실행파일이 Devin 이다(2026-09-08 실측)
     - {key: orca, label: "Orca", exe: "%LOCALAPPDATA%/Programs/Orca/Orca.exe"}   # electron-builder NSIS, /S 로 설치 (2026-09-08)
-    - {key: bruno, label: "Bruno", exe: "%LOCALAPPDATA%\\Programs\\bruno\\Bruno.exe"}
-    - {key: postman, label: "Postman", exe: "%LOCALAPPDATA%\\Postman\\Postman.exe"}
+    - {key: bruno, label: "Bruno", exe: "%LOCALAPPDATA%\\Programs\\bruno\\Bruno.exe", fresh_install: true}   # 이 비교를 위해 새로 설치해 한 번 연다(계정 로그인 없음) — 2026-09-08 55-②
+    - {key: postman, label: "Postman", exe: "%LOCALAPPDATA%\\Postman\\Postman.exe", fresh_install: true}   # 이 비교를 위해 새로 설치해 한 번 연다(계정 로그인 없음) — 2026-09-08 55-②
     - {key: bitwarden, label: "Bitwarden", exe: "%LOCALAPPDATA%\\Programs\\Bitwarden\\Bitwarden.exe"}
     - {key: onepassword, label: "1Password", exe: "%LOCALAPPDATA%\\1Password\\app\\8\\1Password.exe"}
   cli:

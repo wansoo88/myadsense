@@ -134,6 +134,10 @@ def desktop_table(data, blk, per_host):
         fresh_s = ("" if not fresh else
                    f" {esc(' and '.join(fresh))} {'was' if len(fresh) == 1 else 'were'} launched with an empty profile "
                    f"(<code>--user-data-dir</code>), no extensions and no folder open, so the numbers do not include any workspace.")
+        inst = [r["label"] for r in rows if r.get("fresh_install")]
+        fresh_s += ("" if not inst else
+                    f" {esc(' and '.join(inst))} {'was' if len(inst) == 1 else 'were'} installed on this laptop for this comparison and opened "
+                    f"for the first time, with no account signed in and no user data, so the numbers are the app alone.")
         cap = (f"Install footprint = size of the application directory (user data excluded). Cold start = seconds from "
                f"launching the executable until its first visible window, measured once after closing the app. Idle memory = "
                f"resident memory of the whole process tree {payload.get('settle_seconds')} s after the window appeared.{fresh_s} "

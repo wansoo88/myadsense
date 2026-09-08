@@ -142,6 +142,8 @@ def measure_app(app: dict, settle: int, shots_dir: str) -> dict:
         row["launch_args"] = args
     if app.get("fresh_profile"):
         row["fresh_profile"] = True
+    if app.get("fresh_install"):                          # 측정을 위해 새로 설치해 처음 여는 앱(사용자 데이터·계정 없음)
+        row["fresh_install"] = True
     t0 = time.perf_counter()
     proc = subprocess.Popen([exe, *args], cwd=inst_dir)
     hwnd, deadline = 0, time.perf_counter() + 90
