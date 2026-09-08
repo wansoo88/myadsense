@@ -212,7 +212,8 @@ def cli_table(data, blk, per_host):
         rows = [r for r in payload.get("cli", []) if r["key"] in blk.get("keys", []) and r.get("installed")]
         if not rows:
             continue
-        body = [[esc(r["label"]), esc(r.get("version") or "—"), _fmt(r.get("footprint_mb"), " MB"), _fmt(r.get("run_s"), " s")] for r in rows]
+        body = [[esc(r["label"]), esc(r.get("version") or "—"), _fmt(r.get("footprint_mb"), " MB"),
+                 ("—" if r.get("run_s") is None else f"{r['run_s']:.2f} s")] for r in rows]
         cap = (f"Install footprint = size of the install directory; run = fastest of 3 runs of <code>--version</code> "
                f"(process start to exit). {_host_line(payload['host'])}.")
         return _table(["Tool", "Version", "Install footprint", "Run (--version)"], body, cap)
@@ -224,27 +225,30 @@ def cli_table(data, blk, per_host):
 # 표가 없으면 그 문구도 없다 — 데이터가 늘면 제목도 그만큼만 늘어난다.
 PHRASES = {"latency_table": "latency to each region", "throughput_table": "download speed",
            "image_table": "image size", "run_table": "cold start and idle memory",
-           "release_table": "installer size", "desktop_table": "install footprint, cold start, idle memory",
+           "release_table": "installer size", "desktop_table": "install footprint, cold start and idle memory",
            "cli_table": "install footprint and startup time", "repo_table": "repository activity",
            "price_table": "prices on the day we looked"}
 
 
 def derive_title(kinds: list) -> str:
-    """그려진 표 종류(순서 유지·중복 제거)로 'What we measured: a, b, and c' 를 만든다."""
+    """그려진 표 종류(순서 유지·중복 제거)로 'What we measured: a, b and c' 를 만든다.
+    데스크톱 표가 있으면 CLI 표의 문구는 'startup time' 만(footprint 중복 방지). 문구 안에 쉼표가 있으면 세미콜론으로 잇는다."""
     seen, ph = set(), []
+    has_desktop = "desktop_table" in kinds
     for k in kinds:
-        p = PHRASES.get(k, k)
+        p = "startup time" if (k == "cli_table" and has_desktop) else PHRASES.get(k, k)
         if p not in seen:
             seen.add(p)
             ph.append(p)
     if not ph:
         return "What we measured"
+    sep = "; " if any("," in p for p in ph) else ", "
     if len(ph) == 1:
         body = ph[0]
     elif len(ph) == 2:
-        body = f"{ph[0]} and {ph[1]}"
+        body = f"{ph[0]}; {ph[1]}" if sep == "; " else f"{ph[0]} and {ph[1]}"
     else:
-        body = ", ".join(ph[:-1]) + f", and {ph[-1]}"
+        body = sep.join(ph[:-1]) + f"{sep}and {ph[-1]}"
     return f"What we measured: {body}"
 
 

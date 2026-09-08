@@ -70,14 +70,16 @@ def put(doc, slug, name, inner, where):
     m = re.search(rx, doc, re.S)
     if not m:
         raise Anchor(f"{slug}: anchor for {name!r} not found: {rx[:70]!r}")
-    if mode == "before":
-        return doc[:m.start()] + block + doc[m.start():]
+    if mode == "before":                                  # 앵커는 '닫는 태그 앞 60자 + lookahead' 이므로 m.end() 가 곧 닫는 태그 직전
+        return doc[:m.end()] + block + doc[m.end():]
     return doc[:m.start()] + block + doc[m.end():]
 
 
 def replace_exact(doc, slug, old, new, want=1):
     """본문(&#x27;)과 JSON-LD(') 표기 변형을 모두 센다. 합이 want 와 다르면 에러(이미 적용된 경우만 통과)."""
     variants = [old] + ([old.replace("'", "&#x27;"), old.replace("'", "&#39;")] if "'" in old else [])
+    if '"' in old:
+        variants += [v.replace('"', "&quot;") for v in list(variants)]
     hits = [(v, doc.count(v)) for v in variants]
     hits = [(v, n) for v, n in hits if n]
     total = sum(n for _v, n in hits)
@@ -258,6 +260,10 @@ def appflowy_affine(doc, slug, data, prices):
             f"and no release since {esc(ac.get('latest_release_date') or '')}. So the honest reading is narrower than \"slowing\": the desktop repository that "
             f"carries the {stars_k} stars is quiet, and the development you can see from outside now happens in AppFlowy-Web, a repository with "
             f"{_n(aw.get('stars'))} stars. What that means for the desktop and mobile apps is not something these counts can tell you.</p>")
+    doc = replace_exact(doc, slug,
+                        """A big historical codebase plus a fresh commit is not the same as steady, continuous development, so AppFlowy's "active" status is better treated as "verify before you depend on it" than a flat yes.""",
+                        f"A big historical codebase plus a fresh commit is not the same as steady, continuous development — and the {dr} re-read below "
+                        f"separates the two.", 1)
     doc = put(doc, slug, "appflowy-section", para,
               (before_close(doc, "appflowy-a-large-community-with-a-slowing-recent-cadence", "</section>"), "before"))
     # 4) 결론(Verdict) — 세 문단 통째로 교체
