@@ -133,6 +133,12 @@ def orca_herdr(doc, slug, data, prices):
     ratio_c = (ro.get("commits_90d") or 0) / (rh.get("commits_90d") or 1)
     ratio_r = (ro.get("releases_90d_stable") or 0) / (rh.get("releases_90d_stable") or 1)
     hv = (herdr.get("version") or "").replace("herdr ", "")
+    # 라운드 B FAIL(56): 개요부의 구 고지문("not hands-on benchmarking")이 같은 글의 실측 표와 모순 → 실제 잰 범위만 말하게
+    doc = replace_exact(doc, slug,
+                        "This comparison is built from each project's official pages and public repositories. It reflects documented features, not hands-on benchmarking.",
+                        f"The feature, platform and pricing sections are built from each project's official pages and public repositories. The installer size, "
+                        f"install footprint, cold start, idle memory and repository-activity figures are our own readings, taken on the machine and dates given in "
+                        f"<a href=\"#measured\">What we measured</a>; nothing else here is hands-on testing.", 1)
     s = (f"<p><strong>Measured on our laptop, {esc(d)}:</strong> Orca {esc(orca.get('version', ''))} is a {_n(rel_o.get('mb'), ' MB')} installer "
          f"that occupies {_n(orca.get('footprint_mb'), ' MB')}, opened in {_n(orca.get('cold_start_s'), ' s', 2)} and sat at "
          f"{_n(orca.get('idle_rss_mb'), ' MB')} of memory across {_n(orca.get('process_count'))} processes 25 s later; herdr {esc(hv)} is a "
@@ -175,8 +181,8 @@ def cursor_windsurf(doc, slug, data, prices):
          f"used about {_n(diff_mem, ' MB')} less memory at idle; Cursor's install is about {_n(diff_fp, ' MB')} smaller ({_n(c.get('footprint_mb'), ' MB')} against "
          f"{_n(w.get('footprint_mb'), ' MB')}). One observation, recorded as we found it: the Windows build served by the Windsurf stable update endpoint on "
          f"{esc(dl)} was <code>{esc(asset)}</code>; it installed into a folder named Devin under the user's Programs directory, its executable is "
-         f"<code>Devin.exe</code>, and the app reported version {esc(w.get('version', ''))}. Scripts or allow-lists that look for a program named Windsurf will "
-         f"not find one. <strong>Not measured:</strong> how quickly or how well each agent completes a fixed task. That needs a signed-in session on each free "
+         f"<code>Devin.exe</code>, and the app reported version {esc(w.get('version', ''))} — worth knowing if a script or allow-list on your side expects the "
+         f"program to be named Windsurf. <strong>Not measured:</strong> how quickly or how well each agent completes a fixed task. That needs a signed-in session on each free "
          f"tier and an identical task for both, which we have not run, so nothing in this article about agent speed or output quality comes from our own "
          f"testing.</p>")
     doc = put(doc, slug, "verdict", v, (before_close(doc, "verdict", "</div></section>"), "before"))
@@ -226,6 +232,7 @@ def appflowy_affine(doc, slug, data, prices):
     tag_sha = tags[0]["sha"] if tags else "?"
     tag_date = tags[0]["commit_date"] if tags else "?"
     stars_k = f"{(af.get('stars') or 0) / 1000:.1f}k"
+    ac_arch = " — which GitHub lists as archived —" if ac.get("archived") else ""
     # 1) 요약(In short) — 문단 통째로 교체
     new_sum = (f"<p><strong>Short answer (as of {esc(dr)}):</strong> Of the two most-starred open-source Notion alternatives, <strong>AFFiNE</strong> is the one "
                f"whose activity is where you expect it — {_n(fn.get('commits_90d'))} commits on its default branch in the 90 days to {esc(dr)}, newest "
@@ -235,7 +242,8 @@ def appflowy_affine(doc, slug, data, prices):
                f"published {_n(af.get('releases_90d_stable'))} stable releases in the same window, the latest {esc(af.get('latest_release') or '')} on "
                f"{esc(af.get('latest_release_date') or '')} — and the tags for {esc(tag_s)} all point at the same commit <code>{esc(tag_sha)}</code> dated "
                f"{esc(tag_date)}. The visible work moved to the sibling AppFlowy-Web repository ({_n(aw.get('commits_90d'))} commits and "
-               f"{_n(aw.get('releases_90d_stable'))} releases in 90 days, newest commit {esc(aw.get('last_commit') or '')}, {_n(aw.get('stars'))} stars). By the "
+               f"{_n(aw.get('releases_90d_stable'))} releases in 90 days, newest commit {esc(aw.get('last_commit') or '')}, {_n(aw.get('stars'))} stars); the "
+               f"AppFlowy-Cloud repository{esc(ac_arch)} had {_n(ac.get('commits_90d'))}. By the "
                f"desktop repository's own signals AppFlowy has slowed; by the organisation's, development continues — in the Web repository. Our 2026-08-21 "
                f"table below counted only the desktop repository, which is why it read as near-dormant.</p>")
     doc = put(doc, slug, "summary", new_sum,
@@ -256,8 +264,8 @@ def appflowy_affine(doc, slug, data, prices):
             f"{esc(af.get('latest_release_date') or '')}), and its release tags for {esc(tag_s)} all resolve to the one commit <code>{esc(tag_sha)}</code> from "
             f"{esc(tag_date)}. The organisation's other repositories explain the gap: AppFlowy-Web had {_n(aw.get('commits_90d'))} commits and "
             f"{_n(aw.get('releases_90d_stable'))} releases in the same 90 days, its newest commit on {esc(aw.get('last_commit') or '')} and each of its newest tags "
-            f"pointing at a commit from the day it shipped, while AppFlowy-Cloud had {_n(ac.get('commits_90d'))} commits (newest {esc(ac.get('last_commit') or '')}) "
-            f"and no release since {esc(ac.get('latest_release_date') or '')}. So the honest reading is narrower than \"slowing\": the desktop repository that "
+            f"pointing at a commit from the day it shipped, while AppFlowy-Cloud{esc(ac_arch)} had {_n(ac.get('commits_90d'))} commits (newest "
+            f"{esc(ac.get('last_commit') or '')}) and no release since {esc(ac.get('latest_release_date') or '')}. So the honest reading is narrower than \"slowing\": the desktop repository that "
             f"carries the {stars_k} stars is quiet, and the development you can see from outside now happens in AppFlowy-Web, a repository with "
             f"{_n(aw.get('stars'))} stars. What that means for the desktop and mobile apps is not something these counts can tell you.</p>")
     doc = replace_exact(doc, slug,
@@ -275,8 +283,8 @@ def appflowy_affine(doc, slug, data, prices):
              f"<p><strong>AppFlowy</strong> has to be read across three repositories. The desktop repository has slowed by every signal we count — "
              f"{_n(af.get('commits_90d'))} commit in 90 days, {_n(af.get('commits_52w'))} in 52 weeks, {_n(af.get('open_prs'))} pull requests open — while still "
              f"publishing releases whose tags sit on a commit from {esc(tag_date)}. AppFlowy-Web, by contrast, moved every week ({_n(aw.get('commits_90d'))} commits, "
-             f"{_n(aw.get('releases_90d_stable'))} releases in the same 90 days). Development has moved rather than stopped; what our counts cannot say is how much "
-             f"of it reaches the desktop and mobile apps. Both readings are in the {esc(dr)} table below, with the tag-to-commit column that makes the difference "
+             f"{_n(aw.get('releases_90d_stable'))} releases in the same 90 days), and AppFlowy-Cloud{esc(ac_arch)} has {_n(ac.get('commits_90d'))}. Development has "
+             f"moved rather than stopped; what our counts cannot say is how much of it reaches the desktop and mobile apps. Both readings are in the {esc(dr)} table below, with the tag-to-commit column that makes the difference "
              f"visible.</p>")
     doc = put(doc, slug, "verdict", new_v,
               (r'(?<=<div class="lbl">Verdict</div>)<p>Both AppFlowy and AFFiNE are substantial.*?</p>(?=</div></section>)', "replace"))

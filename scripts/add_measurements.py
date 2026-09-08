@@ -168,7 +168,8 @@ def repo_table(data, blk, per_host):
             issues = ("—" if r.get("open_issues") is None else
                       (f"issues off / {_fmt(r.get('open_prs'))}" if r.get("has_issues") is False else f"{_fmt(r['open_issues'])} / {_fmt(r.get('open_prs'))}"))
             url = r.get("url") or f"https://github.com/{r.get('repo') or r.get('github')}"
-            cells = [f'<a href="{esc(url)}" rel="noopener" target="_blank">{esc(r["label"])}</a>', _fmt(r.get("stars")),
+            cells = [f'<a href="{esc(url)}" rel="noopener" target="_blank">{esc(r["label"])}</a>' + (' <span class="mnote">(archived)</span>' if r.get("archived") else ''),
+                     _fmt(r.get("stars")),
                      esc(r.get("last_commit") or "—"), _fmt(r.get(f"commits_{d}d")), rel_s, latest, issues, esc(r.get("license") or "—")]
             if with_tags:
                 tc = r.get("release_tag_commits") or []
@@ -179,6 +180,7 @@ def repo_table(data, blk, per_host):
                f"commits on that branch and releases published in the {d} days ending that day ({esc(since)} → {esc(payload['host'].get('date', ''))}), "
                f"pre-releases counted separately; open issues and open pull requests at that moment (\"issues off\" = the project does not use GitHub issues); and the license GitHub detects. "
                f"Commit counts are the repository's own history, so squash-merged projects show fewer commits than merge-heavy ones."
+               + (" \"archived\" = GitHub lists the repository as archived (read-only) on that day." if any(r.get("archived") for r in rows) else "")
                + (" \"Newest release tags → commit\" resolves each of the newest stable release tags to the commit it points at and that commit's date, "
                   "read the same day — it shows whether releases are being cut from new code on the default branch." if with_tags else ""))
         head = ["Repository", "Stars", "Last commit", f"Commits ({d} d)", f"Releases ({d} d)", "Latest release", "Open issues / PRs", "License"]
