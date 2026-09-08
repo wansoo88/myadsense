@@ -302,10 +302,10 @@ def _privacy_body(domain: str, email: str, mon: dict) -> str:
                 "we may earn a commission at no additional cost to you." if aff else
                 "The vendor links in our articles are plain informational citations — they are not affiliate "
                 "links and earn us no commission.")
-    verdict_line = ("Our comparisons and verdicts are based on documented product features and publicly available "
-                    "information; commissions do not influence our assessments." if (ads or aff) else
-                    "Our comparisons and verdicts are based on documented product features and publicly available "
-                    "information. If we add advertising or affiliate links, this disclosure is updated to say so, "
+    verdict_line = ("Our comparisons and verdicts are based on what we measure and what vendors document; "
+                    "commissions do not influence our assessments." if (ads or aff) else
+                    "Our comparisons and verdicts are based on what we measure and what vendors document. "
+                    "If we add advertising or affiliate links, this disclosure is updated to say so, "
                     "and neither would influence our assessments.")
     return f"""<p><em>Last updated: {PRIVACY_LAST_UPDATED}.</em></p>
 <p>This Privacy Policy explains how {esc(domain)} ("we") collects, uses, and shares information when you visit our site.</p>
@@ -379,33 +379,41 @@ def _about_body(domain: str, email: str, mon: dict) -> str:
     # 자금 조달(아래 'how we are funded') 도 사실만 — 광고·제휴 여부는 _monetization_observed() 관측값.
     ads, aff = bool(mon.get("ads")), bool(mon.get("affiliate"))
     funding = ("<p>This site is supported by advertising and may include affiliate links. Commissions, when they "
-               "exist, do <strong>not</strong> influence our assessments — verdicts are based on documented "
-               "product features and publicly available information. See our "
+               "exist, do <strong>not</strong> influence our assessments — verdicts are based on what we "
+               "measure and what vendors document. See our "
                '<a href="/privacy/">Privacy Policy</a> for the full advertising and affiliate disclosure.</p>'
                ) if (ads or aff) else (
         "<p>This site does not currently carry advertising, and the vendor links in our articles are plain "
         "informational citations rather than affiliate links. We intend to fund the site with advertising; if "
         "we add advertising or affiliate links, our <a href=\"/privacy/\">Privacy Policy</a> is updated to "
-        "disclose it. Either way, verdicts are based on documented product features and publicly available "
-        "information and are <strong>not</strong> influenced by how the site is funded.</p>")
-    return f"""<p><strong>{esc(domain)}</strong> is an independent editorial project that publishes
-in-depth comparisons and buying guides for SaaS, developer, and AI tools. Our goal is a single, honest
-answer to "which of these tools should I choose, and why" — backed by documented features and public data,
-not marketing copy.</p>
+        "disclose it. Either way, verdicts are based on what we measure and what vendors document "
+        "and are <strong>not</strong> influenced by how the site is funded.</p>")
+    # 2026-09-08 ORDER 54 ②: 자기서술 교정 — "공개 문서 재편집" 선언을 "우리가 직접 돌리고 잰 것" 으로.
+    # "every article" 이라 쓰지 않는다(측정 섹션 없는 글이 남아 있는 동안 사실과 어긋난다).
+    return f"""<p><strong>{esc(domain)}</strong> is an independent site about developer and AI-agent tooling
+you run yourself. We install and run the tools we write about and publish what we measure — install sizes,
+cold starts, latency, release cadence, and checked prices — with comparisons built from those numbers.</p>
 
 {_who_block(email)}
 
-<h3>How we compare tools (methodology)</h3>
+<h3 id="how-we-work">How we work</h3>
+<p><strong>How we work.</strong> We install and run the tools we write about. Every figure labeled
+"measured" comes from scripts in our own repository and is published with the host profile and the date it
+was taken. Prices are checked against the vendor's own pricing page on the stated date. Where we have not
+measured something, we say so.</p>
 <ul>
-<li><strong>Primary sources first.</strong> Pricing, limits, and features are taken from each vendor's
-official documentation, pricing pages, and changelogs — every article cites the sources it relied on.</li>
 <li><strong>Structured, like-for-like.</strong> Tools are compared on the same dimensions (pricing,
 core features, data ownership, and fit) so the trade-offs are explicit rather than asserted.</li>
 <li><strong>Dated and kept current.</strong> Each article shows its published and last-updated date;
 pricing and features change often, so we revise pages and note the update date when we do.</li>
-<li><strong>Verdicts, not hype.</strong> Recommendations follow from the documented differences and
-clearly state who each option is best for — and who should skip it.</li>
+<li><strong>Verdicts, not hype.</strong> Recommendations follow from the measured and documented differences
+and clearly state who each option is best for — and who should skip it.</li>
 </ul>
+
+<h3 id="how-we-use-ai">How we use AI</h3>
+<p><strong>How we use AI.</strong> We use AI assistants to draft structure and prose from our measurements,
+notes, and cited sources. AI does not run our measurements and does not supply experiences we did not have.
+Articles are published under the named author's responsibility after review.</p>
 
 <h3>Editorial independence &amp; how we are funded</h3>
 {funding}
@@ -431,8 +439,8 @@ def _og_svg(domain: str) -> str:
         f'<tspan fill="#9aa4b2" font-weight="500">   {esc(domain)}</tspan></text>'
         '<text x="80" y="330" font-size="72" font-weight="800" fill="#e7ebf2">Tool choices, backed'
         '<tspan x="80" dy="86">by <tspan fill="#5b9cff">data</tspan> — not vibes.</tspan></text>'
-        '<text x="80" y="548" font-size="30" fill="#9aa4b2">Independent SaaS, developer &amp; AI tool comparisons '
-        'from official docs.</text>'
+        '<text x="80" y="548" font-size="30" fill="#9aa4b2">Developer &amp; AI-agent tooling, run and measured '
+        'on our own machines.</text>'
         '</svg>\n')
 
 

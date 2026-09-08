@@ -1,3 +1,4 @@
+# ⛔ 비교(comparison) 축 재개 금지 — 2026-09-08 C안(ORDER 54 ⑤). 재개 시 시계열/관측 축만. (guardrails.yaml daily_generate: 0 유지)
 # topics.yaml — 토픽 클러스터 + 시드 키워드 (니치: 기술/SaaS·개발·AI 도구, 영어 Tier-1)
 # keyword_research / generator 가 소비. 의도 우선순위: comparison ≥ transactional > informational (F7).
 # 각 페이지는 quality_gate 통과 필수 — programmatic 패턴마다 unique_data(가격표·기능매트릭스·실측·핸즈온) 강제.

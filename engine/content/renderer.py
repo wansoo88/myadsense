@@ -55,6 +55,12 @@ LEGACY_EDITOR_BYLINES = ("The stack. editors",)
 AUTHOR: dict = {}
 
 
+# 저자 소개 폴백(author_bio 빈값). 2026-09-08 ORDER 54 ②: "공개 문서 재편집" 자기서술을 "직접 돌리고 잰다" 로.
+AUTHOR_BIO_FALLBACK = "We run the tools we write about and publish what we measure."
+# 큐 문서에 구워진 구 폴백 — refresh_chrome 이 **정확 구절만** 치환한다(저자박스 chrome, 본문 아님).
+LEGACY_AUTHOR_BIOS = ("Independent software comparisons from official docs and public data.",)
+
+
 def set_author(cfg) -> dict:
     """`author:` 블록 주입. name 이 비면 {} (무동작). photo 는 사이트 내 절대 경로(/author.jpg) — 복사는 site_builder."""
     global AUTHOR
@@ -732,7 +738,7 @@ def render(spec, draft: bool = False) -> str:
     # 저자 박스
     body.append(f'<div class="authorbox"><span class="av lg">{esc(spec.author[:1].upper())}</span><div>'
                 f'<div class="nm"><a href="{ABOUT_URL}">{esc(spec.author)}</a></div>'
-                f'<div class="bio">{esc(getattr(spec, "author_bio", "") or "Independent software comparisons from official docs and public data.")} '
+                f'<div class="bio">{esc(getattr(spec, "author_bio", "") or AUTHOR_BIO_FALLBACK)} '
                 f'<a href="{ABOUT_URL}">How we compare &amp; who we are &rarr;</a></div>'
                 f'<div class="upd">Updated {esc(spec.updated_at or spec.published_at)}</div></div></div>')
 
@@ -829,6 +835,10 @@ def refresh_chrome(doc: str) -> str:
     for old in LEGACY_EDITOR_BYLINES:
         if old != EDITOR_BYLINE:
             doc = doc.replace(old, EDITOR_BYLINE)
+    # 구 저자 소개 폴백 교정(ORDER 54 ②) — 저자박스 chrome 의 정확 구절만. AUTHOR 가 있으면 아래에서 통째로 덮인다.
+    for old in LEGACY_AUTHOR_BIOS:
+        if old != AUTHOR_BIO_FALLBACK:
+            doc = doc.replace(old, AUTHOR_BIO_FALLBACK)
     return _refresh_author_byline(doc)
 
 
@@ -1081,7 +1091,7 @@ def render_home(pages, *, domain: str = SITE_DOMAIN, canonical: str = "", active
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{_head(f"{SITE_NAME} — independent software comparisons & guides", "We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership.", canonical or base + "/", "website", jsonld)}
+{_head(f"{SITE_NAME} — developer & AI-agent tooling, run and measured", "We run developer and AI-agent tooling on our own machines and publish what we measure — install sizes, cold starts, latency, release cadence, and checked prices — with comparisons built from those numbers.", canonical or base + "/", "website", jsonld)}
 </head>
 <body>
 <a class="skip" href="#featured">Skip to content</a>
@@ -1089,7 +1099,7 @@ def render_home(pages, *, domain: str = SITE_DOMAIN, canonical: str = "", active
 <section class="hero"><div class="container">
 <span class="pill"><span class="dot"></span>{esc(domain)}</span>
 <h1>Tool choices, backed by <span class="ac">data</span> — not vibes.</h1>
-<p class="dek">We compare SaaS, developer, and AI tools using official docs and public data — pricing, features, and data ownership, distilled to what your decision needs.</p>
+<p class="dek">We run developer and AI-agent tooling on our own machines and publish what we measure — install sizes, cold starts, latency, release cadence, and checked prices — with comparisons built from those numbers.</p>
 <form class="searchbox" action="/search/" method="get" role="search">
 <div class="field">{_ic('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path>', 19, "var(--muted)")}
 <input name="q" placeholder="Search tools to compare…  e.g. Cursor, Notion" aria-label="Search tools"></div>
