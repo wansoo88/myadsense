@@ -64,6 +64,134 @@ def _striking_section(db, cfg) -> str:
             '<table><thead><tr><th>쿼리</th><th>평균순위</th><th>노출</th><th>액션</th></tr></thead>'
             f'<tbody>{body}</tbody></table>')
 
+def _epoch_utc(v) -> str:
+    try:
+        return datetime.datetime.fromtimestamp(float(v), datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+    except Exception:
+        return "—"
+
+
+def _analytics_paths() -> tuple:
+    """config/analytics.yaml 의 (롤업 DB 경로, data.json 경로). 설정이 없으면 기본값·None."""
+    db_path, data_json = "engine/store/analytics.db", None
+    try:
+        import yaml
+        with open("config/analytics.yaml", encoding="utf-8") as f:
+            out = (yaml.safe_load(f) or {}).get("output") or {}
+        db_path = out.get("db") or db_path
+        if out.get("dir"):
+            data_json = os.path.join(out["dir"], "data.json")
+    except Exception:
+        pass
+    return db_path, data_json
+
+
+def _googlebot_rows(db_path: str):
+    """analytics.db 의 googlebot_path_daily → [(창, 요청, 200/304, distinct 기사)]. 없으면 []."""
+    import sqlite3
+    if not os.path.exists(db_path):
+        return []
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    except Exception:
+        return []
+    try:
+        if not conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                            "AND name='googlebot_path_daily'").fetchone():
+            return []
+        out = []
+        for label, days in (("7일", 7), ("30일", 30)):
+            cut = (datetime.date.today() - datetime.timedelta(days=days - 1)).isoformat()
+            r = conn.execute("SELECT COALESCE(SUM(requests),0), COALESCE(SUM(ok),0), COUNT(DISTINCT path) "
+                             "FROM googlebot_path_daily WHERE date>=?", (cut,)).fetchone()
+            out.append((label, int(r[0]), int(r[1]), int(r[2])))
+        return out
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def _referrer_rows(data_json):
+    """방문 분석 data.json 의 리퍼러(30일·사람만·봇 3겹 제외) 상위 5. 없으면 []."""
+    if not data_json or not os.path.exists(data_json):
+        return []
+    try:
+        with open(data_json, encoding="utf-8") as f:
+            refs = (json.load(f) or {}).get("referrers") or []
+        return [(r.get("host", "—"), int(r.get("count", 0))) for r in refs[:5]]
+    except Exception:
+        return []
+
+
+def _discovery_section(db) -> str:
+    """'발견 신호' — F16 재신청 게이트(사이트맵 다운로드 · 기사 색인 ≥ 10 · 구글 클릭 > 0)를 자체 데이터로 판정.
+    입력은 전부 읽기 전용 수집분(GSC sitemaps.list · URL Inspection · 검색성과 · nginx 로그 롤업)."""
+    # 1) 사이트맵 — 최신 수집일의 경로별 상태
+    r = _rows(db, "SELECT MAX(date) FROM metrics WHERE source='search_console' AND dimension='sitemap'")
+    sm_date = r[0][0] if r and r[0] else None
+    sitemaps: dict = {}
+    if sm_date:
+        for path, metric, value in _rows(db, "SELECT dim_value,metric,value FROM metrics WHERE "
+                                             "source='search_console' AND dimension='sitemap' AND date=?", (sm_date,)):
+            sitemaps.setdefault(path, {})[metric] = value
+    any_downloaded = any(v.get("downloaded") for v in sitemaps.values())
+    sm_rows = []
+    for path, v in sorted(sitemaps.items()):
+        sm_rows.append((
+            path,
+            "예" if v.get("downloaded") else "아니오 (lastDownloaded 없음)",
+            _epoch_utc(v["last_downloaded_epoch"]) if "last_downloaded_epoch" in v else "—",
+            _epoch_utc(v["last_submitted_epoch"]) if "last_submitted_epoch" in v else "—",
+            "대기(isPending)" if v.get("pending") else "처리됨",
+            int(v.get("errors", 0)), int(v.get("warnings", 0)),
+            int(v.get("submitted", 0)), int(v.get("indexed", 0)),
+        ))
+    # 2) 기사 색인 — 최신 URL Inspection 스냅샷, /compare/ 만
+    r = _rows(db, "SELECT MAX(date) FROM index_status")
+    ix_date = r[0][0] if r and r[0] else None
+    articles_total = articles_indexed = articles_crawled = 0
+    if ix_date:
+        r = _rows(db, "SELECT COUNT(*), COALESCE(SUM(indexed),0), "
+                      "COALESCE(SUM(CASE WHEN indexed=0 AND lower(coverage_state) LIKE '%crawled%' "
+                      "AND lower(coverage_state) LIKE '%not indexed%' THEN 1 ELSE 0 END),0) "
+                      "FROM index_status WHERE date=? AND url LIKE '%/compare/%'", (ix_date,))
+        if r:
+            articles_total, articles_indexed, articles_crawled = int(r[0][0]), int(r[0][1]), int(r[0][2])
+    # 3) 구글 클릭 — 최신 수집일의 query 차원 합(28일 창)
+    r = _rows(db, "SELECT date, COALESCE(SUM(value),0) FROM metrics WHERE source='search_console' "
+                  "AND dimension='query' AND metric='clicks' AND date=(SELECT MAX(date) FROM metrics "
+                  "WHERE source='search_console' AND dimension='query')")
+    clicks_date, clicks = (r[0][0], int(r[0][1])) if r and r[0] and r[0][0] else (None, 0)
+    # 4) Googlebot 기사 요청 · 5) 리퍼러 — 방문 분석(서버 로그) 산출물
+    db_path, data_json = _analytics_paths()
+    gb_rows = _googlebot_rows(db_path)
+    ref_rows = _referrer_rows(data_json)
+
+    conds = [any_downloaded, articles_indexed >= 10, clicks > 0]
+    mark = lambda ok: "✓" if ok else "✗"
+    gate = (f"재신청 게이트 <b>{sum(conds)}/3</b> 충족 — "
+            f"사이트맵 다운로드 {mark(conds[0])} · 기사 색인 {articles_indexed}/10 {mark(conds[1])} · "
+            f"구글 클릭 {clicks} {mark(conds[2])}")
+    cls = "ok" if all(conds) else "warn"
+    return (
+        '<h2>발견 신호 (F16 재신청 게이트 — 구글이 읽고 클릭을 보내는가)</h2>'
+        f'<p class="{cls}">{gate}</p>'
+        f'<h3>사이트맵 (GSC sitemaps.list · 수집 {esc(sm_date or "없음")})</h3>'
+        + _table(["경로", "다운로드됨", "lastDownloaded", "lastSubmitted", "상태", "오류", "경고", "제출 URL", "색인 URL"],
+                 sm_rows, numcols=(5, 6, 7, 8))
+        + f'<h3>기사 색인 (URL Inspection · {esc(ix_date or "없음")} · /compare/ 한정)</h3>'
+        + _table(["기사 전체", "색인 완료", "크롤됐으나 미색인"],
+                 [(articles_total, articles_indexed, articles_crawled)] if ix_date else [], numcols=(0, 1, 2))
+        + f'<h3>구글 클릭 (28일 창 · {esc(clicks_date or "없음")})</h3>'
+        + _table(["클릭 합계"], [(clicks,)] if clicks_date else [], numcols=(0,))
+        + '<h3>Googlebot 기사 요청 (nginx 로그 롤업 · UA 자칭 기준 상한값)</h3>'
+        + _table(["창", "요청", "200/304", "distinct 기사"], gb_rows, numcols=(1, 2, 3))
+        + '<h3>리퍼러 상위 5 (30일 · 사람만)</h3>'
+        + _table(["호스트", "방문"], ref_rows, numcols=(1,))
+    )
+
+
 CSS = (
     "body{margin:0;background:#0f1115;color:#e7ebf2;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif}"
     ".wrap{max-width:880px;margin:0 auto;padding:36px 22px 70px}"
@@ -74,6 +202,8 @@ CSS = (
     "table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}"
     "th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #2a2f3a}th{color:#9aa4b2;font-size:12px;text-transform:uppercase}"
     "td.n{text-align:right;font-variant-numeric:tabular-nums}"
+    "h3{font-size:13.5px;margin:16px 0 4px;color:#c9d1dc}"
+    ".ok{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:#bdf0cf;border-radius:8px;padding:10px 14px;font-size:13px}"
     ".empty{color:#9aa4b2;font-size:13.5px}.warn{background:rgba(245,185,66,.1);border:1px solid rgba(245,185,66,.3);color:#f0d79a;border-radius:8px;padding:10px 14px;font-size:13px}"
 )
 
@@ -131,6 +261,7 @@ def build(cfg, db) -> str:
   <div class="s"><b>{queued}</b><span>발행 큐(게이트 통과)</span></div>
   <div class="s"><b>{"중단" if halted else "정상"}</b><span>킬스위치</span></div>
 </div>
+{_discovery_section(db)}
 <h2>국가별 RPM (상위 10, 최신)</h2>
 {_table(["국가", "RPM"], rpm, numcols=(1,))}
 <h2>Core Web Vitals (페이지별 최신)</h2>

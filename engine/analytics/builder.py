@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS path_daily (
   PRIMARY KEY (date, path)
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS googlebot_path_daily (
+  date TEXT, path TEXT, requests INTEGER, ok INTEGER,
+  PRIMARY KEY (date, path)
+);
 """
 
 
@@ -218,6 +222,52 @@ def _persist(conn, site, paths, hits, now_iso):
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (now_iso,))
 
 
+# --- Googlebot 기사 요청 (F16 재신청 게이트 관측 — 읽기 전용) --------------
+ARTICLE_PREFIX = "/compare/"
+
+
+def _is_googlebot_article(h) -> bool:
+    """정본 분류기(parser)가 bot 으로 판정한 요청 중, UA 에 'googlebot' 이 있고 기사 경로인 것.
+    Googlebot-Image 등 변종은 포함, AdsBot/Mediapartners 는 UA 에 'googlebot' 이 없어 제외.
+    UA 는 자칭이라 역DNS 검증 없이는 상한값이다(직접 정규식 금지 — parser 판정을 먼저 거친다)."""
+    return (h.audience == "bot" and "googlebot" in (h.ua or "").lower()
+            and h.path.startswith(ARTICLE_PREFIX) and h.category != "asset")
+
+
+def _googlebot_rollup(hits) -> dict:
+    """(date, path) → (requests, ok). ok = 200/304 응답 수. 경로 단위로 남겨야 창(7/30일) distinct 가 정확하다."""
+    req, ok = Counter(), Counter()
+    for h in hits:
+        if _is_googlebot_article(h):
+            key = (h.date, h.path)
+            req[key] += 1
+            if h.status in (200, 304):
+                ok[key] += 1
+    return {k: (req[k], ok.get(k, 0)) for k in req}
+
+
+def _persist_googlebot(conn, rollup: dict) -> None:
+    """일자·경로 롤업 upsert — 로그가 있는 날은 재계산·덮어쓰기(site_daily 와 같은 멱등 규칙)."""
+    for (d, path), (requests, ok) in rollup.items():
+        conn.execute(
+            "INSERT INTO googlebot_path_daily(date,path,requests,ok) VALUES(?,?,?,?) "
+            "ON CONFLICT(date,path) DO UPDATE SET requests=excluded.requests, ok=excluded.ok",
+            (d, path, requests, ok))
+
+
+def _googlebot_payload(conn, today: date) -> dict:
+    """7일/30일 요청 수·200/304 수·distinct 기사 수. DB 롤업 기준이라 로그 14일 회전 후에도 30일 창이 유지된다."""
+    def win(days: int) -> dict:
+        cut = (today - timedelta(days=days - 1)).isoformat()
+        r = conn.execute(
+            "SELECT COALESCE(SUM(requests),0), COALESCE(SUM(ok),0), COUNT(DISTINCT path) "
+            "FROM googlebot_path_daily WHERE date>=?", (cut,)).fetchone()
+        return {"requests": int(r[0]), "ok": int(r[1]), "distinct_urls": int(r[2])}
+    last = (conn.execute("SELECT MAX(date) FROM googlebot_path_daily").fetchone() or [None])[0]
+    return {"d7": win(7), "d30": win(30), "last_seen": last, "article_prefix": ARTICLE_PREFIX,
+            "note": "UA 'googlebot' 자칭 기준(역DNS 미검증, 상한값) · parser bot 판정 · 기사 경로만"}
+
+
 def _trend(conn, days: int, today: date):
     rows = dict((d, (pv, uniq, bots)) for d, pv, uniq, bots in
                 conn.execute("SELECT date,pv,uniq,bots FROM site_daily").fetchall())
@@ -327,6 +377,8 @@ def run(cfg_all=None) -> str:
     site, paths = _rollups(hits)
     with _db(db_path) as conn:
         _persist(conn, site, paths, hits, now_iso)
+        _persist_googlebot(conn, _googlebot_rollup(hits))
+        googlebot_articles = _googlebot_payload(conn, today)
         trend = _trend(conn, trend_days, today)
         top_pages = _top_pages(conn)
         first_seen = (conn.execute("SELECT value FROM meta WHERE key='first_seen'").fetchone() or [None])[0]
@@ -403,6 +455,7 @@ def run(cfg_all=None) -> str:
         "browsers": browsers,
         "recent": recent,
         "bots": bot_top,
+        "googlebot_articles": googlebot_articles,   # F16 게이트 관측: Googlebot 의 기사 요청 7/30일(DB 롤업)
         "batch": _batch_payload(cfg, now),   # 운영 배치 주기 + 최근 성공/실패/지연 — '데이터 수집 주기' 패널
         "gsc": _gsc_payload(),               # GSC 색인 현황(색인 파이프라인 단계·페이지별 상태·검색 성과)
     }
