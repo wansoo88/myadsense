@@ -389,18 +389,20 @@ def _about_body(domain: str, email: str, mon: dict) -> str:
         "disclose it. Either way, verdicts are based on what we measure and what vendors document "
         "and are <strong>not</strong> influenced by how the site is funded.</p>")
     # 2026-09-08 ORDER 54 ②: 자기서술 교정 — "공개 문서 재편집" 선언을 "우리가 직접 돌리고 잰 것" 으로.
-    # "every article" 이라 쓰지 않는다(측정 섹션 없는 글이 남아 있는 동안 사실과 어긋난다).
+    # "every article" 과 설치·구동(desktop suite) 표현은 쓰지 않는다 — 측정 섹션 없는 글이 남아 있고 설치·구동
+    # 측정이 아직 라이브에 없다(56-review A-3, 2026-09-08). 라운드 B 로 올라오면 그때 복원.
     return f"""<p><strong>{esc(domain)}</strong> is an independent site about developer and AI-agent tooling
-you run yourself. We install and run the tools we write about and publish what we measure — install sizes,
-cold starts, latency, release cadence, and checked prices — with comparisons built from those numbers.</p>
+you run yourself. We measure the tools we write about from our own machines and publish the numbers —
+network latency from two vantage points, installer and container image sizes, release cadence, and checked
+prices — with comparisons built from those figures.</p>
 
 {_who_block(email)}
 
 <h3 id="how-we-work">How we work</h3>
-<p><strong>How we work.</strong> We install and run the tools we write about. Every figure labeled
-"measured" comes from scripts in our own repository and is published with the host profile and the date it
-was taken. Prices are checked against the vendor's own pricing page on the stated date. Where we have not
-measured something, we say so.</p>
+<p><strong>How we work.</strong> We measure the tools we write about from our own machines. Every figure
+labeled "measured" comes from scripts in our own repository and is published with the host profile and the
+date it was taken. Prices are checked against the vendor's own pricing page on the stated date. Where we have
+not measured something — including install size and run-time behaviour — we say so.</p>
 <ul>
 <li><strong>Structured, like-for-like.</strong> Tools are compared on the same dimensions (pricing,
 core features, data ownership, and fit) so the trade-offs are explicit rather than asserted.</li>
@@ -439,8 +441,8 @@ def _og_svg(domain: str) -> str:
         f'<tspan fill="#9aa4b2" font-weight="500">   {esc(domain)}</tspan></text>'
         '<text x="80" y="330" font-size="72" font-weight="800" fill="#e7ebf2">Tool choices, backed'
         '<tspan x="80" dy="86">by <tspan fill="#5b9cff">data</tspan> — not vibes.</tspan></text>'
-        '<text x="80" y="548" font-size="30" fill="#9aa4b2">Developer &amp; AI-agent tooling, run and measured '
-        'on our own machines.</text>'
+        '<text x="80" y="548" font-size="30" fill="#9aa4b2">Developer &amp; AI-agent tooling, measured '
+        'from our own machines.</text>'
         '</svg>\n')
 
 
