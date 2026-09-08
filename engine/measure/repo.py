@@ -13,6 +13,7 @@ GITHUB_TOKEN 환경변수가 있으면 붙인다. 403/429 는 상태코드와 �
 - last_commit   : 기본 브랜치 최신 커밋의 committer date.
 - commit_weekly_52 : `weekly: true` 인 저장소만. GitHub stats/participation 의 최근 52주 주간 커밋 수(전체 기여자). 시계열 글의 표와 같은 원자료.
 - open_issues / open_prs : 측정 시각의 열린 이슈 / 열린 PR 수. has_issues=false 면 그 저장소는 이슈 기능을 꺼 둔 것(0 이 아니라 "off").
+- release_tag_commits : `release_tags_check: N` 인 저장소만. 최신 N개 정식 릴리스 태그 → 가리키는 커밋(짧은 sha)과 그 커밋의 committer date.
 """
 from __future__ import annotations
 import datetime
@@ -108,6 +109,25 @@ def measure_repo(r: dict, windows: list, sinces: dict) -> dict:
             row["latest_release"] = stable[0].get("tag_name")
             row["latest_release_date"] = (stable[0].get("published_at") or "")[:10]
         row["releases_listed"] = len(rels)   # 100 이면 잘렸을 수 있다
+        # 최신 N개 정식 릴리스 태그가 가리키는 커밋과 그 커밋 날짜 — "릴리스가 새 코드에서 잘리는가"를 표에 그대로 보이기 위해
+        # (2026-09-08: AppFlowy 0.13.0·0.14.0·0.14.1 이 전부 같은 06-26 커밋을 가리켰다). 태그당 최대 3회 호출.
+        n_check = int(r.get("release_tags_check") or 0)
+        if n_check and stable:
+            out = []
+            for rel in stable[:n_check]:
+                tag = rel.get("tag_name")
+                st_t, ref, _ = _get(f"{API}/repos/{full}/git/ref/tags/{urllib.parse.quote(tag)}")
+                sha = ((ref.get("object") or {}).get("sha")) if st_t == 200 else None
+                if st_t == 200 and (ref.get("object") or {}).get("type") == "tag" and sha:   # annotated tag → 한 번 더 푼다
+                    st_a, tobj, _ = _get(f"{API}/repos/{full}/git/tags/{sha}")
+                    sha = ((tobj.get("object") or {}).get("sha")) if st_a == 200 else sha
+                date = None
+                if sha:
+                    st_c, cm, _ = _get(f"{API}/repos/{full}/commits/{sha}")
+                    if st_c == 200:
+                        date = (((cm.get("commit") or {}).get("committer") or {}).get("date") or "")[:10]
+                out.append({"tag": tag, "published": (rel.get("published_at") or "")[:10], "sha": (sha or "")[:7] or None, "commit_date": date})
+            row["release_tag_commits"] = out
     else:
         for d in windows:
             row[f"releases_{d}d_stable"] = row[f"releases_{d}d_pre"] = None

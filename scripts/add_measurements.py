@@ -153,6 +153,7 @@ def repo_table(data, blk, per_host):
         if not rows:
             continue
         d = blk.get("days") or payload.get("days") or 90
+        with_tags = any(r.get("release_tag_commits") for r in rows)
         body = []
         for r in rows:
             rel = r.get(f"releases_{d}d_stable")
@@ -162,14 +163,23 @@ def repo_table(data, blk, per_host):
             issues = ("—" if r.get("open_issues") is None else
                       (f"issues off / {_fmt(r.get('open_prs'))}" if r.get("has_issues") is False else f"{_fmt(r['open_issues'])} / {_fmt(r.get('open_prs'))}"))
             url = r.get("url") or f"https://github.com/{r.get('repo') or r.get('github')}"
-            body.append([f'<a href="{esc(url)}" rel="noopener" target="_blank">{esc(r["label"])}</a>', _fmt(r.get("stars")),
-                         esc(r.get("last_commit") or "—"), _fmt(r.get(f"commits_{d}d")), rel_s, latest, issues, esc(r.get("license") or "—")])
+            cells = [f'<a href="{esc(url)}" rel="noopener" target="_blank">{esc(r["label"])}</a>', _fmt(r.get("stars")),
+                     esc(r.get("last_commit") or "—"), _fmt(r.get(f"commits_{d}d")), rel_s, latest, issues, esc(r.get("license") or "—")]
+            if with_tags:
+                tc = r.get("release_tag_commits") or []
+                cells.append("<br>".join(f'{esc(t["tag"])} → <code>{esc(t["sha"] or "?")}</code> ({esc(t["commit_date"] or "?")})' for t in tc) or "—")
+            body.append(cells)
         since = (payload.get("since") or {}).get(str(d)) or (payload.get("since") or {}).get(d) or ""
         cap = (f"Read from the GitHub API on {esc(payload['host'].get('date', ''))}: stars; the date of the newest commit on the default branch; "
                f"commits on that branch and releases published in the {d} days ending that day ({esc(since)} → {esc(payload['host'].get('date', ''))}), "
                f"pre-releases counted separately; open issues and open pull requests at that moment (\"issues off\" = the project does not use GitHub issues); and the license GitHub detects. "
-               f"Commit counts are the repository's own history, so squash-merged projects show fewer commits than merge-heavy ones.")
-        return _table(["Repository", "Stars", "Last commit", f"Commits ({d} d)", f"Releases ({d} d)", "Latest release", "Open issues / PRs", "License"], body, cap)
+               f"Commit counts are the repository's own history, so squash-merged projects show fewer commits than merge-heavy ones."
+               + (" \"Newest release tags → commit\" resolves each of the newest stable release tags to the commit it points at and that commit's date, "
+                  "read the same day — it shows whether releases are being cut from new code on the default branch." if with_tags else ""))
+        head = ["Repository", "Stars", "Last commit", f"Commits ({d} d)", f"Releases ({d} d)", "Latest release", "Open issues / PRs", "License"]
+        if with_tags:
+            head.append("Newest release tags → commit")
+        return _table(head, body, cap)
     return ""
 
 

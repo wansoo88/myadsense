@@ -107,10 +107,10 @@ repo:
     - {key: amazon_q_cli, label: "Amazon Q Developer CLI (aws/amazon-q-developer-cli)", github: "aws/amazon-q-developer-cli"}
     # appflowy-vs-affine 정정(ORDER 55 추가분): 개발이 형제 저장소로 옮겨간 것을 표에 드러낸다
     # weekly: true → stats/participation 52주 주간 커밋도 받는다(그 글의 52주 표를 같은 원자료로 다시 그리기 위해)
-    - {key: appflowy, label: "AppFlowy (AppFlowy-IO/AppFlowy — desktop/mobile)", github: "AppFlowy-IO/AppFlowy", weekly: true}
-    - {key: appflowy_web, label: "AppFlowy-Web (AppFlowy-IO/AppFlowy-Web)", github: "AppFlowy-IO/AppFlowy-Web", weekly: true}
-    - {key: appflowy_cloud, label: "AppFlowy-Cloud (AppFlowy-IO/AppFlowy-Cloud)", github: "AppFlowy-IO/AppFlowy-Cloud", weekly: true}
-    - {key: affine, label: "AFFiNE (toeverything/AFFiNE)", github: "toeverything/AFFiNE", weekly: true}
+    - {key: appflowy, label: "AppFlowy (AppFlowy-IO/AppFlowy — desktop/mobile)", github: "AppFlowy-IO/AppFlowy", weekly: true, release_tags_check: 3}
+    - {key: appflowy_web, label: "AppFlowy-Web (AppFlowy-IO/AppFlowy-Web)", github: "AppFlowy-IO/AppFlowy-Web", weekly: true, release_tags_check: 3}
+    - {key: appflowy_cloud, label: "AppFlowy-Cloud (AppFlowy-IO/AppFlowy-Cloud)", github: "AppFlowy-IO/AppFlowy-Cloud", weekly: true, release_tags_check: 3}
+    - {key: affine, label: "AFFiNE (toeverything/AFFiNE)", github: "toeverything/AFFiNE", weekly: true, release_tags_check: 3}
     - {key: outline, label: "Outline (outline/outline)", github: "outline/outline", weekly: true}
     - {key: docmost, label: "Docmost (docmost/docmost)", github: "docmost/docmost", weekly: true}
     - {key: siyuan, label: "SiYuan (siyuan-note/siyuan)", github: "siyuan-note/siyuan", weekly: true}
