@@ -7,6 +7,8 @@
                  한 번만 잰다(디스크 캐시가 따뜻할 수 있어 '재기동' 에 가깝다 — 캡션에 그렇게 적는다).
 - idle_rss_mb  : 창이 뜨고 settle 초 뒤, 프로세스 트리 RSS 합(MB). Electron 앱은 보조 프로세스가 여럿이라 트리로 센다.
 - screenshot   : 창 영역만 잘라 assets/measure/<key>.webp (폭 1200 이하).
+- args / fresh_profile : 앱에 넘길 인자(예: VS Code 계열의 --user-data-dir 로 빈 프로필). fresh_profile=true 면 캡션이
+                 "빈 프로필·작업공간 없음" 조건임을 밝힌다 — 기존 설치본이 사용자의 작업공간을 복원하는 것을 막기 위한 것.
 CLI 는 `--version` 실행 시간과 설치 디렉터리 용량만 잰다.
 """
 from __future__ import annotations
@@ -135,8 +137,13 @@ def measure_app(app: dict, settle: int, shots_dir: str) -> dict:
     row["version"] = file_version(exe)
     already = kill_by_exe(exe)
     row["killed_before"] = already
+    args = [expand(x) for x in (app.get("args") or [])]
+    if args:
+        row["launch_args"] = args
+    if app.get("fresh_profile"):
+        row["fresh_profile"] = True
     t0 = time.perf_counter()
-    proc = subprocess.Popen([exe], cwd=inst_dir)
+    proc = subprocess.Popen([exe, *args], cwd=inst_dir)
     hwnd, deadline = 0, time.perf_counter() + 90
     while time.perf_counter() < deadline:
         pids = _tree_pids(proc.pid)
@@ -163,7 +170,10 @@ def measure_app(app: dict, settle: int, shots_dir: str) -> dict:
                 pass
         row["idle_rss_mb"] = round(rss / 1e6, 0)
         row["process_count"] = len(pids)
-        row["screenshot"] = screenshot(hwnd, os.path.join(shots_dir, f"{app['key']}.webp"))
+        # 스크린샷은 기본 꺼짐(config desktop.screenshots: true 로만 켠다). ImageGrab 은 창이 아니라 **화면 영역**을 찍으므로
+        # SetForegroundWindow 가 거부되면(백그라운드 프로세스에서 흔함) 그 자리에 떠 있던 다른 창 — 2026-09-08 에는 편집자의
+        # 브라우저 — 가 찍힌다. 창 내용 자체를 뜨는 PrintWindow 로 바꾸기 전에는 켜지 말 것.
+        row["screenshot"] = (screenshot(hwnd, os.path.join(shots_dir, f"{app['key']}.webp")) if shots_dir else None)
     kill_by_exe(exe)
     print(f"  {app['label']:<12} v{row.get('version')} footprint={row.get('footprint_mb')}MB "
           f"cold_start={row.get('cold_start_s')}s idle_rss={row.get('idle_rss_mb')}MB procs={row.get('process_count')}")
@@ -192,6 +202,8 @@ def run(cfg: dict, shots_dir: str = "assets/measure", only=None) -> dict:
     if os.name != "nt" or psutil is None:
         raise SystemExit("desktop suite 는 Windows + psutil 에서만 돈다")
     settle = int(cfg.get("settle_seconds", 25))
+    if not cfg.get("screenshots"):
+        shots_dir = None
     rows = [measure_app(a, settle, shots_dir) for a in cfg.get("apps", []) if not only or a["key"] in only]
     clis = [measure_cli(c) for c in cfg.get("cli", []) if not only or c["key"] in only]
     return {"settle_seconds": settle, "rows": rows, "cli": clis}

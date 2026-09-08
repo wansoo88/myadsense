@@ -6,6 +6,7 @@
   python scripts/measure.py --suite releases  --host windows-laptop
   python scripts/measure.py --suite desktop   --host windows-laptop        # Windows 전용(창 띄우고 스크린샷)
   python scripts/measure.py --suite docker_run --host windows-laptop --only nextcloud
+  python scripts/measure.py --suite repo      --host windows-laptop        # GitHub 활동(커밋·릴리스·이슈), API 만
 
 host 역할은 config/measure.yaml hosts 의 키. 어느 기계에서 쟀는지가 값의 일부다(본문 캡션에 실린다).
 """
@@ -22,10 +23,14 @@ from engine.measure import common                        # noqa: E402
 
 
 def main(argv=None) -> int:
+    try:                                                  # Windows 콘솔(cp949)에서 라벨의 특수문자로 죽지 않게
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
-    ap.add_argument("--suite", required=True, choices=["netprobe", "registry", "releases", "desktop", "docker_run"])
+    ap.add_argument("--suite", required=True, choices=["netprobe", "registry", "releases", "desktop", "docker_run", "repo"])
     ap.add_argument("--host", required=True, help="config/measure.yaml hosts 의 키 (seoul-vps · windows-laptop)")
-    ap.add_argument("--only", nargs="*", help="docker_run: 대상 key 제한")
+    ap.add_argument("--only", nargs="*", help="docker_run·desktop·repo: 대상 key 제한")
     ap.add_argument("--keep-image", action="store_true", help="docker_run: 측정 후 이미지를 남긴다")
     a = ap.parse_args(argv)
     with open("config/measure.yaml", encoding="utf-8") as f:
@@ -47,10 +52,15 @@ def main(argv=None) -> int:
     elif a.suite == "desktop":
         from engine.measure import desktop_win
         res = desktop_win.run(cfg["desktop"], only=a.only)
+    elif a.suite == "repo":
+        from engine.measure import repo
+        res = repo.run(cfg["repo"], only=a.only)
     else:
         from engine.measure import docker_run
         res = docker_run.run(cfg["docker_run"], only=a.only, keep_image=a.keep_image)
     payload = {"suite": a.suite, "host": prof, **res}
+    if a.only:                                            # --only 는 기존 파일의 다른 행을 지우지 않는다(키 단위 병합, 2026-09-08)
+        payload = common.merge_only(a.suite, a.host, payload, keys=a.only)
     p = common.save(a.suite, a.host, payload)
     print(f"saved → {p}")
     return 0

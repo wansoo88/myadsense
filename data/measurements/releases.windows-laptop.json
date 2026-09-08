@@ -7,8 +7,8 @@
   "ram_gb": 15.3,
   "cores": 12,
   "python": "3.12.10",
-  "measured_at": "2026-09-05T23:34:56Z",
-  "date": "2026-09-06",
+  "measured_at": "2026-09-08T12:55:55Z",
+  "date": "2026-09-08",
   "description": "Windows 11 laptop (AMD Ryzen 5 5625U, 6 cores, 16 GB RAM) — the editor's workstation"
  },
  "rows": [
@@ -55,7 +55,7 @@
   {
    "key": "postman",
    "label": "Postman",
-   "bytes": 206184056,
+   "bytes": 205898360,
    "asset": "win64",
    "version": null,
    "source": "https://dl.pstmn.io/download/latest/win64",
@@ -91,6 +91,46 @@
    "bytes": 377009,
    "source": "https://pypi.org/project/aider-chat/0.86.2/",
    "mb": 0.4
+  },
+  {
+   "key": "orca",
+   "label": "Orca",
+   "version": "v1.4.198",
+   "published": "2026-09-08",
+   "asset": "orca-windows-setup.exe",
+   "bytes": 183117728,
+   "source": "https://github.com/stablyai/orca/releases/tag/v1.4.198",
+   "mb": 183.0
+  },
+  {
+   "key": "herdr",
+   "label": "herdr (Windows zip)",
+   "version": "v0.9.0",
+   "published": "2026-09-07",
+   "asset": "herdr-windows-x86_64.zip",
+   "bytes": 9054745,
+   "source": "https://github.com/herdrdev/herdr/releases/tag/v0.9.0",
+   "mb": 9.1
+  },
+  {
+   "key": "cursor",
+   "label": "Cursor",
+   "bytes": 205640928,
+   "asset": "CursorUserSetup-x64-3.19.13.exe",
+   "version": "3.19.13",
+   "source": "https://downloads.cursor.com/production/dd066f332fcea7382764400fde902f61920648d5/win32/x64/user-setup/CursorUserSetup-x64-3.19.13.exe",
+   "final_url": "https://downloads.cursor.com/production/dd066f332fcea7382764400fde902f61920648d5/win32/x64/user-setup/CursorUserSetup-x64-3.19.13.exe",
+   "mb": 206.0
+  },
+  {
+   "key": "windsurf",
+   "label": "Windsurf",
+   "bytes": 254456656,
+   "asset": "DevinUserSetup-x64-3.8.20.exe",
+   "version": "3.8.20",
+   "source": "https://windsurf-stable.codeiumdata.com/win32-x64-user/stable/2d9020110aa91587b3c3b0fcf7d1faaf601fc7b8/DevinUserSetup-x64-3.8.20.exe",
+   "final_url": "https://windsurf-stable.codeiumdata.com/win32-x64-user/stable/2d9020110aa91587b3c3b0fcf7d1faaf601fc7b8/DevinUserSetup-x64-3.8.20.exe",
+   "mb": 254.0
   }
  ]
 }

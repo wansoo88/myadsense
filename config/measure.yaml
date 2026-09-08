@@ -60,20 +60,31 @@ releases:
     - {key: onepassword, label: "1Password", url: "https://downloads.1password.com/win/1PasswordSetup-latest.exe"}
     - {key: notion, label: "Notion", url: "https://www.notion.so/desktop/windows/download"}
     - {key: aider, label: "aider (PyPI aider-chat)", pypi: "aider-chat"}
+    # 2026-09-08 (ORDER 55): orca-vs-herdr · cursor-vs-windsurf
+    - {key: orca, label: "Orca", github: "stablyai/orca", asset: '^orca-windows-setup\.exe$', tag_prefix: "v"}
+    - {key: herdr, label: "herdr (Windows zip)", github: "herdrdev/herdr", asset: '^herdr-windows-x86_64\.zip$', tag_prefix: "v"}
+    - {key: cursor, label: "Cursor", url: "https://downloads.cursor.com/production/dd066f332fcea7382764400fde902f61920648d5/win32/x64/user-setup/CursorUserSetup-x64-3.19.13.exe"}   # cursor.com/api/download?platform=win32-x64-user&releaseTrack=stable 가 준 URL(2026-09-08)
+    - {key: windsurf, label: "Windsurf", url: "https://windsurf-stable.codeiumdata.com/win32-x64-user/stable/2d9020110aa91587b3c3b0fcf7d1faaf601fc7b8/DevinUserSetup-x64-3.8.20.exe"}   # windsurf-stable.codeium.com/api/update/win32-x64-user/stable/latest (2026-09-08) — 설치파일 이름이 이미 Devin 이다
 
 desktop:
   settle_seconds: 25     # 창이 뜬 뒤 유휴 메모리 표본까지 대기
+  screenshots: false     # 화면 영역 캡처는 전면의 다른 창을 찍는다(2026-09-08 실제 발생) — PrintWindow 로 바꾸기 전엔 끈다
   apps:
     - {key: notion, label: "Notion", exe: "%LOCALAPPDATA%\\Programs\\Notion\\Notion.exe"}
     - {key: obsidian, label: "Obsidian", exe: "%LOCALAPPDATA%\\Obsidian\\Obsidian.exe"}
-    - {key: cursor, label: "Cursor", exe: "%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe"}
-    - {key: windsurf, label: "Windsurf", exe: "%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe"}
+    # cursor·windsurf(VS Code 계열)는 빈 프로필·확장 없음·작업공간 없음으로 띄운다 — 기존 설치본이 편집자의 작업공간을 복원하면
+    # 콜드 스타트·메모리가 그 작업공간 크기를 재는 꼴이 된다(2026-09-08 1차 측정: 26 s · 3.3 GB). 두 앱을 같은 조건으로.
+    - {key: cursor, label: "Cursor", exe: "%LOCALAPPDATA%/Programs/cursor/Cursor.exe", args: ["--user-data-dir=%TEMP%/measure-profile-cursor", "--extensions-dir=%TEMP%/measure-ext-cursor"], fresh_profile: true}
+    - {key: windsurf, label: "Windsurf (installs as Devin)", exe: "%LOCALAPPDATA%/Programs/Devin/Devin.exe", args: ["--user-data-dir=%TEMP%/measure-profile-windsurf", "--extensions-dir=%TEMP%/measure-ext-windsurf"], fresh_profile: true}   # 3.8.20 설치본은 폴더·실행파일이 Devin 이다(2026-09-08 실측)
+    - {key: orca, label: "Orca", exe: "%LOCALAPPDATA%/Programs/Orca/Orca.exe"}   # electron-builder NSIS, /S 로 설치 (2026-09-08)
     - {key: bruno, label: "Bruno", exe: "%LOCALAPPDATA%\\Programs\\bruno\\Bruno.exe"}
     - {key: postman, label: "Postman", exe: "%LOCALAPPDATA%\\Postman\\Postman.exe"}
     - {key: bitwarden, label: "Bitwarden", exe: "%LOCALAPPDATA%\\Programs\\Bitwarden\\Bitwarden.exe"}
     - {key: onepassword, label: "1Password", exe: "%LOCALAPPDATA%\\1Password\\app\\8\\1Password.exe"}
   cli:
     - {key: herdr, label: "herdr", exe: "%LOCALAPPDATA%\\Programs\\Herdr\\bin\\herdr.exe", args: ["--version"], dir: "%LOCALAPPDATA%\\Programs\\Herdr"}
+    # 팀이 쓰는 설치본(위)은 0.7.4 preview 라, 글에는 릴리스 zip 을 별도 폴더에 풀어 잰 값을 쓴다 (2026-09-08)
+    - {key: herdr_release, label: "herdr", exe: "%LOCALAPPDATA%/herdr-measure/0.9.0/herdr.exe", args: ["--version"], dir: "%LOCALAPPDATA%/herdr-measure/0.9.0"}
 
 docker_run:
   settle_seconds: 45
@@ -82,48 +93,73 @@ docker_run:
     - {key: siyuan, label: "SiYuan", image: "b3log/siyuan:latest", port: 6806, health: "/", args: ["--workspace=/siyuan/workspace", "--accessAuthCode=measure"]}
     - {key: trilium, label: "TriliumNext", image: "triliumnext/notes:latest", port: 8080, health: "/"}
 
+repo:
+  # GitHub 저장소 활동(engine/measure/repo.py) — 커밋·릴리스 수는 windows 의 각 창(일수)마다 센다. API 만 읽는다.
+  windows: [90, 365]
+  repos:
+    # orca-vs-herdr
+    - {key: orca, label: "Orca (stablyai/orca)", github: "stablyai/orca", release_tag_prefix: "v"}          # mobile-android-* 태그 제외
+    - {key: herdr, label: "herdr (herdrdev/herdr)", github: "herdrdev/herdr"}
+    # the-best-ai-code-review-tools — 공개 저장소가 있는 항목만
+    - {key: pr_agent, label: "Qodo Merge / PR-Agent (open-source core)", github: "qodo-ai/pr-agent"}
+    - {key: sonarqube, label: "SonarQube Server (SonarSource/sonarqube)", github: "SonarSource/sonarqube"}
+    - {key: snyk_cli, label: "Snyk CLI (snyk/cli)", github: "snyk/cli"}
+    - {key: amazon_q_cli, label: "Amazon Q Developer CLI (aws/amazon-q-developer-cli)", github: "aws/amazon-q-developer-cli"}
+    # appflowy-vs-affine 정정(ORDER 55 추가분): 개발이 형제 저장소로 옮겨간 것을 표에 드러낸다
+    # weekly: true → stats/participation 52주 주간 커밋도 받는다(그 글의 52주 표를 같은 원자료로 다시 그리기 위해)
+    - {key: appflowy, label: "AppFlowy (AppFlowy-IO/AppFlowy — desktop/mobile)", github: "AppFlowy-IO/AppFlowy", weekly: true}
+    - {key: appflowy_web, label: "AppFlowy-Web (AppFlowy-IO/AppFlowy-Web)", github: "AppFlowy-IO/AppFlowy-Web", weekly: true}
+    - {key: appflowy_cloud, label: "AppFlowy-Cloud (AppFlowy-IO/AppFlowy-Cloud)", github: "AppFlowy-IO/AppFlowy-Cloud", weekly: true}
+    - {key: affine, label: "AFFiNE (toeverything/AFFiNE)", github: "toeverything/AFFiNE", weekly: true}
+    - {key: outline, label: "Outline (outline/outline)", github: "outline/outline", weekly: true}
+    - {key: docmost, label: "Docmost (docmost/docmost)", github: "docmost/docmost", weekly: true}
+    - {key: siyuan, label: "SiYuan (siyuan-note/siyuan)", github: "siyuan-note/siyuan", weekly: true}
+
 # 글 ↔ 측정 매핑: add_measurements.py 가 이 순서대로 섹션을 만든다. 표는 있는 데이터만 그린다(없으면 그 표를 생략).
 articles:
+  # 섹션 제목(h2)은 여기 적지 않는다 — add_measurements.derive_title 이 실제로 그려진 표에서 만든다(B0, 2026-09-08).
   cheap-vps-in-2026-digitalocean-and-vultr-compared-with-our-value-picks:
-    title: "What we measured: latency to each region from Seoul"
     blocks:
       - {suite: netprobe, kind: latency_table, providers: [DigitalOcean, Vultr]}
       - {suite: netprobe, kind: throughput_table, providers: [Vultr]}
   best-self-hosted-alternatives-to-notion-8-open-source-picks:
-    title: "What we measured: image size and a cold start"
     blocks:
       - {suite: registry, kind: image_table, keys: [appflowy_cloud, affine, outline, docmost, siyuan, trilium]}
       - {suite: docker_run, kind: run_table, keys: [siyuan, trilium]}
   how-to-self-host-nextcloud-a-complete-setup-guide:
-    title: "What we measured: the official image, pulled and started"
     blocks:
       - {suite: registry, kind: image_table, keys: [nextcloud]}
       - {suite: docker_run, kind: run_table, keys: [nextcloud]}
   bruno-vs-postman-git-native-client-vs-cloud-platform-2026:
-    title: "What we measured: installer size, footprint, cold start"
     blocks:
       - {suite: releases, kind: release_table, keys: [bruno, postman]}
       - {suite: desktop, kind: desktop_table, keys: [bruno, postman]}
   bitwarden-vs-1password-which-password-manager-should-you-use:
-    title: "What we measured: installer size, footprint, cold start"
     blocks:
       - {suite: releases, kind: release_table, keys: [bitwarden, bitwarden_portable, onepassword]}
       - {suite: desktop, kind: desktop_table, keys: [bitwarden, onepassword]}
   notion-vs-obsidian-which-note-taking-app-should-you-use-in-2026:
-    title: "What we measured: installer size, footprint, cold start"
     blocks:
       - {suite: releases, kind: release_table, keys: [notion, obsidian]}
       - {suite: desktop, kind: desktop_table, keys: [notion, obsidian]}
   cursor-vs-windsurf-which-ai-code-editor-should-you-use-in-2026:
-    title: "What we measured: footprint and cold start on our laptop"
     blocks:
+      - {suite: releases, kind: release_table, keys: [cursor, windsurf]}
       - {suite: desktop, kind: desktop_table, keys: [cursor, windsurf]}
   aider-vs-cursor-terminal-ai-coding-vs-the-ai-ide:
-    title: "What we measured: package size and footprint"
     blocks:
       - {suite: releases, kind: release_table, keys: [aider]}
       - {suite: desktop, kind: desktop_table, keys: [cursor]}
   orca-vs-herdr-agent-ide-or-terminal-multiplexer-for-coding-agents:
-    title: "What we measured: herdr on our own machine"
     blocks:
-      - {suite: desktop, kind: cli_table, keys: [herdr]}
+      - {suite: releases, kind: release_table, keys: [orca, herdr]}
+      - {suite: desktop, kind: desktop_table, keys: [orca]}
+      - {suite: desktop, kind: cli_table, keys: [herdr_release]}
+      - {suite: repo, kind: repo_table, keys: [orca, herdr]}
+  the-best-ai-code-review-tools-in-2026-8-options-compared:
+    blocks:
+      - {suite: repo, kind: repo_table, keys: [pr_agent, sonarqube, snyk_cli, amazon_q_cli]}
+      - {suite: prices, kind: price_table}
+  which-open-source-notion-alternatives-are-actually-being-developed-appflowy-vs-affine-2026:
+    blocks:
+      - {suite: repo, kind: repo_table, keys: [appflowy, appflowy_web, appflowy_cloud, affine]}

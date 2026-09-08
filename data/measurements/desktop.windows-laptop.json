@@ -1,0 +1,94 @@
+{
+ "suite": "desktop",
+ "host": {
+  "role": "windows-laptop",
+  "os": "Windows 11 (10.0.26200)",
+  "cpu": "AMD Ryzen 5 5625U with Radeon Graphics",
+  "ram_gb": 15.3,
+  "cores": 12,
+  "python": "3.12.10",
+  "measured_at": "2026-09-08T13:32:45Z",
+  "date": "2026-09-08",
+  "description": "Windows 11 laptop (AMD Ryzen 5 5625U, 6 cores, 16 GB RAM) — the editor's workstation"
+ },
+ "settle_seconds": 25,
+ "rows": [
+  {
+   "key": "orca",
+   "label": "Orca",
+   "exe": "C:\\Users\\kimws\\AppData\\Local/Programs/Orca/Orca.exe",
+   "installed": true,
+   "footprint_mb": 652.0,
+   "version": "1.4.198.0",
+   "killed_before": 6,
+   "cold_start_s": 2.72,
+   "idle_rss_mb": 774.0,
+   "process_count": 6,
+   "screenshot": null,
+   "measured_at": "2026-09-08T12:57:59Z",
+   "screenshot_note": "discarded: screen-region grab captured whatever was on top of the desktop, not the app window (2026-09-08)"
+  },
+  {
+   "key": "cursor",
+   "label": "Cursor",
+   "exe": "C:\\Users\\kimws\\AppData\\Local/Programs/cursor/Cursor.exe",
+   "installed": true,
+   "footprint_mb": 928.0,
+   "version": "3.19.13",
+   "killed_before": 0,
+   "launch_args": [
+    "--user-data-dir=C:\\Users\\kimws\\AppData\\Local\\Temp/measure-profile-cursor",
+    "--extensions-dir=C:\\Users\\kimws\\AppData\\Local\\Temp/measure-ext-cursor"
+   ],
+   "fresh_profile": true,
+   "cold_start_s": 2.71,
+   "idle_rss_mb": 3456.0,
+   "process_count": 11,
+   "screenshot": null,
+   "measured_at": "2026-09-08T13:32:45Z",
+   "screenshot_note": "discarded: screen-region grab captured whatever was on top of the desktop, not the app window (2026-09-08)"
+  },
+  {
+   "key": "windsurf",
+   "label": "Windsurf (installs as Devin)",
+   "exe": "C:\\Users\\kimws\\AppData\\Local/Programs/Devin/Devin.exe",
+   "installed": true,
+   "footprint_mb": 1216.0,
+   "version": "3.8.20",
+   "killed_before": 0,
+   "launch_args": [
+    "--user-data-dir=C:\\Users\\kimws\\AppData\\Local\\Temp/measure-profile-windsurf",
+    "--extensions-dir=C:\\Users\\kimws\\AppData\\Local\\Temp/measure-ext-windsurf"
+   ],
+   "fresh_profile": true,
+   "cold_start_s": 1.82,
+   "idle_rss_mb": 2384.0,
+   "process_count": 13,
+   "screenshot": null,
+   "measured_at": "2026-09-08T13:32:45Z",
+   "screenshot_note": "discarded: screen-region grab captured whatever was on top of the desktop, not the app window (2026-09-08)"
+  }
+ ],
+ "cli": [
+  {
+   "key": "herdr",
+   "label": "herdr",
+   "exe": "C:\\Users\\kimws\\AppData\\Local\\Programs\\Herdr\\bin\\herdr.exe",
+   "installed": true,
+   "footprint_mb": 18.0,
+   "version": "herdr 0.7.4-preview.2026-07-17-813fec141faa",
+   "run_s": 0.03,
+   "measured_at": "2026-09-08T12:57:59Z"
+  },
+  {
+   "key": "herdr_release",
+   "label": "herdr",
+   "exe": "C:\\Users\\kimws\\AppData\\Local/herdr-measure/0.9.0/herdr.exe",
+   "installed": true,
+   "footprint_mb": 27.0,
+   "version": "herdr 0.9.0",
+   "run_s": 0.03,
+   "measured_at": "2026-09-08T12:57:59Z"
+  }
+ ]
+}

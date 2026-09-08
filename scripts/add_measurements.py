@@ -7,6 +7,8 @@
 - 숫자는 전부 우리 측정값 + 잰 기계 + 날짜. 캡션이 측정 정의를 그대로 말한다(engine/measure/*.py docstring 과 동일).
 
   python scripts/add_measurements.py [--dry-run] [--only slug ...]     (리포 루트에서, 서버 큐 = 정본)
+  python scripts/add_measurements.py --src dist/queue_server --dst dist/queue_patched --only <slug>
+      (서버 큐 사본을 읽어 별도 디렉터리에 쓴다 — 워커가 서버에 손대지 않고 OPS 에 반영을 요청할 때)
 """
 from __future__ import annotations
 import argparse
@@ -127,9 +129,13 @@ def desktop_table(data, blk, per_host):
         body = [[esc(r["label"]), esc(r.get("version") or "—"), _fmt(r.get("footprint_mb"), " MB"),
                  _fmt(r.get("cold_start_s"), " s"), (_fmt(r.get("idle_rss_mb"), " MB") + (f" ({r.get('process_count')} processes)" if r.get("process_count") else ""))]
                 for r in rows]
+        fresh = [r["label"] for r in rows if r.get("fresh_profile")]
+        fresh_s = ("" if not fresh else
+                   f" {esc(' and '.join(fresh))} {'was' if len(fresh) == 1 else 'were'} launched with an empty profile "
+                   f"(<code>--user-data-dir</code>), no extensions and no folder open, so the numbers do not include any workspace.")
         cap = (f"Install footprint = size of the application directory (user data excluded). Cold start = seconds from "
                f"launching the executable until its first visible window, measured once after closing the app. Idle memory = "
-               f"resident memory of the whole process tree {payload.get('settle_seconds')} s after the window appeared. "
+               f"resident memory of the whole process tree {payload.get('settle_seconds')} s after the window appeared.{fresh_s} "
                f"{_host_line(payload['host'])}.")
         figs = ""
         for r in rows:
@@ -139,6 +145,56 @@ def desktop_table(data, blk, per_host):
                          f'<figcaption>{esc(r["label"])} {esc(r.get("version") or "")} as it opened on our laptop, {esc(payload["host"].get("date", ""))}.</figcaption></figure>')
         return _table(["App", "Version", "Install footprint", "Cold start", "Idle memory"], body, cap) + figs
     return ""
+
+
+def repo_table(data, blk, per_host):
+    for role, payload in per_host.items():
+        rows = [r for r in payload.get("rows", []) if r["key"] in blk.get("keys", []) and not r.get("error")]
+        if not rows:
+            continue
+        d = blk.get("days") or payload.get("days") or 90
+        body = []
+        for r in rows:
+            rel = r.get(f"releases_{d}d_stable")
+            pre = r.get(f"releases_{d}d_pre") or 0
+            rel_s = "—" if rel is None else (f"{rel}" + (f" (+{pre} pre)" if pre else ""))
+            latest = (esc(r.get("latest_release") or "—") + (f" · {esc(r.get('latest_release_date'))}" if r.get("latest_release_date") else ""))
+            issues = ("—" if r.get("open_issues") is None else
+                      (f"issues off / {_fmt(r.get('open_prs'))}" if r.get("has_issues") is False else f"{_fmt(r['open_issues'])} / {_fmt(r.get('open_prs'))}"))
+            url = r.get("url") or f"https://github.com/{r.get('repo') or r.get('github')}"
+            body.append([f'<a href="{esc(url)}" rel="noopener" target="_blank">{esc(r["label"])}</a>', _fmt(r.get("stars")),
+                         esc(r.get("last_commit") or "—"), _fmt(r.get(f"commits_{d}d")), rel_s, latest, issues, esc(r.get("license") or "—")])
+        since = (payload.get("since") or {}).get(str(d)) or (payload.get("since") or {}).get(d) or ""
+        cap = (f"Read from the GitHub API on {esc(payload['host'].get('date', ''))}: stars; the date of the newest commit on the default branch; "
+               f"commits on that branch and releases published in the {d} days ending that day ({esc(since)} → {esc(payload['host'].get('date', ''))}), "
+               f"pre-releases counted separately; open issues and open pull requests at that moment (\"issues off\" = the project does not use GitHub issues); and the license GitHub detects. "
+               f"Commit counts are the repository's own history, so squash-merged projects show fewer commits than merge-heavy ones.")
+        return _table(["Repository", "Stars", "Last commit", f"Commits ({d} d)", f"Releases ({d} d)", "Latest release", "Open issues / PRs", "License"], body, cap)
+    return ""
+
+
+def price_table(data, blk, per_host, slug=None):
+    """config/prices.yaml observations[] (관측 가격 + 관측일 + 출처)를 그 글의 표로. 값이 없는 벤더는 'not published' 로 남긴다."""
+    try:
+        with open("config/prices.yaml", encoding="utf-8") as f:
+            pr = yaml.safe_load(f) or {}
+    except OSError:
+        return ""
+    meta = pr.get("meta") or {}
+    cards = [c for c in (pr.get("observations") or []) if c.get("slug") == slug]   # cards[] 는 카드 패치용, observations[] 가 이 표의 출처
+    if not cards:
+        return ""
+    body = []
+    for c in cards:
+        price = c.get("price") or ("not published" if c.get("unverified") else "—")
+        note = f' <span class="mnote">({esc(c["note"])})</span>' if c.get("note") else ""
+        src = c.get("source") or ""
+        body.append([esc(c.get("plan", "")), esc(price) + note, esc(str(c.get("as_of") or meta.get("as_of") or "")),
+                     f'<a href="{esc(src)}" rel="noopener" target="_blank">{esc(src.replace("https://", "").split("/")[0])}</a>' if src else "—"])
+    dates = sorted({str(c.get("as_of") or meta.get("as_of") or "") for c in cards})
+    cap = (f"Prices as shown on each vendor's own pricing page on the date in the third column ({', '.join(esc(x) for x in dates if x)}). "
+           f"Where a vendor publishes no figure we say so rather than estimate. Vendors change prices without notice; the linked page is authoritative.")
+    return _table(["Plan", "Observed price", "Checked", "Source"], body, cap)
 
 
 def cli_table(data, blk, per_host):
@@ -153,25 +209,64 @@ def cli_table(data, blk, per_host):
     return ""
 
 
+# 섹션 제목은 config 가 아니라 **실제로 그려진 표**에서 만든다(ORDER 55 B0, 2026-09-08 REVIEW 부수발견):
+# config 의 title 이 "pulled and started"·"cold start" 를 말하는데 표는 레지스트리 크기뿐인 글이 4/5편이었다.
+# 표가 없으면 그 문구도 없다 — 데이터가 늘면 제목도 그만큼만 늘어난다.
+PHRASES = {"latency_table": "latency to each region", "throughput_table": "download speed",
+           "image_table": "image size", "run_table": "cold start and idle memory",
+           "release_table": "installer size", "desktop_table": "install footprint, cold start, idle memory",
+           "cli_table": "install footprint and startup time", "repo_table": "repository activity",
+           "price_table": "prices on the day we looked"}
+
+
+def derive_title(kinds: list) -> str:
+    """그려진 표 종류(순서 유지·중복 제거)로 'What we measured: a, b, and c' 를 만든다."""
+    seen, ph = set(), []
+    for k in kinds:
+        p = PHRASES.get(k, k)
+        if p not in seen:
+            seen.add(p)
+            ph.append(p)
+    if not ph:
+        return "What we measured"
+    if len(ph) == 1:
+        body = ph[0]
+    elif len(ph) == 2:
+        body = f"{ph[0]} and {ph[1]}"
+    else:
+        body = ", ".join(ph[:-1]) + f", and {ph[-1]}"
+    return f"What we measured: {body}"
+
+
+INTRO = ("<p>The figures below were collected by us on the dates shown, not taken from vendor marketing. "
+         "Each table says what was read or measured, on which machine, and when.</p>")
+
 KINDS = {"latency_table": latency_table, "throughput_table": throughput_table, "image_table": image_table,
-         "run_table": run_table, "release_table": release_table, "desktop_table": desktop_table, "cli_table": cli_table}
+         "run_table": run_table, "release_table": release_table, "desktop_table": desktop_table, "cli_table": cli_table,
+         "repo_table": repo_table, "price_table": price_table}
 
 
 def section_for(slug: str, art: dict, data: dict) -> str | None:
-    parts = []
+    parts, kinds = [], []
     for blk in art.get("blocks", []):
+        if blk["kind"] == "price_table":                  # 측정 파일이 아니라 config/prices.yaml 이 출처
+            h = price_table(data, blk, {}, slug=slug)
+            if h:
+                parts.append(h)
+                kinds.append("price_table")
+            continue
         per_host = data.get(blk["suite"]) or {}
         if not per_host:
             continue
         h = KINDS[blk["kind"]](data, blk, per_host)
         if h:
             parts.append(h)
+            kinds.append(blk["kind"])
     if not parts:
         return None
-    intro = ("<p>The figures below are our own measurements, not vendor claims. Each table says what was measured, "
-             "on which machine, and when.</p>")
-    return (f'<section class="blk" id="measured">{MARK}<h2>{esc(art.get("title") or "What we measured")}</h2>'
-            f'{intro}{"".join(parts)}</section>')
+    # config 의 title 은 더 이상 쓰지 않는다 — 표가 없는 것을 제목이 약속하던 결함(B0). 제목은 그려진 표에서만 나온다.
+    return (f'<section class="blk" id="measured">{MARK}<h2>{esc(derive_title(kinds))}</h2>'
+            f'{INTRO}{"".join(parts)}</section>')
 
 
 def inject(doc: str, sec: str) -> tuple[str, str]:
@@ -193,7 +288,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--src", default=QUEUE, help="읽을 큐 디렉터리(기본 dist/queue)")
+    ap.add_argument("--dst", default=None, help="쓸 디렉터리(기본 = --src 제자리)")
     a = ap.parse_args(argv)
+    dst = a.dst or a.src
+    os.makedirs(dst, exist_ok=True)
     with open("config/measure.yaml", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     data = common.load_all()
@@ -202,7 +301,10 @@ def main(argv=None) -> int:
     for slug, art in (cfg.get("articles") or {}).items():
         if a.only and slug not in a.only:
             continue
-        path = os.path.join(QUEUE, slug + ".html")
+        path = os.path.join(a.src, slug + ".html")
+        out_path = os.path.join(dst, slug + ".html")
+        if os.path.isfile(out_path) and dst != a.src:      # 같은 글에 다른 패치가 먼저 쌓였으면 그 위에 쌓는다
+            path = out_path
         if not os.path.isfile(path):
             print(f"  - {slug[:60]}: 큐에 없음(내려감?) — 건너뜀")
             continue
@@ -212,8 +314,8 @@ def main(argv=None) -> int:
             continue
         doc = open(path, encoding="utf-8").read()
         new, how = inject(doc, sec)
-        if not a.dry_run and new != doc:
-            open(path, "w", encoding="utf-8", newline="").write(new)
+        if not a.dry_run and (new != doc or out_path != path):
+            open(out_path, "w", encoding="utf-8", newline="").write(new)
         print(f"  ✓ {slug[:60]}: {how} ({len(sec):,} chars){' [dry]' if a.dry_run else ''}")
         n += 1
     print(f"{'DRY ' if a.dry_run else ''}sections: {n}")

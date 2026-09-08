@@ -331,3 +331,57 @@ cards:
     plan: "GitHub Copilot — Business / Enterprise"
     price: "Business $19 · Enterprise $39 per seat / month"
     source: https://docs.github.com/en/copilot/about-github-copilot/plans-for-github-copilot
+
+# ─────────────────────────────────────────────────────────────
+# 관측 표(measured 섹션용): slug 별 "그날 벤더 페이지에 보인 가격". add_measurements.py price_table 이 읽는다.
+# cards[] 와 달리 글의 카드 플랜명과 일치할 필요가 없다(patch_prices.py 는 이 키를 보지 않는다).
+# 규칙은 cards 와 같다 — 관측한 값만, 출처 URL 과 관측일 필수, 없으면 price 를 비우고 unverified: true.
+# ─────────────────────────────────────────────────────────────
+observations:
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "CodeRabbit — Essentials / Team / Advanced"
+    price: "$24 · $48 · $72 per developer/month billed annually ($30 · $60 monthly for the first two)"
+    note: "free forever for public repositories; 14-day trial; Enterprise custom"
+    as_of: 2026-09-08
+    source: https://www.coderabbit.ai/pricing
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "GitHub Copilot code review"
+    price: "Included from $10/user/mo (Copilot Pro); Business $19, Enterprise $39 per seat/month"
+    as_of: 2026-08-12
+    source: https://github.com/features/copilot/plans
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "Qodo — Pro Team"
+    price: "$30 per user/month, monthly billing"
+    note: "up to 30 users; 14-day trial; Enterprise custom; usage credits $0.012 each pooled across the team. The open-source PR-Agent core is not priced on this page"
+    as_of: 2026-09-08
+    source: https://www.qodo.ai/pricing/
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "Greptile — Pro"
+    price: "$30 per seat/month"
+    note: "Starter free; 14-day trial; free for qualifying MIT/Apache non-commercial projects; startups under $2M revenue 50% off; Enterprise custom"
+    as_of: 2026-09-08
+    source: https://www.greptile.com/pricing
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "Graphite — Starter / Team"
+    price: "$20 · $40 per user/month billed annually"
+    note: "Hobby free with limited AI reviews; unlimited AI reviews from Team; the page no longer lists a separate 'Diamond' price"
+    as_of: 2026-09-08
+    source: https://graphite.com/pricing
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "SonarQube Cloud — Team"
+    price: "from $34/month"
+    note: "priced by lines of code analysed; Free up to 50k LOC private; Enterprise custom, annual; Server editions priced per instance per year by LOC (no figure on the page)"
+    as_of: 2026-09-08
+    source: https://www.sonarsource.com/plans-and-pricing/
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "Snyk — Team"
+    price: "from $25 per contributing developer/month"
+    note: "Free $0 with 100 Snyk Code tests/month; Team includes 1,000 Code tests/month; Ignite from $1,260 per developer/year; Enterprise contact sales"
+    as_of: 2026-09-08
+    source: https://snyk.io/plans/
+  - slug: the-best-ai-code-review-tools-in-2026-8-options-compared
+    plan: "Amazon Q Developer — Pro"
+    price: "$19 per user/month"
+    note: "Free tier 50 agentic requests/month; Pro pools 4,000 transformation LOC per user/month, overage $0.003 per LOC"
+    as_of: 2026-09-08
+    source: https://aws.amazon.com/q/developer/pricing/

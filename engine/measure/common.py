@@ -92,3 +92,36 @@ def load_all() -> dict:
         except (OSError, ValueError):
             continue
     return out
+
+
+def merge_only(suite: str, role: str, new: dict, keys: list) -> dict:
+    """--only 로 일부 키만 다시 쟀을 때: 기존 결과 파일의 나머지 행은 그대로 두고, 잰 키의 행만 갈아 끼운다.
+    행 목록(rows·cli)은 key 로 맞추고, 그 밖의 최상위 값(host·settle_seconds…)은 새 실행의 것을 쓴다.
+    기존 행마다 measured_at 을 남겨 두어, 어느 행이 언제 잰 값인지 파일만 봐도 알 수 있게 한다."""
+    p = result_path(suite, role)
+    if not os.path.isfile(p):
+        return new
+    try:
+        with open(p, encoding="utf-8") as f:
+            old = json.load(f)
+    except (OSError, ValueError):
+        return new
+    old_at = (old.get("host") or {}).get("measured_at")
+    out = dict(new)
+    for lst in ("rows", "cli"):
+        if lst not in old and lst not in new:
+            continue
+        merged, seen = [], set()
+        for r in old.get(lst, []):
+            if r.get("key") in keys:
+                continue                                  # 이번에 다시 잰 키 — 새 행으로 대체
+            r = dict(r)
+            r.setdefault("measured_at", old_at)
+            merged.append(r)
+            seen.add(r.get("key"))
+        for r in new.get(lst, []):
+            r = dict(r)
+            r.setdefault("measured_at", (new.get("host") or {}).get("measured_at"))
+            merged.append(r)
+        out[lst] = merged
+    return out
